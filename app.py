@@ -595,8 +595,8 @@ elif user["role"] == "Staff":
     st.title("🛠️ BiteHub Staff Portal")
     choice = st.sidebar.radio(
         "Staff Menu", 
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
-    )
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"])
+        
         if choice == "Dashboard":
             st.subheader("📊 Staff Dashboard")
             st.info("Overview: pending orders, quick sales, and recent feedback.")
