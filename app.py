@@ -426,18 +426,18 @@ def password_valid_rules(pw: str):
 # LOGIN PAGE
 # ---------------------------
 if st.session_state.page == "login":
-st.markdown(
-    """
-    <div style='text-align: center; margin-top: -20px;'>
-        <img src='bite.jpg' width='180'>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
+    st.markdown(
+        """
+        <div style='text-align: center; margin-top: -20px;'>
+            <img src='bite.jpg' width='180'>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     username = st.text_input("Username", placeholder="Enter username", key="login_username")
     password = st.text_input("Password", type="password", placeholder="Enter password", key="login_password")
+
 
     # centered buttons with consistent width
     col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
