@@ -539,7 +539,7 @@ with col_left:
     if st.button("Ask AI", key="ai_button_main"):
         with st.spinner("Asking AI..."):
             answer = run_ai(q)
-            st.markdown(f"<div style='color: black; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color: white; font-size:25px'>{answer}</div>", unsafe_allow_html=True)
 
 
     # RIGHT: Sentiment analysis
