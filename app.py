@@ -595,21 +595,22 @@ elif user["role"] == "Staff":
     st.title("🛠️ BiteHub Staff Portal")
     choice = st.sidebar.radio(
         "Staff Menu", 
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"])
-        
-        if choice == "Dashboard":
-            st.subheader("📊 Staff Dashboard")
-            st.info("Overview: pending orders, quick sales, and recent feedback.")
-            try:
-                receipts = load_receipts_df()
-                fb = load_feedbacks_df()
-                st.metric("Total Orders", len(receipts))
-                st.metric("Feedbacks", len(fb))
-                pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
-                st.metric("Pending Orders", len(pending))
-            except Exception as e:
-                st.error(f"Could not load quick stats: {e}")
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+    )
 
+    if choice == "Dashboard":
+        st.subheader("📊 Staff Dashboard")
+        st.info("Overview: pending orders, quick sales, and recent feedback.")
+        try:
+            receipts = load_receipts_df()
+            fb = load_feedbacks_df()
+            st.metric("Total Orders", len(receipts))
+            st.metric("Feedbacks", len(fb))
+            pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
+            st.metric("Pending Orders", len(pending))
+        except Exception as e:
+            st.error(f"Could not load quick stats: {e}")
+            
         elif choice == "Pending Orders":
             st.subheader("📦 Pending Orders")
             try:
