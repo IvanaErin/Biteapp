@@ -2,19 +2,17 @@ import os
 import base64
 import streamlit as st
 import pandas as pd
+import snowflake.connector
+from groq import Groq
 import random
+from datetime import datetime, date, time
+import matplotlib.pyplot as plt
 import hashlib
 import secrets
 import re
-from datetime import datetime, date, time
-from dotenv import load_dotenv
-load_dotenv() 
 
-# OPTIONAL: try import Groq, but continue gracefully if not installed
-try:
-    from groq import Groq
-except Exception:
-    Groq = None
+# ----------------- AI CLIENT -----------------
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # ---------------------------
 # PAGE CONFIG & BACKGROUND
