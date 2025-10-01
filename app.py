@@ -561,9 +561,9 @@ elif st.session_state.page == "main":
 
         # Cart, ordering, and feedback submission below the two columns
         st.divider()
-        st.subheader("📋 Full Menu")
-        for cat, items in menu_data.items():
-        with st.expander(cat, expanded=False):
+st.subheader("📋 Full Menu")
+for cat, items in menu_data.items():
+    with st.expander(cat, expanded=False):
         for item_name, price in items.items():
             st.write(f"- {item_name}: ₱{price}")
 
