@@ -431,14 +431,15 @@ if st.session_state.page == "login":
     logo = Image.open("bite.jpg")
     logo = logo.resize((180, 80))  # width=180, height=80
 
-    # Center using a container and columns
+    # Center using columns
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.image(logo, use_column_width=False)
+        st.image(logo, use_container_width=False)  # updated parameter
 
     # Login fields
     username = st.text_input("Username", placeholder="Enter username", key="login_username")
     password = st.text_input("Password", type="password", placeholder="Enter password", key="login_password")
+
     # centered buttons with consistent width
     col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
     with col2:
