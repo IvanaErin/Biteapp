@@ -130,9 +130,6 @@ def verify_password(stored: str, provided_password: str) -> bool:
         return False
 
 
-import streamlit as st
-import pandas as pd
-
 # ---------------------------
 # LOCAL DB FALLBACK
 # ---------------------------
@@ -381,18 +378,14 @@ def run_ai(question: str, extra_context: str = "") -> str:
     except Exception as e:
         return f"⚠️ AI unavailable: {e}"
 
+# ---------------------------
+# MENU DATA FROM CSV
+# ---------------------------
+menu_df = pd.read_csv("menu.csv")  # Make sure your CSV file exists in the app folder
 
-# ---------------------------
-# MENU + initial session keys
-# ---------------------------
-menu_data = {
-    "Breakfast": {"Tapsilog": 70, "Longsilog": 65, "Hotdog Meal": 50, "Omelette": 45},
-    "Lunch": {"Chicken Adobo": 90, "Pork Sinigang": 100, "Beef Caldereta": 120, "Rice": 15},
-    "Snack": {"Burger": 50, "Fries": 30, "Siomai Rice": 60, "Spaghetti": 45},
-    "Drinks": {"Soda": 20, "Iced Tea": 25, "Bottled Water": 15, "Coffee": 30},
-    "Dessert": {"Halo-Halo": 65, "Leche Flan": 40, "Ice Cream": 35},
-    "Dinner": {"Grilled Chicken": 95, "Sisig": 110, "Fried Bangus": 85, "Rice": 15},
-}
+menu_data = {}
+for cat, group in menu_df.groupby("Category"):
+    menu_data[cat] = dict(zip(group["Item"], group["Price"]))
 
 # session defaults
 if "page" not in st.session_state:
@@ -568,21 +561,11 @@ elif st.session_state.page == "main":
 
         # Cart, ordering, and feedback submission below the two columns
         st.divider()
-        st.subheader("📋 Menu & Ordering")
-        colA, colB = st.columns([2, 1])
-        with colA:
-            for cat, items in menu_data.items():
-                with st.expander(cat, expanded=False):
-                    for item_name, price in items.items():
-                        if item_name in st.session_state.sold_out:
-                            st.write(f"~~{item_name}~~ — Sold out")
-                            continue
-                        cols = st.columns([1, 1, 1])
-                        qty_key = f"qty_{cat}_{item_name}"
-                        qty = cols[0].number_input(f"{item_name} (₱{price})", min_value=0, value=0, step=1, key=qty_key)
-                        if cols[1].button("Add", key=f"add_{cat}_{item_name}") and qty > 0:
-                            st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + qty
-                            st.success(f"Added {qty} x {item_name}")
+        st.subheader("📋 Full Menu")
+        for cat, items in menu_data.items():
+        with st.expander(cat, expanded=False):
+        for item_name, price in items.items():
+            st.write(f"- {item_name}: ₱{price}")
 
         with colB:
             st.subheader("✍️ Give Feedback")
