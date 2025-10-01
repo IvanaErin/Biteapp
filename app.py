@@ -518,61 +518,59 @@ elif st.session_state.page == "main":
 
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
-    # ---------------------------
-    # Non-Staff UX
-    # ---------------------------
-    if user["role"] == "Non-Staff":
-        is_guest = user["username"] == "Guest"
+# Non-Staff UX
+if user["role"] == "Non-Staff":
+    is_guest = user["username"] == "Guest"
 
-        # Two main columns: left = AI, right = feedback
-        col_left, col_right = st.columns([1, 1])
+    # Two main columns: left = AI, right = feedback
+    col_left, col_right = st.columns([1, 1])
 
-        # LEFT COLUMN: AI Assistant
-        with col_left:
-            st.subheader("🤖 Canteen AI Assistant")
-            q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
-            
-            if st.button("Ask AI", key="ai_button_main"):
-                with st.spinner("Asking AI..."):
-                    answer = run_ai(q)
-                    st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+    # LEFT COLUMN: AI Assistant
+    with col_left:
+        st.subheader("🤖 Canteen AI Assistant")
+        q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+        if st.button("Ask AI", key="ai_button_main"):
+            with st.spinner("Asking AI..."):
+                answer = run_ai(q)
+                st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-        # RIGHT COLUMN: Feedback / Sentiment
-        with col_right:
-            st.subheader("📝 Feedback Sentiment Analysis")
-            for item_name, qty in st.session_state.cart.items():
-                fb_key = f"feedback_{item_name}"
-                feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
-                if feedback_text:
-                    if st.button(f"Analyze Sentiment for {item_name}", key=f"analyze_{item_name}"):
-                        prompt = f"""
-                        You are a sentiment analysis assistant.
-                        The user gave this feedback for {item_name}: "{feedback_text}"
-                        Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
-                        """
-                        if client:
-                            resp = client.chat.completions.create(
-                                model="llama-3.1-8b-instant",
-                                messages=[{"role": "user", "content": prompt}]
-                            )
-                            st.success(resp.choices[0].message.content)
-                        else:
-                            st.warning("Sentiment AI unavailable")
+    # RIGHT COLUMN: Feedback / Sentiment
+    with col_right:
+        st.subheader("📝 Feedback Sentiment Analysis")
+        for item_name, qty in st.session_state.cart.items():
+            fb_key = f"feedback_{item_name}"
+            feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
+            if feedback_text:
+                if st.button(f"Analyze Sentiment for {item_name}", key=f"analyze_{item_name}"):
+                    prompt = f"""
+                    You are a sentiment analysis assistant.
+                    The user gave this feedback for {item_name}: "{feedback_text}"
+                    Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
+                    """
+                    if client:
+                        resp = client.chat.completions.create(
+                            model="llama-3.1-8b-instant",
+                            messages=[{"role": "user", "content": prompt}]
+                        )
+                        st.success(resp.choices[0].message.content)
+                    else:
+                        st.warning("Sentiment AI unavailable")
 
-        # Cart, ordering, and feedback submission below the two columns
-    # Menu display
+    # Menu display and ordering (new column set)
     st.divider()
     st.subheader("📋 Full Menu")
-    for cat, items in menu_data.items():
-        with st.expander(cat, expanded=False):
-            for item_name, price in items.items():
-                st.write(f"- {item_name}: ₱{price}")
+    colA, colB = st.columns([2, 1])  # <-- define colB here
+    with colA:
+        for cat, items in menu_data.items():
+            with st.expander(cat, expanded=False):
+                for item_name, price in items.items():
+                    st.write(f"- {item_name}: ₱{price}")
 
-    # Feedback submission column
     with colB:
-            st.subheader("✍️ Give Feedback")
-            if is_guest:
-                st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
+        st.subheader("✍️ Give Feedback")
+        if is_guest:
+            st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
+
             else:
                 fb_item = st.selectbox("Select Item:", ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], key="fb_item")
                 rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
