@@ -432,7 +432,7 @@ if st.session_state.page == "login":
     logo = logo.resize((180, 80))  # width=180, height=80
 
     # Center using columns
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2, col3 = st.columns([1, 0, 1])
     with col2:
         st.image(logo, use_container_width=False)  # updated parameter
 
