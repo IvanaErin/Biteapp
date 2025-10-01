@@ -19,80 +19,78 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 # ---------------------------
 st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
 
-
 def set_background(image_file: str | None = None):
-"""
-   Sets a base64 background if image_file is present.
-   If not present, do nothing (keeps Streamlit default).
-   """
-css_parts = []
-if image_file and os.path.exists(image_file):
-with open(image_file, "rb") as f:
-encoded = base64.b64encode(f.read()).decode()
-ext = image_file.split(".")[-1].lower()
-mime = "jpeg" if ext in ["jpg", "jpeg"] else "png"
-css_parts.append(
-f"""
-           [data-testid="stAppViewContainer"] {{
-               background: url("data:image/{mime};base64,{encoded}");
-               background-size: cover;
-               background-position: center;
-               background-repeat: no-repeat;
-           }}
-           """
-)
+    """
+    Sets a base64 background if image_file is present.
+    If not present, do nothing (keeps Streamlit default).
+    """
+    css_parts = []
+    if image_file and os.path.exists(image_file):
+        with open(image_file, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+        ext = image_file.split(".")[-1].lower()
+        mime = "jpeg" if ext in ["jpg", "jpeg"] else "png"
+        css_parts.append(
+            f"""
+            [data-testid="stAppViewContainer"] {{
+                background: url("data:image/{mime};base64,{encoded}");
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+            }}
+            """
+        )
 
-# common UI CSS
-css_parts.append(
-"""
-       /* remove the default Streamlit header gap */
-       [data-testid="stAppViewContainer"] > section:first-child {
-           padding-top: 18px !important;
-           margin-top: 0px !important;
-       }
+    # common UI CSS
+    css_parts.append(
+        """
+        /* remove the default Streamlit header gap */
+        [data-testid="stAppViewContainer"] > section:first-child {
+            padding-top: 18px !important;
+            margin-top: 0px !important;
+        }
 
-       /* hide builtin menu / footer if desired */
-       #MainMenu { visibility: hidden; }
-       footer { visibility: hidden; }
+        /* hide builtin menu / footer if desired */
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
 
-       /* login card appearance */
-       .login-card {
-           background: rgba(10,10,10,0.6);
-           padding: 1.6rem;
-           border-radius: 12px;
-           max-width: 840px;
-           margin: 18px auto;
-           color: #fff;
-           box-shadow: 0 8px 28px rgba(0,0,0,0.5);
-       }
+        /* login card appearance */
+        .login-card {
+            background: rgba(10,10,10,0.6);
+            padding: 1.6rem;
+            border-radius: 12px;
+            max-width: 840px;
+            margin: 18px auto;
+            color: #fff;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+        }
 
-       /* uniform button sizing */
-       div.stButton > button {
-           width: 100%;
-           height: 44px;
-           font-size: 15px;
-           border-radius: 8px;
-       }
+        /* uniform button sizing */
+        div.stButton > button {
+            width: 100%;
+            height: 44px;
+            font-size: 15px;
+            border-radius: 8px;
+        }
 
-       /* inputs look */
-       .stTextInput>div>div>input, .stTextInput>div>div>div>input {
-           background: rgba(0,0,0,0.55);
-           color: #fff;
-       }
+        /* inputs look */
+        .stTextInput>div>div>input, .stTextInput>div>div>div>input {
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+        }
 
-       /* make containers slightly translucent on top of background */
-       .stContainer, .stMarkdown, .stExpander {
-           color: #fff;
-       }
-       """
-)
+        /* make containers slightly translucent on top of background */
+        .stContainer, .stMarkdown, .stExpander {
+            color: #fff;
+        }
+        """
+    )
 
-st.markdown("<style>" + "\n".join(css_parts) + "</style>", unsafe_allow_html=True)
+    st.markdown("<style>" + "\n".join(css_parts) + "</style>", unsafe_allow_html=True)
 
 
 # call background (make sure can.jpg exists or pass None)
 set_background("cof.jpg")
-
 # ---------------------------
 # DB CONNECTION (Snowflake) OR LOCAL FALLBACK
 # ---------------------------
