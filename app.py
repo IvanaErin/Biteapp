@@ -560,14 +560,17 @@ elif st.session_state.page == "main":
                             st.warning("Sentiment AI unavailable")
 
         # Cart, ordering, and feedback submission below the two columns
-        st.divider()
-st.subheader("📋 Full Menu")
-for cat, items in menu_data.items():
-    with st.expander(cat, expanded=False):
-        for item_name, price in items.items():
-            st.write(f"- {item_name}: ₱{price}")
+        
+    # Menu display
+    st.divider()
+    st.subheader("📋 Full Menu")
+    for cat, items in menu_data.items():
+        with st.expander(cat, expanded=False):
+            for item_name, price in items.items():
+                st.write(f"- {item_name}: ₱{price}")
 
-        with colB:
+    # Feedback submission column
+    with colB:
             st.subheader("✍️ Give Feedback")
             if is_guest:
                 st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
