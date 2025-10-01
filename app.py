@@ -91,7 +91,7 @@ def set_background(image_file: str | None = None):
 
 
 # call background (make sure can.jpg exists or pass None)
-set_background("cof.jpg")
+set_background("back.jpg")
 # ---------------------------
 # DB CONNECTION (Snowflake) OR LOCAL FALLBACK
 # ---------------------------
