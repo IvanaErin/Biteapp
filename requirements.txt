@@ -1,6 +1,7 @@
 streamlit
 pandas
-openpyxl
-xlrd
-kagglehub
-requests
+matplotlib
+qrcode[pil]
+groq
+pillow
+snowflake-connector-python
