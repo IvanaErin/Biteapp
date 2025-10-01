@@ -429,7 +429,7 @@ def password_valid_rules(pw: str):
 if st.session_state.page == "login":
     # Open and resize the logo
     logo = Image.open("bite.jpg")
-    logo = logo.resize((300, 150))  # width=180, height=80
+    logo = logo.resize((350, 150))  # width=180, height=80
 
     # Center using columns
     col1, col2, col3 = st.columns([1, 1, 1])
