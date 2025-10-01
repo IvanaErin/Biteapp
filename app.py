@@ -510,101 +510,98 @@ elif st.session_state.page == "signup":
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-
 # ---------------------------
 # UI: MAIN PORTAL (Non-Staff + Staff)
 # ---------------------------
 elif st.session_state.page == "main":
     user = st.session_state.user or {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0}
-    is_guest = user["username"] == "Guest"
+    if "loyalty_points" not in user:
+        user["loyalty_points"] = user.get("loyalty_points", 0)
+
+    # Guest banner
+    if user["username"] == "Guest":
+        st.warning("🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting.")
 
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
-    if is_guest:
-        st.warning("🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting.")
+    # ---------------------------
+    # Non-Staff UX
+    # ---------------------------
+    if user["role"] == "Non-Staff":
+        is_guest = user["username"] == "Guest"
 
-    # ---------- Top: AI Assistant ----------
-    st.subheader("🤖 Canteen AI Assistant")
-    q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
-    if st.button("Ask AI", key="ai_button_main"):
-        with st.spinner("Asking AI..."):
-            answer = run_ai(q)
-            st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+        # Two main columns: left = AI, right = feedback
+        col_left, col_right = st.columns([1, 1])
 
-    st.divider()
+        # LEFT COLUMN: AI Assistant
+        with col_left:
+            st.subheader("🤖 Canteen AI Assistant")
+            q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+            
+            if st.button("Ask AI", key="ai_button_main"):
+                with st.spinner("Asking AI..."):
+                    answer = run_ai(q)
+                    st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-    # ---------- Two main columns ----------
-    col_left, col_right = st.columns([2, 1])  # left = 2/3, right = 1/3
+        # RIGHT COLUMN: Feedback / Sentiment
+        with col_right:
+            st.subheader("📝 Feedback Sentiment Analysis")
+            for item_name, qty in st.session_state.cart.items():
+                fb_key = f"feedback_{item_name}"
+                feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
+                if feedback_text:
+                    if st.button(f"Analyze Sentiment for {item_name}", key=f"analyze_{item_name}"):
+                        prompt = f"""
+                        You are a sentiment analysis assistant.
+                        The user gave this feedback for {item_name}: "{feedback_text}"
+                        Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
+                        """
+                        if client:
+                            resp = client.chat.completions.create(
+                                model="llama-3.1-8b-instant",
+                                messages=[{"role": "user", "content": prompt}]
+                            )
+                            st.success(resp.choices[0].message.content)
+                        else:
+                            st.warning("Sentiment AI unavailable")
 
-    # --------- Left Column: Menu + Cart ---------
-    with col_left:
-        st.subheader("📋 Menu")
-        for cat, items in menu_data.items():
-            with st.expander(cat, expanded=False):
-                for item_name, price in items.items():
-                    if item_name in st.session_state.sold_out:
-                        st.write(f"~~{item_name}~~ — Sold out")
-                        continue
-                    cols = st.columns([2, 1])  # qty + add button
-                    qty_key = f"qty_{cat}_{item_name}"
-                    qty = cols[0].number_input(f"{item_name} (₱{price})", min_value=0, value=0, step=1, key=qty_key)
-                    if cols[1].button("Add", key=f"add_{cat}_{item_name}") and qty > 0:
-                        st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + qty
-                        st.success(f"Added {qty} x {item_name}")
+        # Cart, ordering, and feedback submission below the two columns
+        st.divider()
+        st.subheader("📋 Menu & Ordering")
+        colA, colB = st.columns([2, 1])
+        with colA:
+            for cat, items in menu_data.items():
+                with st.expander(cat, expanded=False):
+                    for item_name, price in items.items():
+                        if item_name in st.session_state.sold_out:
+                            st.write(f"~~{item_name}~~ — Sold out")
+                            continue
+                        cols = st.columns([1, 1, 1])
+                        qty_key = f"qty_{cat}_{item_name}"
+                        qty = cols[0].number_input(f"{item_name} (₱{price})", min_value=0, value=0, step=1, key=qty_key)
+                        if cols[1].button("Add", key=f"add_{cat}_{item_name}") and qty > 0:
+                            st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + qty
+                            st.success(f"Added {qty} x {item_name}")
 
-        # Cart summary & checkout
-        if st.session_state.cart:
-            st.subheader("🛒 Your Cart")
-            total = 0
-            for it, qtt in st.session_state.cart.items():
-                price = next((p for cat in menu_data.values() for n, p in cat.items() if n == it), 0)
-                st.write(f"{it} x {qtt} = ₱{price * qtt}")
-                total += price * qtt
+        with colB:
+            st.subheader("✍️ Give Feedback")
+            if is_guest:
+                st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
+            else:
+                fb_item = st.selectbox("Select Item:", ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], key="fb_item")
+                rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
+                fb_text = st.text_area("Your Feedback:", key="fb_text")
+                if st.button("Submit Feedback", key="submit_fb_nonstaff"):
+                    if fb_item != "(select)" and fb_text.strip():
+                        try:
+                            save_feedback(fb_item, fb_text.strip(), rating, username=user["username"])
+                            st.success("✅ Feedback submitted!")
+                        except Exception as e:
+                            st.error(f"Failed to save feedback: {e}")
+                    else:
+                        st.warning("Choose an item and write feedback.")
 
-            st.write(f"**Subtotal: ₱{total}**")
-
-            # Pickup & payment
-            pickup_date = st.date_input("Pickup date (optional)", value=date.today(), key="pickup_date")
-            pickup_time = st.time_input("Pickup time (optional)", value=datetime.now().time(), key="pickup_time")
-            payment_method = st.radio("Payment Method", ["Cash", "Card", "E-Wallet"], key="pmethod")
-            payment_details = ""
-            if payment_method == "Card":
-                payment_details = st.text_input("Card Number (mock)", key="card_num")
-            elif payment_method == "E-Wallet":
-                payment_details = st.selectbox("E-Wallet", ["GCash", "Maya", "QR Scan"], key="ewallet_type")
-
-            if st.button("Place Order", key="place_order_nonstaff"):
-                order_id = f"ORD{random.randint(10000,99999)}"
-                items_str = ", ".join([f"{k}x{v}" for k, v in st.session_state.cart.items()])
-                pickup_dt = datetime.combine(pickup_date, pickup_time)
-                details = f"user:{user['username']}|notes:pickup scheduled"
-                try:
-                    save_receipt(order_id, items_str, total, payment_method, details, pickup_time=pickup_dt, status="Pending", user_id=(None if is_guest else user["username"]))
-                    st.success(f"✅ Order placed! Order ID: {order_id} | Total: ₱{total}")
-                    st.session_state.cart = {}
-                except Exception as e:
-                    st.error(f"Error saving order: {e}")
-
-    # --------- Right Column: Feedback + Notifications ---------
-    with col_right:
-        st.subheader("✍️ Give Feedback")
-        if is_guest:
-            st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
-        else:
-            fb_item = st.selectbox("Select Item:", ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], key="fb_item")
-            rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
-            fb_text = st.text_area("Your Feedback:", key="fb_text")
-            if st.button("Submit Feedback", key="submit_fb_nonstaff"):
-                if fb_item != "(select)" and fb_text.strip():
-                    try:
-                        save_feedback(fb_item, fb_text.strip(), rating, username=user["username"])
-                        st.success("✅ Feedback submitted!")
-                    except Exception as e:
-                        st.error(f"Failed to save feedback: {e}")
-                else:
-                    st.warning("Choose an item and write feedback.")
-
-        st.markdown("---")
+        st.divider()
         st.subheader("🔔 Notifications")
         if st.session_state.notifications:
             for n in st.session_state.notifications[-6:]:
@@ -612,7 +609,8 @@ elif st.session_state.page == "main":
         else:
             st.info("No notifications yet.")
 
-        st.markdown("---")
+        # Order History
+        st.divider()
         st.subheader("📦 Order History / Track")
         try:
             receipts_df = load_receipts_df()
@@ -637,6 +635,8 @@ elif st.session_state.page == "main":
     # ---------------------------
     elif user["role"] == "Staff":
         st.title("🛠️ BiteHub Staff Portal")
+        # ... Staff portal code remains the same ...
+
         choice = st.sidebar.radio("Staff Menu", ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"])
 
         if choice == "Dashboard":
