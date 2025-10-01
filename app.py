@@ -524,39 +524,79 @@ elif st.session_state.page == "main":
     if user["role"] == "Non-Staff":
         is_guest = user["username"] == "Guest"
 
-        # Two main columns: left = AI, right = feedback
-        col_left, col_right = st.columns([1, 1])
+# Two main columns: left = AI, right = feedback
+col_left, col_right = st.columns([1, 1])
 
-        # LEFT COLUMN: AI Assistant
-        with col_left:
-            st.subheader("🤖 Canteen AI Assistant")
-            q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
-            if st.button("Ask AI", key="ai_button_main"):
-                with st.spinner("Asking AI..."):
-                    answer = run_ai(q)
-                    st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+# LEFT COLUMN: AI Assistant + Ordering
+with col_left:
+    st.subheader("🤖 Canteen AI Assistant")
+    q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+    if st.button("Ask AI", key="ai_button_main"):
+        with st.spinner("Asking AI..."):
+            answer = run_ai(q)
+            st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-        # RIGHT COLUMN: Feedback / Sentiment
-        with col_right:
-            st.subheader("📝 Feedback Sentiment Analysis")
-            for item_name, qty in st.session_state.cart.items():
-                fb_key = f"feedback_{item_name}"
-                feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
-                if feedback_text:
-                    if st.button(f"Analyze Sentiment for {item_name}", key=f"analyze_{item_name}"):
-                        prompt = f"""
-                        You are a sentiment analysis assistant.
-                        The user gave this feedback for {item_name}: "{feedback_text}"
-                        Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
-                        """
-                        if client:
-                            resp = client.chat.completions.create(
-                                model="llama-3.1-8b-instant",
-                                messages=[{"role": "user", "content": prompt}]
-                            )
-                            st.success(resp.choices[0].message.content)
+    st.divider()
+    st.subheader("🛒 Menu & Add to Cart")
+    for cat, items in menu_data.items():
+        with st.expander(cat, expanded=False):
+            for item_name, price in items.items():
+                col_item, col_btn = st.columns([3,1])
+                with col_item:
+                    st.write(f"- {item_name}: ₱{price}")
+                with col_btn:
+                    if st.button(f"Add {item_name}", key=f"add_{item_name}"):
+                        if item_name in st.session_state.cart:
+                            st.session_state.cart[item_name] += 1
                         else:
-                            st.warning("Sentiment AI unavailable")
+                            st.session_state.cart[item_name] = 1
+                        st.success(f"✅ {item_name} added to cart")
+
+    # Show Cart & Place Order
+    if st.session_state.cart:
+        st.divider()
+        st.subheader("🛒 Your Cart")
+        total = 0
+        for item, qty in st.session_state.cart.items():
+            price = None
+            for cat_items in menu_data.values():
+                if item in cat_items:
+                    price = cat_items[item]
+                    break
+            line_total = price * qty
+            total += line_total
+            st.write(f"{item} x{qty} = ₱{line_total}")
+        st.write(f"**Total: ₱{total}**")
+        if st.button("Place Order", key="place_order"):
+            try:
+                order_id = f"ORD{random.randint(1000,9999)}"
+                save_receipt(order_id, str(st.session_state.cart), total, "Cash", user["username"])
+                st.session_state.cart = {}  # empty cart after order
+                st.success(f"✅ Order {order_id} placed successfully!")
+            except Exception as e:
+                st.error(f"Failed to place order: {e}")
+
+# RIGHT COLUMN: Feedback / Sentiment
+with col_right:
+    st.subheader("📝 Feedback Sentiment Analysis")
+    for item_name, qty in st.session_state.cart.items():
+        fb_key = f"feedback_{item_name}"
+        feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
+        if feedback_text:
+            if st.button(f"Analyze Sentiment for {item_name}", key=f"analyze_{item_name}"):
+                prompt = f"""
+                You are a sentiment analysis assistant.
+                The user gave this feedback for {item_name}: "{feedback_text}"
+                Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
+                """
+                if client:
+                    resp = client.chat.completions.create(
+                        model="llama-3.1-8b-instant",
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    st.success(resp.choices[0].message.content)
+                else:
+                    st.warning("Sentiment AI unavailable")
 
         # Menu display and ordering (new column set)
         st.divider()
