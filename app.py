@@ -20,41 +20,78 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
 
 
-# 1️⃣ Set gradient background
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background: linear-gradient(135deg, #FFA500, #FFDD99);
-        background-size: cover;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
+def set_background(image_file: str | None = None):
+"""
+   Sets a base64 background if image_file is present.
+   If not present, do nothing (keeps Streamlit default).
+   """
+css_parts = []
+if image_file and os.path.exists(image_file):
+with open(image_file, "rb") as f:
+encoded = base64.b64encode(f.read()).decode()
+ext = image_file.split(".")[-1].lower()
+mime = "jpeg" if ext in ["jpg", "jpeg"] else "png"
+css_parts.append(
+f"""
+           [data-testid="stAppViewContainer"] {{
+               background: url("data:image/{mime};base64,{encoded}");
+               background-size: cover;
+               background-position: center;
+               background-repeat: no-repeat;
+           }}
+           """
 )
 
-# 2️⃣ Style the AI assistant box
-st.markdown(
-    """
-    <style>
-    .ai-box {
-        background-color: rgba(255, 255, 255, 0.85);
-        border-radius: 15px;
-        padding: 20px;
-        box-shadow: 3px 3px 15px rgba(0,0,0,0.2);
-    }
-    .ai-box h2 {
-        color: #333333;
-    }
-    .ai-box input, .ai-box button {
-        border-radius: 10px;
-        padding: 8px;
-        margin-top: 5px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
+# common UI CSS
+css_parts.append(
+"""
+       /* remove the default Streamlit header gap */
+       [data-testid="stAppViewContainer"] > section:first-child {
+           padding-top: 18px !important;
+           margin-top: 0px !important;
+       }
+
+       /* hide builtin menu / footer if desired */
+       #MainMenu { visibility: hidden; }
+       footer { visibility: hidden; }
+
+       /* login card appearance */
+       .login-card {
+           background: rgba(10,10,10,0.6);
+           padding: 1.6rem;
+           border-radius: 12px;
+           max-width: 840px;
+           margin: 18px auto;
+           color: #fff;
+           box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+       }
+
+       /* uniform button sizing */
+       div.stButton > button {
+           width: 100%;
+           height: 44px;
+           font-size: 15px;
+           border-radius: 8px;
+       }
+
+       /* inputs look */
+       .stTextInput>div>div>input, .stTextInput>div>div>div>input {
+           background: rgba(0,0,0,0.55);
+           color: #fff;
+       }
+
+       /* make containers slightly translucent on top of background */
+       .stContainer, .stMarkdown, .stExpander {
+           color: #fff;
+       }
+       """
 )
+
+st.markdown("<style>" + "\n".join(css_parts) + "</style>", unsafe_allow_html=True)
+
+
+# call background (make sure can.jpg exists or pass None)
+set_background("cof.jpg")
 
 # ---------------------------
 # DB CONNECTION (Snowflake) OR LOCAL FALLBACK
@@ -490,21 +527,17 @@ elif st.session_state.page == "main":
 
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
-# 3️⃣ Columns layout
-col_left, col_right = st.columns([2, 1])
+# Columns layout
+col_left, col_right = st.columns([1, 1])
 
-# 4️⃣ Left: AI Assistant
 with col_left:
-    st.markdown('<div class="ai-box">', unsafe_allow_html=True)
     st.subheader("🤖 Canteen AI Assistant")
-    ai_query = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+    q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+    
     if st.button("Ask AI", key="ai_button_main"):
-        # Fake AI response for demo
-        answer = f"AI says: You asked '{ai_query}'"
-        st.markdown(f"<div style='color: black; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
+        with st.spinner("Asking AI..."):
+            answer = run_ai(q)
+            st.markdown(f"<div style='color: black; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
     # RIGHT: Sentiment analysis
     with col_right:
