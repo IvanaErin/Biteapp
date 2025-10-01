@@ -426,14 +426,14 @@ def password_valid_rules(pw: str):
 # LOGIN PAGE
 # ---------------------------
 if st.session_state.page == "login":
-    st.markdown(
-        """
-        <h1 style='text-align: center; color: white; margin-top: -20px;'>
-            ☕ BiteHub — Login
-        </h1>
-        """,
-        unsafe_allow_html=True
-    )
+st.markdown(
+    """
+    <div style='text-align: center; margin-top: -20px;'>
+        <img src='bite.jpg' width='180'>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 
     username = st.text_input("Username", placeholder="Enter username", key="login_username")
