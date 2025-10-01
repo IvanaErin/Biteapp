@@ -560,7 +560,6 @@ elif st.session_state.page == "main":
                             st.warning("Sentiment AI unavailable")
 
         # Cart, ordering, and feedback submission below the two columns
-        
     # Menu display
     st.divider()
     st.subheader("📋 Full Menu")
