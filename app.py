@@ -532,7 +532,7 @@ elif st.session_state.page == "main":
     col_left, col_right = st.columns([2, 1])
 
     # LEFT: AI assistant
-    with col_left:
+with col_left:
     st.subheader("🤖 Canteen AI Assistant")
     q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
     
