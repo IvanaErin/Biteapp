@@ -559,72 +559,44 @@ if user["role"] == "Non-Staff":
     # Menu display and ordering (new column set)
     st.divider()
     st.subheader("📋 Full Menu")
-    colA, colB = st.columns([2, 1])  # <-- define colB here
-with colA:
-    for cat, items in menu_data.items():
-        with st.expander(cat, expanded=False):
-            for item_name, price in items.items():
-                st.write(f"- {item_name}: ₱{price}")
+    colA, colB = st.columns([2, 1])
+    with colA:
+        for cat, items in menu_data.items():
+            with st.expander(cat, expanded=False):
+                for item_name, price in items.items():
+                    st.write(f"- {item_name}: ₱{price}")
 
-with colB:
-    st.subheader("✍️ Give Feedback")
-    if is_guest:
-        st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
-    else:  # ✅ aligned with the `if`
-        fb_item = st.selectbox(
-            "Select Item:", 
-            ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], 
-            key="fb_item"
-        )
-        rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
-        fb_text = st.text_area("Your Feedback:", key="fb_text")
-        if st.button("Submit Feedback", key="submit_fb_nonstaff"):
-            if fb_item != "(select)" and fb_text.strip():
-                try:
-                    save_feedback(fb_item, fb_text.strip(), rating, username=user["username"])
-                    st.success("✅ Feedback submitted!")
-                except Exception as e:
-                    st.error(f"Failed to save feedback: {e}")
-            else:
-                st.warning("Choose an item and write feedback.")
-        st.divider()
-        st.subheader("🔔 Notifications")
-        if st.session_state.notifications:
-            for n in st.session_state.notifications[-6:]:
-                st.info(n)
+    with colB:
+        st.subheader("✍️ Give Feedback")
+        if is_guest:
+            st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
         else:
-            st.info("No notifications yet.")
-
-        # Order History
-        st.divider()
-        st.subheader("📦 Order History / Track")
-        try:
-            receipts_df = load_receipts_df()
-            if not receipts_df.empty:
-                my = receipts_df if is_guest else receipts_df[receipts_df["user_id"] == user["username"]]
-                if not my.empty:
-                    st.dataframe(my[["order_id", "items", "total", "payment_method", "pickup_time", "status", "timestamp"]])
+            fb_item = st.selectbox(
+                "Select Item:", 
+                ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], 
+                key="fb_item"
+            )
+            rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
+            fb_text = st.text_area("Your Feedback:", key="fb_text")
+            if st.button("Submit Feedback", key="submit_fb_nonstaff"):
+                if fb_item != "(select)" and fb_text.strip():
+                    try:
+                        save_feedback(fb_item, fb_text.strip(), rating, username=user["username"])
+                        st.success("✅ Feedback submitted!")
+                    except Exception as e:
+                        st.error(f"Failed to save feedback: {e}")
                 else:
-                    st.info("No previous orders found.")
-            else:
-                st.info("No receipts recorded yet.")
-        except Exception as e:
-            st.error(f"Could not load receipts: {e}")
+                    st.warning("Choose an item and write feedback.")
 
-        if st.button("Log Out", key="logout_nonstaff"):
-            st.session_state.page = "login"
-            st.session_state.user = None
-            st.rerun()
-
-    # ---------------------------
-    # STAFF PORTAL
-    # ---------------------------
-    elif user["role"] == "Staff":
-        st.title("🛠️ BiteHub Staff Portal")
-        # ... Staff portal code remains the same ...
-
-        choice = st.sidebar.radio("Staff Menu", ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"])
-
+# ---------------------------
+# STAFF PORTAL
+# ---------------------------
+elif user["role"] == "Staff":
+    st.title("🛠️ BiteHub Staff Portal")
+    choice = st.sidebar.radio(
+        "Staff Menu", 
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+    )
         if choice == "Dashboard":
             st.subheader("📊 Staff Dashboard")
             st.info("Overview: pending orders, quick sales, and recent feedback.")
