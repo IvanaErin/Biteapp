@@ -529,7 +529,7 @@ elif st.session_state.page == "main":
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
     # Define the two columns **inside this block**
-    col_left, col_right = st.columns([2, 1])
+    col_left, col_right = st.columns([1, 1])
 
     # LEFT: AI assistant
 with col_left:
@@ -539,7 +539,7 @@ with col_left:
     if st.button("Ask AI", key="ai_button_main"):
         with st.spinner("Asking AI..."):
             answer = run_ai(q)
-            st.markdown(f"<div style='color: white; font-size:25px'>{answer}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color: white; font-size:20px'>{answer}</div>", unsafe_allow_html=True)
 
 
     # RIGHT: Sentiment analysis
