@@ -505,100 +505,39 @@ elif st.session_state.page == "signup":
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# UI: MAIN PORTAL (Non-Staff + Staff)
+# MAIN PORTAL
 # ---------------------------
-elif st.session_state.page == "main":
+if st.session_state.page == "main":
     user = st.session_state.user or {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0}
-    if "loyalty_points" not in user:
-        user["loyalty_points"] = user.get("loyalty_points", 0)
-
-    # Guest banner
-    if user["username"] == "Guest":
-        st.warning("🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting.")
-
-    st.title(f"🏫 Welcome {user['username']} to BiteHub")
-
-    # ---------------------------
-    # Non-Staff UX
-    # ---------------------------
-    if user["role"] == "Non-Staff":
-        is_guest = user["username"] == "Guest"
-
-# Two main columns: left = AI, right = feedback
-col_left, col_right = st.columns([1, 1])
-
-# LEFT COLUMN: AI Assistant + Ordering
-with col_left:
-    st.subheader("🤖 Canteen AI Assistant")
-    q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
-    if st.button("Ask AI", key="ai_button_main"):
-        with st.spinner("Asking AI..."):
-            answer = run_ai(q)
-            st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
-
-    st.divider()
-    st.subheader("🛒 Menu & Add to Cart")
-    for cat, items in menu_data.items():
-        with st.expander(cat, expanded=False):
-            for item_name, price in items.items():
-                col_item, col_btn = st.columns([3,1])
-                with col_item:
-                    st.write(f"- {item_name}: ₱{price}")
-                with col_btn:
-                    if st.button(f"Add {item_name}", key=f"add_{item_name}"):
-                        if item_name in st.session_state.cart:
-                            st.session_state.cart[item_name] += 1
-                        else:
-                            st.session_state.cart[item_name] = 1
-                        st.success(f"✅ {item_name} added to cart")
-
-    # Show Cart & Place Order
-    if st.session_state.cart:
-        st.divider()
-        st.subheader("🛒 Your Cart")
-        total = 0
-        for item, qty in st.session_state.cart.items():
-            price = None
-            for cat_items in menu_data.values():
-                if item in cat_items:
-                    price = cat_items[item]
-                    break
-            line_total = price * qty
-            total += line_total
-            st.write(f"{item} x{qty} = ₱{line_total}")
-        st.write(f"**Total: ₱{total}**")
-        if st.button("Place Order", key="place_order"):
-            try:
-                order_id = f"ORD{random.randint(1000,9999)}"
-                save_receipt(order_id, str(st.session_state.cart), total, "Cash", user["username"])
-                st.session_state.cart = {}  # empty cart after order
-                st.success(f"✅ Order {order_id} placed successfully!")
-            except Exception as e:
-                st.error(f"Failed to place order: {e}")
-
-# RIGHT COLUMN: Feedback / Sentiment (Non-Staff)
-if user["role"] == "Non-Staff":
     is_guest = user["username"] == "Guest"
 
-    col_left, col_right = st.columns([1, 1])
+    st.title(f"🏫 Welcome {user['username']} to BiteHub")
+    if is_guest:
+        st.warning("🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting.")
 
-    # LEFT: AI Assistant
-    with col_left:
-        st.subheader("🤖 Canteen AI Assistant")
-        q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
-        if st.button("Ask AI", key="ai_button_main"):
-            with st.spinner("Asking AI..."):
-                answer = run_ai(q)
-                st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+    # ---------------------------
+    # NON-STAFF UX
+    # ---------------------------
+    if user["role"] == "Non-Staff":
+        col_left, col_right = st.columns([1, 1])
 
-    # RIGHT: Feedback / Sentiment
-    with col_right:
-        st.subheader("📝 Feedback Sentiment Analysis")
-        for item_name, qty in st.session_state.cart.items():
-            fb_key = f"feedback_{item_name}"
-            feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
-            if feedback_text:
-                if st.button(f"Analyze Sentiment for {item_name}", key=f"analyze_{item_name}"):
+        # LEFT: AI Assistant
+        with col_left:
+            st.subheader("🤖 Canteen AI Assistant")
+            q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+            if st.button("Ask AI", key="ai_button_main"):
+                with st.spinner("Asking AI..."):
+                    answer = run_ai(q)
+                    st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+
+        # RIGHT: Feedback / Sentiment
+        with col_right:
+            st.subheader("📝 Feedback Sentiment Analysis")
+            for idx, (item_name, qty) in enumerate(st.session_state.cart.items()):
+                fb_key = f"feedback_{idx}_{item_name}"  # make unique by index
+                feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
+                analyze_key = f"analyze_{idx}_{item_name}"
+                if feedback_text and st.button(f"Analyze Sentiment for {item_name}", key=analyze_key):
                     prompt = f"""
                     You are a sentiment analysis assistant.
                     The user gave this feedback for {item_name}: "{feedback_text}"
@@ -613,86 +552,88 @@ if user["role"] == "Non-Staff":
                     else:
                         st.warning("Sentiment AI unavailable")
 
-    # Menu & Feedback (still Non-Staff)
-    st.divider()
-    st.subheader("📋 Full Menu")
-    colA, colB = st.columns([2, 1])
-    with colA:
-        for cat, items in menu_data.items():
-            with st.expander(cat, expanded=False):
-                for item_name, price in items.items():
-                    st.write(f"- {item_name}: ₱{price}")
+        # Menu display & Feedback
+        st.divider()
+        st.subheader("📋 Full Menu")
+        colA, colB = st.columns([2, 1])
 
-    with colB:
-        st.subheader("✍️ Give Feedback")
-        if is_guest:
-            st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
-        else:
-            fb_item = st.selectbox(
-                "Select Item:", 
-                ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], 
-                key="fb_item"
-            )
-            rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
-            fb_text = st.text_area("Your Feedback:", key="fb_text")
-            if st.button("Submit Feedback", key="submit_fb_nonstaff"):
-                if fb_item != "(select)" and fb_text.strip():
-                    try:
-                        save_feedback(fb_item, fb_text.strip(), rating, username=user["username"])
-                        st.success("✅ Feedback submitted!")
-                    except Exception as e:
-                        st.error(f"Failed to save feedback: {e}")
-                else:
-                    st.warning("Choose an item and write feedback.")
+        with colA:
+            for cat, items in menu_data.items():
+                with st.expander(cat, expanded=False):
+                    for item_name, price in items.items():
+                        add_key = f"add_{cat}_{item_name}".replace(" ", "_")
+                        if st.button(f"Add {item_name}", key=add_key):
+                            st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + 1
+                            st.experimental_rerun()
 
-
-# ---------------------------
-# STAFF PORTAL
-# ---------------------------
-elif user["role"] == "Staff":
-    st.title("🛠️ BiteHub Staff Portal")
-    choice = st.sidebar.radio(
-        "Staff Menu", 
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
-    )
-
-    if choice == "Dashboard":
-        st.subheader("📊 Staff Dashboard")
-        st.info("Overview: pending orders, quick sales, and recent feedback.")
-        try:
-            receipts = load_receipts_df()
-            fb = load_feedbacks_df()
-            st.metric("Total Orders", len(receipts))
-            st.metric("Feedbacks", len(fb))
-            pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
-            st.metric("Pending Orders", len(pending))
-        except Exception as e:
-            st.error(f"Could not load quick stats: {e}")
-
-    elif choice == "Pending Orders":
-        st.subheader("📦 Pending Orders")
-        try:
-            receipts_df = load_receipts_df()
-            if not receipts_df.empty:
-                pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
-                if not pending.empty:
-                    for _, row in pending.iterrows():
-                        st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | Pickup: {row['pickup_time']} | By: {row['user_id']}")
-                        if st.button(f"Mark Ready {row['order_id']}", key=f"ready_{row['order_id']}"):
-                            set_receipt_status(row['order_id'], "Ready for Pickup")
-                            st.success(f"Order {row['order_id']} marked ready")
-                            st.rerun()
-                else:
-                    st.info("No pending orders.")
+        with colB:
+            st.subheader("✍️ Give Feedback")
+            if is_guest:
+                st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
             else:
-                st.info("No receipts yet.")
-        except Exception as e:
-            st.error(f"Could not load pending orders: {e}")
+                fb_item = st.selectbox(
+                    "Select Item:", 
+                    ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], 
+                    key="fb_item"
+                )
+                rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
+                fb_text = st.text_area("Your Feedback:", key="fb_text")
+                if st.button("Submit Feedback", key="submit_fb_nonstaff"):
+                    if fb_item != "(select)" and fb_text.strip():
+                        try:
+                            save_feedback(fb_item, fb_text.strip(), rating, username=user["username"])
+                            st.success("✅ Feedback submitted!")
+                        except Exception as e:
+                            st.error(f"Failed to save feedback: {e}")
+                    else:
+                        st.warning("Choose an item and write feedback.")
 
-    # Continue similarly for Manage Menu, AI Assistant, Feedback Review, Sales Report
-    # ...
+    # ---------------------------
+    # STAFF UX
+    # ---------------------------
+    elif user["role"] == "Staff":
+        st.title("🛠️ BiteHub Staff Portal")
+        choice = st.sidebar.radio(
+            "Staff Menu", 
+            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+        )
 
-    if st.button("Log Out", key="logout_staff"):
-        st.session_state.page = "login"
-        st.session_state.user = None
-        st.rerun()
+        if choice == "Dashboard":
+            st.subheader("📊 Staff Dashboard")
+            st.info("Overview: pending orders, quick sales, and recent feedback.")
+            try:
+                receipts = load_receipts_df()
+                fb = load_feedbacks_df()
+                st.metric("Total Orders", len(receipts))
+                st.metric("Feedbacks", len(fb))
+                pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
+                st.metric("Pending Orders", len(pending))
+            except Exception as e:
+                st.error(f"Could not load quick stats: {e}")
+
+        elif choice == "Pending Orders":
+            st.subheader("📦 Pending Orders")
+            try:
+                receipts_df = load_receipts_df()
+                if not receipts_df.empty:
+                    pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
+                    if not pending.empty:
+                        for _, row in pending.iterrows():
+                            btn_key = f"ready_{row['order_id']}"
+                            st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | Pickup: {row['pickup_time']} | By: {row['user_id']}")
+                            if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
+                                set_receipt_status(row['order_id'], "Ready for Pickup")
+                                st.success(f"Order {row['order_id']} marked ready")
+                                st.experimental_rerun()
+                    else:
+                        st.info("No pending orders.")
+                else:
+                    st.info("No receipts yet.")
+            except Exception as e:
+                st.error(f"Could not load pending orders: {e}")
+
+        # TODO: Manage Menu, AI Assistant, Feedback Review, Sales Report
+        if st.button("Log Out", key="logout_staff"):
+            st.session_state.page = "login"
+            st.session_state.user = None
+            st.rerun()
