@@ -537,7 +537,7 @@ elif st.session_state.page == "main":
         q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
         if st.button("Ask AI", key="ai_button_main"):
             with st.spinner("Asking AI..."):
-                st.info(run_ai(q))
+                st.markdown(f"<div style='color: black; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
     # RIGHT: Sentiment analysis
     with col_right:
