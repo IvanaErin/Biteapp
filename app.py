@@ -570,7 +570,6 @@ if user["role"] == "Non-Staff":
         st.subheader("✍️ Give Feedback")
         if is_guest:
             st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
-
             else:
                 fb_item = st.selectbox("Select Item:", ["(select)"] + [i for cat in menu_data.values() for i in cat.keys()], key="fb_item")
                 rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
