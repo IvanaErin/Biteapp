@@ -196,7 +196,7 @@ def get_account(username: str):
 
 def validate_account(username: str, password: str):
     acc = get_account(username)
-    if acc and acc["password"] == password:
+    if acc and verify_password(acc["password"], password):
         return acc
     return None
 
