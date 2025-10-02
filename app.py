@@ -902,9 +902,9 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------
-# STAFF PORTAL (inside st.session_state.page == "main")
+# STAFF PORTAL
 # ---------------------------
-if st.session_state.role == "Staff":
+if role == "Staff":
     # Load menu from Snowflake
     menu_df = load_menu()  # Snowflake version
     menu_data = {}
