@@ -873,88 +873,51 @@ elif st.session_state.page == "payment":
                 st.session_state.page = "main"
 
 # ---------------------------
-# STAFF PORTAL
+# STAFF PORTAL (inside st.session_state.page == "main")
 # ---------------------------
-elif user["role"] == "Staff":
-    st.title("🛠️ BiteHub Staff Portal")
-
-    # --- Load menu CSV (editable only by staff) ---
-    default_menu = {
-        "Breakfast": {"Pancakes": 50, "Omelette": 40},
-        "Lunch": {"Burger": 80, "Pizza": 120},
-        "Drinks": {"Coffee": 30, "Juice": 40},
-        "Snacks": {"Chips": 20, "Donut": 25}
-    }
-
-    if not os.path.exists("menu.csv"):
-        menu_list = []
-        for cat, items in default_menu.items():
-            for item, price in items.items():
-                menu_list.append({"Category": cat, "Item": item, "Price": price})
-        pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
-
-    menu_df = pd.read_csv("menu.csv")
-    menu_data = {}
-    for cat, group in menu_df.groupby("Category"):
-        menu_data[cat] = dict(zip(group["Item"], group["Price"]))
-
-    choice = st.sidebar.radio(
-        "Staff Menu", 
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
-    )
-
-    # --- Manage Menu ---
-    if choice == "Manage Menu":
-        st.subheader("📖 Manage Menu")
-        st.info("Add or update menu items")
-        menu_edit_df = pd.DataFrame([
+if role == "Staff":
+    # Load menu.csv once at app startup
+    if os.path.exists("menu.csv"):
+        menu_df = pd.read_csv("menu.csv")
+        menu_data = {}
+        for cat, group in menu_df.groupby("Category"):
+            menu_data[cat] = dict(zip(group["Item"], group["Price"]))
+    else:
+        default_menu = {
+            "Breakfast": {"Pancakes": 50, "Omelette": 40},
+            "Lunch": {"Burger": 80, "Pizza": 120},
+            "Drinks": {"Coffee": 30, "Juice": 40},
+            "Snacks": {"Chips": 20, "Donut": 25}
+        }
+        menu_data = default_menu.copy()
+        # Save default menu to CSV
+        pd.DataFrame([
             {"Category": cat, "Item": item, "Price": price}
             for cat, items in menu_data.items()
             for item, price in items.items()
-        ])
-        edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
+        ]).to_csv("menu.csv", index=False)
 
-        if st.button("💾 Save Menu Updates"):
-            # Convert edited DataFrame back to nested dictionary
-            new_menu = {}
-            menu_list_to_save = []
-            for _, row in edited_df.iterrows():
-                cat = row["Category"]
-                item = row["Item"]
-                price = row["Price"]
-
-                if cat not in new_menu:
-                    new_menu[cat] = {}
-                new_menu[cat][item] = price
-
-                # Prepare list for CSV saving
-                menu_list_to_save.append({"Category": cat, "Item": item, "Price": price})
-
-            # Update in-memory menu
-            menu_data.clear()
-            menu_data.update(new_menu)
-
-            # Save to CSV for persistence
-            pd.DataFrame(menu_list_to_save).to_csv("menu.csv", index=False)
-
-            st.success("✅ Menu updated and saved!")
-            st.rerun()
-            
+    # Sidebar menu
     choice = st.sidebar.radio(
         "Staff Menu", 
         ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
     )
 
+    # ---------------------------
+    # DASHBOARD
+    # ---------------------------
     if choice == "Dashboard":
         st.subheader("📊 Staff Dashboard")
-        st.info("Overview: pending orders, quick sales, and recent feedback.")
         receipts = load_receipts_df()
         fb = load_feedbacks_df()
+        pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
         st.metric("Total Orders", len(receipts))
         st.metric("Feedbacks", len(fb))
-        pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
         st.metric("Pending Orders", len(pending))
 
+    # ---------------------------
+    # PENDING ORDERS
+    # ---------------------------
     elif choice == "Pending Orders":
         st.subheader("📦 Pending Orders")
         receipts_df = load_receipts_df()
@@ -973,6 +936,52 @@ elif user["role"] == "Staff":
         else:
             st.info("No receipts yet.")
 
+    # ---------------------------
+    # MANAGE MENU
+    # ---------------------------
+    elif choice == "Manage Menu":
+        st.subheader("📖 Manage Menu")
+        st.info("Add, edit, or remove menu items")
+
+        # Create editable DataFrame
+        menu_edit_df = pd.DataFrame([
+            {"Category": cat, "Item": item, "Price": price}
+            for cat, items in menu_data.items()
+            for item, price in items.items()
+        ])
+
+        edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
+
+        if st.button("💾 Save Menu Updates"):
+            new_menu = {}
+            menu_list_to_save = []
+
+            for _, row in edited_df.iterrows():
+                # Skip empty rows
+                if pd.isna(row["Category"]) or pd.isna(row["Item"]) or pd.isna(row["Price"]):
+                    continue
+                cat = row["Category"]
+                item = row["Item"]
+                price = row["Price"]
+
+                if cat not in new_menu:
+                    new_menu[cat] = {}
+                new_menu[cat][item] = price
+                menu_list_to_save.append({"Category": cat, "Item": item, "Price": price})
+
+            # Update in-memory menu
+            menu_data.clear()
+            menu_data.update(new_menu)
+
+            # Save to CSV
+            pd.DataFrame(menu_list_to_save).to_csv("menu.csv", index=False)
+
+            st.success("✅ Menu updated and saved!")
+            st.rerun()
+
+    # ---------------------------
+    # AI ASSISTANT
+    # ---------------------------
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
         q = st.text_input("Ask AI about sales, menu trends, or customer feedback:")
@@ -980,6 +989,9 @@ elif user["role"] == "Staff":
             answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
             st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
+    # ---------------------------
+    # FEEDBACK REVIEW
+    # ---------------------------
     elif choice == "Feedback Review":
         st.subheader("📝 All Customer Feedback")
         fb_df = load_feedbacks_df()
@@ -988,11 +1000,13 @@ elif user["role"] == "Staff":
         else:
             st.info("No feedback received yet.")
 
+    # ---------------------------
+    # SALES REPORT
+    # ---------------------------
     elif choice == "Sales Report":
         st.subheader("💹 Sales Report")
         receipts = load_receipts_df()
         if not receipts.empty:
-            # Pie chart: sales per category
             category_sales = {}
             for cat, items in menu_data.items():
                 total_cat = sum(
@@ -1006,7 +1020,10 @@ elif user["role"] == "Staff":
             st.pyplot(fig)
         else:
             st.info("No sales data yet.")
-            
+
+    # ---------------------------
+    # LOGOUT
+    # ---------------------------
     if st.button("Log Out", key="logout_staff"):
         st.session_state.page = "login"
         st.session_state.user = None
