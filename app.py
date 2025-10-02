@@ -471,13 +471,14 @@ elif st.session_state.page == "signup":
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+# Ensure user is always defined
+user = st.session_state.get("user", {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0})
+is_guest = user["username"] == "Guest"
+
 # ---------------------------
 # MAIN PORTAL
 # ---------------------------
 if st.session_state.page == "main":
-    user = st.session_state.user or {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0}
-    is_guest = user["username"] == "Guest"
-
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
     if is_guest:
         st.warning("🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting.")
