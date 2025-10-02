@@ -466,96 +466,103 @@ elif st.session_state.page == "signup":
 
     st.markdown("</div>", unsafe_allow_html=True)
 # ---------------------------
-# HELPER: Get current user safely
+# HELPER FUNCTIONS
 # ---------------------------
 def get_current_user():
     user = st.session_state.get("user")
     if not isinstance(user, dict):
-        # Fallback to guest
         user = {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0}
-    # Ensure required keys exist
     user.setdefault("username", "Guest")
     user.setdefault("role", "Non-Staff")
     user.setdefault("loyalty_points", 0)
     return user
 
-# ---------------------------
-# SESSION VARIABLES
-# ---------------------------
-user = get_current_user()
-is_guest = user.get("username") == "Guest"
-page = st.session_state.get("page", "main")
+def save_receipt(order_id, items_str, total, payment_method, user_id, pickup_time, status):
+    st.session_state.receipts = st.session_state.get("receipts", {})
+    st.session_state.receipts[order_id] = {
+        "user": user_id,
+        "items": items_str,
+        "total": total,
+        "payment_method": payment_method,
+        "pickup": pickup_time,
+        "status": status,
+        "timestamp": datetime.now()
+    }
+
+def save_feedback(item, text, rating, user_id):
+    st.session_state.feedbacks = st.session_state.get("feedbacks", [])
+    st.session_state.feedbacks.append({
+        "item": item,
+        "text": text,
+        "rating": rating,
+        "user": user_id,
+        "timestamp": datetime.now()
+    })
+
+# Mock function to load receipts (replace with database logic)
+def load_receipts_df():
+    import pandas as pd
+    receipts = st.session_state.get("receipts", {})
+    if receipts:
+        df = pd.DataFrame.from_dict(receipts, orient="index")
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        return df
+    return pd.DataFrame()
 
 # ---------------------------
-# MAIN PORTAL
+# SESSION STATE INIT
+# ---------------------------
+if "cart" not in st.session_state:
+    st.session_state.cart = {}
+if "page" not in st.session_state:
+    st.session_state.page = "main"
+if "pending_order" not in st.session_state:
+    st.session_state.pending_order = {}
+if "notifications" not in st.session_state:
+    st.session_state.notifications = []
+
+# ---------------------------
+# USER + MENU SETUP
+# ---------------------------
+user = get_current_user()
+is_guest = user["username"] == "Guest"
+page = st.session_state.page
+
+# Mock menu
+menu_data = {
+    "Breakfast": {"Longsilog": 65, "Tapsilog": 70, "Porksilog": 75},
+    "Lunch": {"Chicken Adobo": 120, "Beef Steak": 150},
+    "Drinks": {"Coffee": 40, "Tea": 35, "Juice": 50},
+    "Snacks": {"Banana Cue": 25, "Turon": 30}
+}
+
+# ---------------------------
+# MAIN PORTAL PAGE
 # ---------------------------
 if page == "main":
-    # Only show welcome message once
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
     if is_guest:
         st.warning(
             "🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting."
         )
-        st.info("Your cart is empty. Add items from the menu to order.")
 
-    # ---------------------------
-    # NON-STAFF UX: AI + Feedback
-    # ---------------------------
-    if user.get("role") == "Non-Staff":
-        col_left, col_right = st.columns([1, 1])
-        # LEFT: AI Assistant
-        with col_left:
-            st.subheader("🤖 Canteen AI Assistant")
-            q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
-            if st.button("Ask AI", key="ai_button_main"):
-                with st.spinner("Asking AI..."):
-                    answer = run_ai(q)
-                    st.markdown(
-                        f"<div style='color: white; font-size:16px'>{answer}</div>",
-                        unsafe_allow_html=True
-                    )
+    # TWO-COLUMN LAYOUT
+    col_left, col_right = st.columns([2, 1])
 
-        # RIGHT: Feedback Submission
-        with col_right:
-            st.subheader("✍️ Give Feedback")
-            if is_guest:
-                st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
-            else:
-                # Flatten menu items for feedback
-                all_items = [i for cat in menu_data.values() for i in cat.keys()]
-                fb_item = st.selectbox("Select Item:", ["(select)"] + all_items, key="fb_item")
-                rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
-                fb_text = st.text_area("Your Feedback:", key="fb_text")
-                if st.button("Submit Feedback", key="submit_fb_nonstaff"):
-                    if fb_item != "(select)" and fb_text.strip():
-                        try:
-                            save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
-                            st.success("✅ Feedback submitted!")
-                        except Exception as e:
-                            st.error(f"Failed to save feedback: {e}")
-                    else:
-                        st.warning("Choose an item and write feedback.")
+    # LEFT COLUMN: AI + MENU + CART + PAYMENT METHOD
+    with col_left:
+        # AI Assistant
+        st.subheader("🤖 Canteen AI Assistant")
+        q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+        if st.button("Ask AI", key="ai_button_main"):
+            with st.spinner("Asking AI..."):
+                answer = run_ai(q)
+                st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-    # ---------------------------
-    # NOTIFICATIONS (below feedback)
-    # ---------------------------
-    if st.session_state.notifications:
-        st.subheader("📢 Notifications")
-        for note in st.session_state.notifications:
-            st.info(note)
-        if st.button("Clear notifications", key="clear_notifs"):
-            st.session_state.notifications.clear()
-
-    # ---------------------------
-    # MENU DISPLAY
-    # ---------------------------
-    st.divider()
-    st.subheader("📋 Full Menu")
-    colA, colB = st.columns([2, 1])
-
-    # LEFT COLUMN: Menu
-    with colA:
+        # Menu display
+        st.divider()
+        st.subheader("📋 Full Menu")
         for cat, items in menu_data.items():
             with st.expander(cat, expanded=False):
                 for item_name, price in items.items():
@@ -565,8 +572,58 @@ if page == "main":
                         st.success(f"Added 1 x {item_name}")
                         st.experimental_rerun()
 
-    # RIGHT COLUMN: Feedback
-    with colB:
+        # Cart + Checkout
+        st.divider()
+        st.subheader("🛒 Your Cart")
+        if st.session_state.cart:
+            total = 0
+            for item, qty in st.session_state.cart.items():
+                price = next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0)
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"{item} x {qty} — ₱{price * qty}")
+                with col2:
+                    if st.button(f"➖ Remove {item}", key=f"remove_{item}"):
+                        if st.session_state.cart[item] > 1:
+                            st.session_state.cart[item] -= 1
+                        else:
+                            del st.session_state.cart[item]
+                        st.experimental_rerun()
+                total += price * qty
+
+            st.write(f"**Subtotal: ₱{total}**")
+            pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
+            pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
+            payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
+
+            if st.button("Proceed to Payment", key="checkout_btn"):
+                st.session_state.pending_order = {
+                    "items": dict(st.session_state.cart),
+                    "total": total,
+                    "pickup_dt": datetime.combine(pickup_date, pickup_time),
+                    "payment_method": payment_method,
+                    "user_id": user["username"]
+                }
+                st.session_state.page = "payment"
+                st.success("Go to the Payment page to complete your order.")
+
+        else:
+            st.info("Your cart is empty. Add items to proceed.")
+
+    # RIGHT COLUMN: Sentiment Analysis + Feedback + Notifications
+    with col_right:
+        # Sentiment Analysis
+        st.subheader("📝 Feedback Sentiment Analysis")
+        for idx, (item_name, qty) in enumerate(st.session_state.get("cart", {}).items()):
+            fb_key = f"feedback_{idx}_{item_name}"
+            feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
+            analyze_key = f"analyze_{idx}_{item_name}"
+            if feedback_text and st.button(f"Analyze Sentiment for {item_name}", key=analyze_key):
+                prompt = f"You are a sentiment analysis assistant. The user gave this feedback for {item_name}: '{feedback_text}'. Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐."
+                st.info("Sentiment analysis simulated: Positive")  # Replace with AI call
+
+        # Feedback submission
+        st.divider()
         st.subheader("✍️ Give Feedback")
         if is_guest:
             st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
@@ -577,51 +634,18 @@ if page == "main":
             fb_text = st.text_area("Your Feedback:", key="fb_text")
             if st.button("Submit Feedback", key="submit_fb_nonstaff"):
                 if fb_item != "(select)" and fb_text.strip():
-                    try:
-                        save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
-                        st.success("✅ Feedback submitted!")
-                    except Exception as e:
-                        st.error(f"Failed to save feedback: {e}")
+                    save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
+                    st.success("✅ Feedback submitted!")
                 else:
                     st.warning("Choose an item and write feedback.")
-    # ---------------------------
-    # CART + CHECKOUT
-    # ---------------------------
-    st.divider()
-    st.subheader("🛒 Your Cart")
-    if st.session_state.cart:
-        total = 0
-        for item, qty in st.session_state.cart.items():
-            price = next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0)
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"{item} x {qty} — ₱{price * qty}")
-            with col2:
-                if st.button(f"➖ Remove {item}", key=f"remove_{item}"):
-                    if st.session_state.cart[item] > 1:
-                        st.session_state.cart[item] -= 1
-                    else:
-                        del st.session_state.cart[item]
-                    st.experimental_rerun()
-            total += price * qty
 
-        st.write(f"**Subtotal: ₱{total}**")
-        pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
-        pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
-        payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
-
-        if st.button("Checkout", key="checkout_btn"):
-            st.session_state.pending_order = {
-                "items": dict(st.session_state.cart),
-                "total": total,
-                "pickup_dt": datetime.combine(pickup_date, pickup_time),
-                "payment_method": payment_method,
-                "user_id": user["username"]
-            }
-            st.session_state.page = "payment"
-            st.success("Proceed to payment to confirm your order.")
-    else:
-        st.info("Your cart is empty. Add items to proceed.")
+        # Notifications
+        st.divider()
+        st.subheader("📢 Notifications")
+        for note in st.session_state.notifications:
+            st.info(note)
+        if st.button("Clear notifications", key="clear_notifs"):
+            st.session_state.notifications.clear()
 
 # ---------------------------
 # PAYMENT PAGE
@@ -635,52 +659,57 @@ elif page == "payment":
         st.write(f"Total: ₱{pending['total']}")
         st.write(f"Payment Method: {pending['payment_method']}")
 
-        try:
-            # Cash payment
-            if pending["payment_method"] == "Cash":
-                if st.button("Confirm Cash Payment"):
-                    order_id = f"ORD{random.randint(10000,99999)}"
-                    items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
-                    save_receipt(order_id, items_str, pending["total"], "Cash", pending["user_id"], pending["pickup_dt"], "Paid")
-                    st.success(f"Order confirmed! Order ID: {order_id}")
-                    receipt_text = f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: Cash\nPickup: {pending['pickup_dt']}\nStatus: Paid\nPlaced at: {datetime.now().isoformat()}\n"
-                    st.download_button("Download Receipt (txt)", data=receipt_text, file_name=f"{order_id}_receipt.txt")
-                    st.session_state.cart = {}
-                    st.session_state.pending_order = {}
-                    st.session_state.page = "main"
+        if pending["payment_method"] == "Cash":
+            if st.button("Confirm Cash Payment"):
+                order_id = f"ORD{random.randint(10000,99999)}"
+                items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
+                save_receipt(order_id, items_str, pending["total"], "Cash", pending["user_id"], pending["pickup_dt"], "Paid")
+                st.success(f"Order confirmed! Order ID: {order_id}")
+                receipt_text = f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: Cash\nPickup: {pending['pickup_dt']}\nStatus: Paid"
+                st.download_button("Download Receipt (txt)", data=receipt_text, file_name=f"{order_id}_receipt.txt")
+                st.session_state.cart = {}
+                st.session_state.pending_order = {}
+                st.session_state.page = "main"
 
-            # GCash or Card payment
-            elif pending["payment_method"] in ["GCash", "Card"]:
-                st.info("Please complete the payment to confirm your order.")
+        elif pending["payment_method"] in ["GCash", "Card"]:
+            if pending["payment_method"] == "GCash":
+                st.image("https://via.placeholder.com/150?text=GCash+QR")
+            if pending["payment_method"] == "Card":
+                card_number = st.text_input("Card Number")
+                expiry = st.text_input("Expiry MM/YY")
+                cvv = st.text_input("CVV")
 
-                if pending["payment_method"] == "GCash":
-                    st.image("https://via.placeholder.com/150?text=GCash+QR")  # Replace with real QR
-                if pending["payment_method"] == "Card":
-                    card_number = st.text_input("Card Number")
-                    expiry = st.text_input("Expiry MM/YY")
-                    cvv = st.text_input("CVV")
+            if st.button("Simulate Payment Success"):
+                order_id = f"ORD{random.randint(10000,99999)}"
+                items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
+                save_receipt(order_id, items_str, pending["total"], pending["payment_method"], pending["user_id"], pending["pickup_dt"], "Paid")
+                st.success(f"Payment confirmed! Order ID: {order_id}")
+                receipt_text = f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: {pending['payment_method']}\nPickup: {pending['pickup_dt']}\nStatus: Paid"
+                st.download_button("Download Receipt (txt)", data=receipt_text, file_name=f"{order_id}_receipt.txt")
 
-                if st.button("Simulate Payment Success"):
-                    order_id = f"ORD{random.randint(10000,99999)}"
-                    items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
-                    save_receipt(order_id, items_str, pending["total"], pending["payment_method"], pending["user_id"], pending["pickup_dt"], "Paid")
-                    st.success(f"Payment confirmed! Order ID: {order_id}")
+                st.session_state.notifications.append(f"Order {order_id} placed — Payment: {pending['payment_method']} — Pickup: {pending['pickup_dt']}")
+                if not is_guest:
+                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
 
-                    receipt_text = f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: {pending['payment_method']}\nPickup: {pending['pickup_dt']}\nStatus: Paid\nPlaced at: {datetime.now().isoformat()}\n"
-                    st.download_button("Download Receipt (txt)", data=receipt_text, file_name=f"{order_id}_receipt.txt")
+                st.session_state.cart = {}
+                st.session_state.pending_order = {}
+                st.session_state.page = "main"
 
-                    # Update notifications & loyalty points
-                    st.session_state.notifications.append(f"Order {order_id} placed — Payment: {pending['payment_method']} — Pickup: {pending['pickup_dt']}")
-                    if not is_guest:
-                        st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
-
-                    # Clear cart & return to main
-                    st.session_state.cart = {}
-                    st.session_state.pending_order = {}
-                    st.session_state.page = "main"
-
-        except Exception as e:
-            st.error(f"Failed to process payment: {e}")
+# ---------------------------
+# ORDER HISTORY (visible on main page)
+# ---------------------------
+if page == "main":
+    st.divider()
+    st.subheader("📜 Your Order History")
+    history = load_receipts_df()
+    if not history.empty:
+        user_orders = history[history["user"] == user["username"]]
+        if not user_orders.empty:
+            st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+        else:
+            st.info("No past orders yet.")
+    else:
+        st.info("No orders have been made yet.")
 
 # ---------------------------
 # STAFF UX
