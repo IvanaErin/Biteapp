@@ -501,29 +501,42 @@ if page == "main":
     # ---------------------------
     # NON-STAFF UX
     # ---------------------------
-if user.get("role") == "Non-Staff":
-    col_left, col_right = st.columns([1, 1])
-    # RIGHT: Feedback / Sentiment
-    with col_right:
-        st.subheader("📝 Feedback Sentiment Analysis")
-        for idx, (item_name, qty) in enumerate(st.session_state.cart.items()):
-            fb_key = f"feedback_{idx}_{item_name}"  # unique key
-            feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
-            analyze_key = f"analyze_{idx}_{item_name}"
-            if feedback_text and st.button(f"Analyze Sentiment for {item_name}", key=analyze_key):
-                prompt = f"""
-                You are a sentiment analysis assistant.
-                The user gave this feedback for {item_name}: "{feedback_text}"
-                Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
-                """
-                if client:
-                    resp = client.chat.completions.create(
-                        model="llama-3.1-8b-instant",
-                        messages=[{"role": "user", "content": prompt}]
+    if user.get("role") == "Non-Staff":
+        col_left, col_right = st.columns([1, 1])
+        # LEFT: AI Assistant
+        with col_left:
+            st.subheader("🤖 Canteen AI Assistant")
+            q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
+            if st.button("Ask AI", key="ai_button_main"):
+                with st.spinner("Asking AI..."):
+                    answer = run_ai(q)
+                    st.markdown(
+                        f"<div style='color: white; font-size:16px'>{answer}</div>",
+                        unsafe_allow_html=True
                     )
-                    st.success(resp.choices[0].message.content)
-                else:
-                    st.warning("Sentiment AI unavailable")
+
+        # RIGHT: Feedback / Sentiment
+        with col_right:
+            st.subheader("📝 Feedback Sentiment Analysis")
+            for idx, (item_name, qty) in enumerate(st.session_state.get("cart", {}).items()):
+                fb_key = f"feedback_{idx}_{item_name}"
+                feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
+                analyze_key = f"analyze_{idx}_{item_name}"
+                if feedback_text and st.button(f"Analyze Sentiment for {item_name}", key=analyze_key):
+                    prompt = f"""
+                    You are a sentiment analysis assistant.
+                    The user gave this feedback for {item_name}: "{feedback_text}"
+                    Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
+                    """
+                    if client:
+                        resp = client.chat.completions.create(
+                            model="llama-3.1-8b-instant",
+                            messages=[{"role": "user", "content": prompt}]
+                        )
+                        st.success(resp.choices[0].message.content)
+                    else:
+                        st.warning("Sentiment AI unavailable")
+
 
     # ---------------------------
     # Notifications
