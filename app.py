@@ -897,11 +897,20 @@ if role == "Staff":
             for item, price in items.items()
         ]).to_csv("menu.csv", index=False)
 
-    # Sidebar menu
-    choice = st.sidebar.radio(
-        "Staff Menu", 
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+    # ---------------------------
+    # STAFF MENU SIDEBAR
+    # ---------------------------
+    if "staff_choice" not in st.session_state:
+        st.session_state.staff_choice = "Dashboard"
+
+    st.session_state.staff_choice = st.sidebar.radio(
+        "Staff Menu",
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+        key="staff_menu_radio",
+        index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(st.session_state.staff_choice)
     )
+
+    choice = st.session_state.staff_choice
 
     # ---------------------------
     # DASHBOARD
@@ -943,21 +952,26 @@ if role == "Staff":
         st.subheader("📖 Manage Menu")
         st.info("Add, edit, or remove menu items")
 
-        # Create editable DataFrame
-        menu_edit_df = pd.DataFrame([
-            {"Category": cat, "Item": item, "Price": price}
-            for cat, items in menu_data.items()
-            for item, price in items.items()
-        ])
+        # Store editable menu in session_state
+        if "menu_edit_df" not in st.session_state:
+            st.session_state.menu_edit_df = pd.DataFrame([
+                {"Category": cat, "Item": item, "Price": price}
+                for cat, items in menu_data.items()
+                for item, price in items.items()
+            ])
 
-        edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
+        edited_df = st.data_editor(
+            st.session_state.menu_edit_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="menu_data_editor"
+        )
 
-        if st.button("💾 Save Menu Updates"):
+        if st.button("💾 Save Menu Updates", key="save_menu_btn"):
             new_menu = {}
             menu_list_to_save = []
 
             for _, row in edited_df.iterrows():
-                # Skip empty rows
                 if pd.isna(row["Category"]) or pd.isna(row["Item"]) or pd.isna(row["Price"]):
                     continue
                 cat = row["Category"]
@@ -969,13 +983,13 @@ if role == "Staff":
                 new_menu[cat][item] = price
                 menu_list_to_save.append({"Category": cat, "Item": item, "Price": price})
 
-            # Update in-memory menu
+            # Update in-memory menu and session
             menu_data.clear()
             menu_data.update(new_menu)
+            st.session_state.menu_edit_df = edited_df.copy()
 
             # Save to CSV
             pd.DataFrame(menu_list_to_save).to_csv("menu.csv", index=False)
-
             st.success("✅ Menu updated and saved!")
             st.rerun()
 
@@ -984,9 +998,17 @@ if role == "Staff":
     # ---------------------------
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
-        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:")
-        if st.button("Ask Staff AI") and q:
-            answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
+        if "ai_query" not in st.session_state:
+            st.session_state.ai_query = ""
+
+        st.session_state.ai_query = st.text_input(
+            "Ask AI about sales, menu trends, or customer feedback:",
+            value=st.session_state.ai_query,
+            key="ai_input"
+        )
+
+        if st.button("Ask Staff AI", key="ask_ai_btn") and st.session_state.ai_query:
+            answer = run_ai(st.session_state.ai_query, extra_context="STAFF MODE: Provide analytics insights")
             st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
     # ---------------------------
@@ -1010,7 +1032,10 @@ if role == "Staff":
             category_sales = {}
             for cat, items in menu_data.items():
                 total_cat = sum(
-                    receipts.apply(lambda r: sum(r['items'].count(item)*r['total']/len(r['items'].split(',')) if item in r['items'] else 0, axis=0), axis=0)
+                    receipts.apply(
+                        lambda r: sum(r['items'].count(item) * r['total'] / len(r['items'].split(',')) if item in r['items'] else 0, axis=0),
+                        axis=0
+                    )
                     for item in items
                 )
                 category_sales[cat] = total_cat
