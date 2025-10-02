@@ -873,26 +873,44 @@ elif st.session_state.page == "payment":
                 st.session_state.page = "main"
 
 # ---------------------------
+# Initialize session state variables
+# ---------------------------
+if "role" not in st.session_state:
+    st.session_state.role = None  # will be set on login
+
+if "staff_block_loaded" not in st.session_state:
+    st.session_state.staff_block_loaded = False
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# ---------------------------
 # STAFF PORTAL
 # ---------------------------
 if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     st.session_state.staff_block_loaded = True
 
-    # Load menu
+    # Load menu.csv or create default menu
     if os.path.exists("menu.csv"):
         menu_df = pd.read_csv("menu.csv")
         menu_data = {cat: dict(zip(group["Item"], group["Price"]))
                      for cat, group in menu_df.groupby("Category")}
     else:
-        menu_data = {
+        default_menu = {
             "Breakfast": {"Pancakes": 50, "Omelette": 40},
             "Lunch": {"Burger": 80, "Pizza": 120},
             "Drinks": {"Coffee": 30, "Juice": 40},
             "Snacks": {"Chips": 20, "Donut": 25}
         }
+        menu_data = default_menu.copy()
+        pd.DataFrame([
+            {"Category": cat, "Item": item, "Price": price}
+            for cat, items in menu_data.items()
+            for item, price in items.items()
+        ]).to_csv("menu.csv", index=False)
 
     # ---------------------------
-    # Sidebar menu
+    # Sidebar menu (unique key)
     # ---------------------------
     choice = st.sidebar.radio(
         "Staff Menu",
@@ -905,8 +923,8 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     # ---------------------------
     if choice == "Dashboard":
         st.subheader("📊 Staff Dashboard")
-        receipts = load_receipts_df()
-        fb = load_feedbacks_df()
+        receipts = load_receipts_df()  # make sure this function exists
+        fb = load_feedbacks_df()       # make sure this function exists
         pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
         st.metric("Total Orders", len(receipts))
         st.metric("Feedbacks", len(fb))
@@ -938,22 +956,29 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     # ---------------------------
     elif choice == "Manage Menu":
         st.subheader("📖 Manage Menu")
-        st.info("Add, edit, or remove menu items")
         menu_edit_df = pd.DataFrame([
             {"Category": cat, "Item": item, "Price": price}
             for cat, items in menu_data.items()
             for item, price in items.items()
         ])
         edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True, key="menu_editor")
+
         if st.button("💾 Save Menu Updates", key="save_menu"):
             new_menu = {}
             menu_list_to_save = []
+
             for _, row in edited_df.iterrows():
                 if pd.isna(row["Category"]) or pd.isna(row["Item"]) or pd.isna(row["Price"]):
                     continue
-                cat, item, price = row["Category"], row["Item"], row["Price"]
-                new_menu.setdefault(cat, {})[item] = price
+                cat = row["Category"]
+                item = row["Item"]
+                price = row["Price"]
+
+                if cat not in new_menu:
+                    new_menu[cat] = {}
+                new_menu[cat][item] = price
                 menu_list_to_save.append({"Category": cat, "Item": item, "Price": price})
+
             menu_data.clear()
             menu_data.update(new_menu)
             pd.DataFrame(menu_list_to_save).to_csv("menu.csv", index=False)
@@ -965,7 +990,7 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     # ---------------------------
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
-        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:", key="ai_input")
+        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:", key="ai_question")
         if st.button("Ask Staff AI", key="ask_ai") and q:
             answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
             st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
@@ -1008,5 +1033,7 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     if st.button("Log Out", key="logout_staff"):
         st.session_state.page = "login"
         st.session_state.user = None
+        st.session_state.role = None
         st.session_state.staff_block_loaded = False
         st.experimental_rerun()
+
