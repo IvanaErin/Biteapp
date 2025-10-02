@@ -359,6 +359,7 @@ default_menu = {
     "Snacks": {"Chips": 20, "Donut": 25}
 }
 
+# Create menu.csv if it doesn't exist
 if not os.path.exists("menu.csv"):
     menu_list = []
     for cat, items in default_menu.items():
@@ -366,40 +367,42 @@ if not os.path.exists("menu.csv"):
             menu_list.append({"Category": cat, "Item": item, "Price": price})
     pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
 
+# Load menu from CSV
 menu_df = pd.read_csv("menu.csv")
 menu_data = {}
 for cat, group in menu_df.groupby("Category"):
     menu_data[cat] = dict(zip(group["Item"], group["Price"]))
 
 # ----------------------------
-# MENU EDITOR
+# MENU EDITING SECTION
 # ----------------------------
-edited_df = pd.DataFrame(
-    [(cat, item, price) for cat, items in menu_data.items() for item, price in items.items()],
-    columns=["Category", "Item", "Price"]
-)
+st.write("## 🍽 Edit Menu Items")
 
-edited_df = st.experimental_data_editor(edited_df, num_rows="dynamic")
+# Prepare editable list
+new_menu_list = []
+for cat, items in menu_data.items():
+    st.write(f"### {cat}")
+    for item, price in items.items():
+        # Editable numeric input for price
+        new_price = st.number_input(f"{item}", value=price, min_value=0)
+        new_menu_list.append({"Category": cat, "Item": item, "Price": new_price})
 
+# Save button
 if st.button("💾 Save Menu Updates"):
-    new_menu = {}
-    menu_list = []
-    for _, row in edited_df.iterrows():
-        if row["Category"] not in new_menu:
-            new_menu[row["Category"]] = {}
-        new_menu[row["Category"]][row["Item"]] = row["Price"]
-        menu_list.append({"Category": row["Category"], "Item": row["Item"], "Price": row["Price"]})
-
-    # Update in-memory menu
+    # Update in-memory menu_data
+    new_menu_data = {}
+    for row in new_menu_list:
+        if row["Category"] not in new_menu_data:
+            new_menu_data[row["Category"]] = {}
+        new_menu_data[row["Category"]][row["Item"]] = row["Price"]
     menu_data.clear()
-    menu_data.update(new_menu)
+    menu_data.update(new_menu_data)
 
-    # Save to CSV
-    pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
+    # Save changes to CSV
+    pd.DataFrame(new_menu_list).to_csv("menu.csv", index=False)
 
     st.success("✅ Menu updated and saved!")
-    st.rerun()
-
+    st.experimental_rerun()
 # ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
