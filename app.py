@@ -350,93 +350,6 @@ def run_ai(question: str, extra_context: str = "") -> str:
         return f"⚠️ AI unavailable: {e}"
 
 # ---------------------------
-# MENU CSV INITIALIZATION
-# ---------------------------
-default_menu = {
-    "Breakfast": {"Pancakes": 50, "Omelette": 40},
-    "Lunch": {"Burger": 80, "Pizza": 120},
-    "Drinks": {"Coffee": 30, "Juice": 40},
-    "Snacks": {"Chips": 20, "Donut": 25}
-}
-
-# Create CSV if not exists
-if not os.path.exists("menu.csv"):
-    menu_list = []
-    for cat, items in default_menu.items():
-        for item, price in items.items():
-            menu_list.append({"Category": cat, "Item": item, "Price": price})
-    pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
-
-# Load menu
-menu_df = pd.read_csv("menu.csv")
-menu_data = {}
-for cat, group in menu_df.groupby("Category"):
-    menu_data[cat] = dict(zip(group["Item"], group["Price"]))
-
-# ---------------------------
-# MENU EDITING (Staff Only)
-# ---------------------------
-if st.session_state.get("user") and st.session_state["user"].get("role") == "Staff" and st.session_state.get("page") == "staff":
-
-    st.title("🍽️ Edit Menu")
-
-    updated_menu_list = []
-
-    # --- Edit existing items ---
-    for cat, items in menu_data.items():
-        st.subheader(cat)
-        for item, price in items.items():
-            new_name = st.text_input(f"Item Name ({cat})", value=item, key=f"{cat}_{item}_name")
-            new_price = st.number_input(f"Price ({cat})", value=price, min_value=0, key=f"{cat}_{item}_price")
-            updated_menu_list.append({"Category": cat, "Item": new_name, "Price": new_price})
-
-    # --- Add new items dynamically ---
-    st.markdown("---")
-    st.subheader("➕ Add New Menu Item")
-    new_item_category = st.selectbox("Category", options=list(menu_data.keys()), key="new_item_cat")
-    new_item_name = st.text_input("Item Name", key="new_item_name")
-    new_item_price = st.number_input("Price", min_value=0, key="new_item_price")
-
-    if st.button("Add Item"):
-        if new_item_name.strip() == "":
-            st.error("Item name cannot be empty!")
-        else:
-            updated_menu_list.append({
-                "Category": new_item_category,
-                "Item": new_item_name.strip(),
-                "Price": new_item_price
-            })
-            st.success(f"✅ '{new_item_name}' added to {new_item_category}")
-            st.experimental_rerun()
-
-    # --- Save all changes ---
-    if st.button("💾 Save Menu Updates"):
-        new_menu_data = {}
-        for entry in updated_menu_list:
-            cat = entry["Category"]
-            name = entry["Item"]
-            price = entry["Price"]
-            if cat not in new_menu_data:
-                new_menu_data[cat] = {}
-            new_menu_data[cat][name] = price
-
-        menu_data.clear()
-        menu_data.update(new_menu_data)
-
-        # Save to CSV
-        pd.DataFrame(updated_menu_list).to_csv("menu.csv", index=False)
-
-        st.success("✅ Menu updated and saved!")
-        st.experimental_rerun()
-
-else:
-    # Non-staff view
-    st.title("🍽️ Menu")
-    for cat, items in menu_data.items():
-        st.subheader(cat)
-        for item, price in items.items():
-            st.write(f"{item}: ₱{price}")
-# ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
 if "page" not in st.session_state:
@@ -941,6 +854,69 @@ elif st.session_state.page == "payment":
 # ---------------------------
 elif user["role"] == "Staff":
     st.title("🛠️ BiteHub Staff Portal")
+
+    # --- Load menu CSV (editable only by staff) ---
+    default_menu = {
+        "Breakfast": {"Pancakes": 50, "Omelette": 40},
+        "Lunch": {"Burger": 80, "Pizza": 120},
+        "Drinks": {"Coffee": 30, "Juice": 40},
+        "Snacks": {"Chips": 20, "Donut": 25}
+    }
+
+    if not os.path.exists("menu.csv"):
+        menu_list = []
+        for cat, items in default_menu.items():
+            for item, price in items.items():
+                menu_list.append({"Category": cat, "Item": item, "Price": price})
+        pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
+
+    menu_df = pd.read_csv("menu.csv")
+    menu_data = {}
+    for cat, group in menu_df.groupby("Category"):
+        menu_data[cat] = dict(zip(group["Item"], group["Price"]))
+
+    choice = st.sidebar.radio(
+        "Staff Menu", 
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+    )
+
+    # --- Manage Menu ---
+    if choice == "Manage Menu":
+        st.subheader("📖 Manage Menu")
+        st.info("Add or update menu items")
+        menu_edit_df = pd.DataFrame([
+            {"Category": cat, "Item": item, "Price": price}
+            for cat, items in menu_data.items()
+            for item, price in items.items()
+        ])
+        edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
+
+        if st.button("💾 Save Menu Updates"):
+            # Convert edited DataFrame back to nested dictionary
+            new_menu = {}
+            menu_list_to_save = []
+            for _, row in edited_df.iterrows():
+                cat = row["Category"]
+                item = row["Item"]
+                price = row["Price"]
+
+                if cat not in new_menu:
+                    new_menu[cat] = {}
+                new_menu[cat][item] = price
+
+                # Prepare list for CSV saving
+                menu_list_to_save.append({"Category": cat, "Item": item, "Price": price})
+
+            # Update in-memory menu
+            menu_data.clear()
+            menu_data.update(new_menu)
+
+            # Save to CSV for persistence
+            pd.DataFrame(menu_list_to_save).to_csv("menu.csv", index=False)
+
+            st.success("✅ Menu updated and saved!")
+            st.rerun()
+            
     choice = st.sidebar.radio(
         "Staff Menu", 
         ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
@@ -973,26 +949,6 @@ elif user["role"] == "Staff":
                 st.info("No pending orders.")
         else:
             st.info("No receipts yet.")
-
-    elif choice == "Manage Menu":
-        st.subheader("📖 Manage Menu")
-        st.info("Add or update menu items")
-        menu_edit_df = pd.DataFrame([
-            {"Category": cat, "Item": item, "Price": price}
-            for cat, items in menu_data.items()
-            for item, price in items.items()
-        ])
-        edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Save Menu Updates"):
-            new_menu = {}
-            for _, row in edited_df.iterrows():
-                if row["Category"] not in new_menu:
-                    new_menu[row["Category"]] = {}
-                new_menu[row["Category"]][row["Item"]] = row["Price"]
-            menu_data.clear()
-            menu_data.update(new_menu)
-            st.success("✅ Menu updated!")
-            st.rerun()
 
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
