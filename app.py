@@ -117,6 +117,20 @@ def get_connection():
         return None
 
 # ---------------------------
+# STRICT SNOWFLAKE CONNECTION (no fallback)
+# ---------------------------
+def get_snowflake_conn():
+    import snowflake.connector
+    return snowflake.connector.connect(
+        user=st.secrets["SNOWFLAKE_USER"],
+        password=st.secrets["SNOWFLAKE_PASSWORD"],
+        account=st.secrets["SNOWFLAKE_ACCOUNT"],
+        warehouse=st.secrets["SNOWFLAKE_WAREHOUSE"],
+        database=st.secrets["SNOWFLAKE_DATABASE"],
+        schema=st.secrets["SNOWFLAKE_SCHEMA"]
+    )
+
+# ---------------------------
 # CRYPTO HELPERS (passwords)
 # ---------------------------
 def hash_password(password: str, salt: bytes | None = None) -> str:
