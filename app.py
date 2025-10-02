@@ -546,7 +546,7 @@ if "feedbacks" not in st.session_state:
 elif st.session_state.page == "main":
     user = st.session_state.user or {
         "username": "Guest",
-        "role": "Non-Staff",
+        "role": "Non-Staff", "Staff",
         "loyalty_points": 0,
     }
 
