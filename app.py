@@ -376,33 +376,35 @@ for cat, group in menu_df.groupby("Category"):
 # ----------------------------
 # MENU EDITING SECTION
 # ----------------------------
-st.write("## 🍽 Edit Menu Items")
+st.write("## 🍽 Edit Menu Prices")
 
-# Prepare editable list
-new_menu_list = []
+# Prepare editable menu
+updated_menu_list = []
 for cat, items in menu_data.items():
     st.write(f"### {cat}")
     for item, price in items.items():
-        # Editable numeric input for price
-        new_price = st.number_input(f"{item}", value=price, min_value=0)
-        new_menu_list.append({"Category": cat, "Item": item, "Price": new_price})
+        # Add unique key by combining category and item
+        new_price = st.number_input(
+            f"{item}", value=price, min_value=0, key=f"{cat}_{item}"
+        )
+        updated_menu_list.append({"Category": cat, "Item": item, "Price": new_price})
 
 # Save button
 if st.button("💾 Save Menu Updates"):
     # Update in-memory menu_data
     new_menu_data = {}
-    for row in new_menu_list:
+    for row in updated_menu_list:
         if row["Category"] not in new_menu_data:
             new_menu_data[row["Category"]] = {}
         new_menu_data[row["Category"]][row["Item"]] = row["Price"]
     menu_data.clear()
     menu_data.update(new_menu_data)
 
-    # Save changes to CSV
-    pd.DataFrame(new_menu_list).to_csv("menu.csv", index=False)
+    # Save to CSV
+    pd.DataFrame(updated_menu_list).to_csv("menu.csv", index=False)
 
     st.success("✅ Menu updated and saved!")
-    st.experimental_rerun()
+    st.rerun()
 # ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
