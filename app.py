@@ -554,6 +554,7 @@ if page == "main":
     st.subheader("📋 Full Menu")
     colA, colB = st.columns([2, 1])
 
+    # LEFT COLUMN: Menu
     with colA:
         for cat, items in menu_data.items():
             with st.expander(cat, expanded=False):
@@ -564,28 +565,25 @@ if page == "main":
                         st.success(f"Added 1 x {item_name}")
                         st.experimental_rerun()
 
-# ---------------------------
-# RIGHT COLUMN: Feedback for menu items
-# ---------------------------
-with colB:
-    st.subheader("✍️ Give Feedback")
-    if is_guest:
-        st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
-    else:
-        # Flatten menu items for feedback dropdown
-        all_items = [i for cat in menu_data.values() for i in cat.keys()]
-        fb_item = st.selectbox("Select Item:", ["(select)"] + all_items, key="fb_item")
-        rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
-        fb_text = st.text_area("Your Feedback:", key="fb_text")
-        if st.button("Submit Feedback", key="submit_fb_nonstaff"):
-            if fb_item != "(select)" and fb_text.strip():
-                try:
-                    save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
-                    st.success("✅ Feedback submitted!")
-                except Exception as e:
-                    st.error(f"Failed to save feedback: {e}")
-            else:
-                st.warning("Choose an item and write feedback.")
+    # RIGHT COLUMN: Feedback
+    with colB:
+        st.subheader("✍️ Give Feedback")
+        if is_guest:
+            st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
+        else:
+            all_items = [i for cat in menu_data.values() for i in cat.keys()]
+            fb_item = st.selectbox("Select Item:", ["(select)"] + all_items, key="fb_item")
+            rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
+            fb_text = st.text_area("Your Feedback:", key="fb_text")
+            if st.button("Submit Feedback", key="submit_fb_nonstaff"):
+                if fb_item != "(select)" and fb_text.strip():
+                    try:
+                        save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
+                        st.success("✅ Feedback submitted!")
+                    except Exception as e:
+                        st.error(f"Failed to save feedback: {e}")
+                else:
+                    st.warning("Choose an item and write feedback.")
     # ---------------------------
     # CART + CHECKOUT
     # ---------------------------
