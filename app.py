@@ -490,75 +490,14 @@ page = st.session_state.get("page", "main")
 # MAIN PORTAL
 # ---------------------------
 if page == "main":
+    # Only show welcome message once
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
-    
+
     if is_guest:
         st.warning(
             "🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting."
         )
         st.info("Your cart is empty. Add items from the menu to order.")
-
-# ---------------------------
-# Helper: Save Receipt (mock)
-# ---------------------------
-def save_receipt(order_id, items_str, total, payment_method, user_id, pickup_time, status):
-    """Mock function to save order to database"""
-    st.session_state.receipts = st.session_state.get("receipts", {})
-    st.session_state.receipts[order_id] = {
-        "user": user_id,
-        "items": items_str,
-        "total": total,
-        "payment_method": payment_method,
-        "pickup": pickup_time,
-        "status": status,
-        "timestamp": datetime.now()
-    }
-
-# ---------------------------
-# Helper: Save Feedback (mock)
-# ---------------------------
-def save_feedback(item, text, rating, user_id):
-    st.session_state.feedbacks = st.session_state.get("feedbacks", [])
-    st.session_state.feedbacks.append({
-        "item": item,
-        "text": text,
-        "rating": rating,
-        "user": user_id,
-        "timestamp": datetime.now()
-    })
-
-# ---------------------------
-# Initialize session state
-# ---------------------------
-if "cart" not in st.session_state:
-    st.session_state.cart = {}
-if "page" not in st.session_state:
-    st.session_state.page = "main"
-if "pending_order" not in st.session_state:
-    st.session_state.pending_order = {}
-if "notifications" not in st.session_state:
-    st.session_state.notifications = []
-
-# Mock user
-user = st.session_state.get("user", {"username": "Guest", "role": "Non-Staff"})
-is_guest = user.get("username") == "Guest"
-
-# Mock menu
-menu_data = {
-    "Breakfast": {"Longsilog": 65, "Tapsilog": 70},
-    "Drinks": {"Coffee": 40, "Tea": 35}
-}
-
-# ---------------------------
-# PAGE NAVIGATION
-# ---------------------------
-page = st.session_state.page
-
-# ---------------------------
-# MAIN PAGE: MENU + CART + AI + Feedback
-# ---------------------------
-if page == "main":
-    st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
     # ---------------------------
     # NON-STAFF UX: AI + Feedback
@@ -577,30 +516,29 @@ if page == "main":
                         unsafe_allow_html=True
                     )
 
-        # RIGHT: Feedback / Sentiment
+        # RIGHT: Feedback Submission
         with col_right:
-            st.subheader("📝 Feedback Sentiment Analysis")
-            for idx, (item_name, qty) in enumerate(st.session_state.get("cart", {}).items()):
-                fb_key = f"feedback_{idx}_{item_name}"
-                feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
-                analyze_key = f"analyze_{idx}_{item_name}"
-                if feedback_text and st.button(f"Analyze Sentiment for {item_name}", key=analyze_key):
-                    prompt = f"""
-                    You are a sentiment analysis assistant.
-                    The user gave this feedback for {item_name}: "{feedback_text}"
-                    Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐.
-                    """
-                    if client:
-                        resp = client.chat.completions.create(
-                            model="llama-3.1-8b-instant",
-                            messages=[{"role": "user", "content": prompt}]
-                        )
-                        st.success(resp.choices[0].message.content)
+            st.subheader("✍️ Give Feedback")
+            if is_guest:
+                st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
+            else:
+                # Flatten menu items for feedback
+                all_items = [i for cat in menu_data.values() for i in cat.keys()]
+                fb_item = st.selectbox("Select Item:", ["(select)"] + all_items, key="fb_item")
+                rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
+                fb_text = st.text_area("Your Feedback:", key="fb_text")
+                if st.button("Submit Feedback", key="submit_fb_nonstaff"):
+                    if fb_item != "(select)" and fb_text.strip():
+                        try:
+                            save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
+                            st.success("✅ Feedback submitted!")
+                        except Exception as e:
+                            st.error(f"Failed to save feedback: {e}")
                     else:
-                        st.warning("Sentiment AI unavailable")
+                        st.warning("Choose an item and write feedback.")
 
     # ---------------------------
-    # NOTIFICATIONS
+    # NOTIFICATIONS (below feedback)
     # ---------------------------
     if st.session_state.notifications:
         st.subheader("📢 Notifications")
@@ -618,7 +556,7 @@ if page == "main":
 
     with colA:
         for cat, items in menu_data.items():
-            with st.expander(cat):
+            with st.expander(cat, expanded=False):
                 for item_name, price in items.items():
                     add_key = f"add_{cat}_{item_name}".replace(" ", "_")
                     if st.button(f"Add {item_name} — ₱{price}", key=add_key):
@@ -626,6 +564,28 @@ if page == "main":
                         st.success(f"Added 1 x {item_name}")
                         st.experimental_rerun()
 
+# ---------------------------
+# RIGHT COLUMN: Feedback for menu items
+# ---------------------------
+with colB:
+    st.subheader("✍️ Give Feedback")
+    if is_guest:
+        st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
+    else:
+        # Flatten menu items for feedback dropdown
+        all_items = [i for cat in menu_data.values() for i in cat.keys()]
+        fb_item = st.selectbox("Select Item:", ["(select)"] + all_items, key="fb_item")
+        rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
+        fb_text = st.text_area("Your Feedback:", key="fb_text")
+        if st.button("Submit Feedback", key="submit_fb_nonstaff"):
+            if fb_item != "(select)" and fb_text.strip():
+                try:
+                    save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
+                    st.success("✅ Feedback submitted!")
+                except Exception as e:
+                    st.error(f"Failed to save feedback: {e}")
+            else:
+                st.warning("Choose an item and write feedback.")
     # ---------------------------
     # CART + CHECKOUT
     # ---------------------------
