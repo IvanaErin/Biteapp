@@ -534,7 +534,7 @@ if st.session_state.page == "main":
         with col_right:
             st.subheader("📝 Feedback Sentiment Analysis")
             for idx, (item_name, qty) in enumerate(st.session_state.cart.items()):
-                fb_key = f"feedback_{idx}_{item_name}"  # make unique by index
+                fb_key = f"feedback_{idx}_{item_name}"  # unique key
                 feedback_text = st.text_area(f"Your feedback for {item_name}:", key=fb_key)
                 analyze_key = f"analyze_{idx}_{item_name}"
                 if feedback_text and st.button(f"Analyze Sentiment for {item_name}", key=analyze_key):
@@ -551,6 +551,15 @@ if st.session_state.page == "main":
                         st.success(resp.choices[0].message.content)
                     else:
                         st.warning("Sentiment AI unavailable")
+
+        # ---------------------------
+        # Notifications
+        # ---------------------------
+        if "notifications" in st.session_state and st.session_state.notifications:
+            st.subheader("📢 Notifications")
+            for note in st.session_state.notifications:
+                st.info(note)
+            st.session_state.notifications.clear()
 
         # ---------------------------
         # Menu display & Feedback
@@ -614,12 +623,15 @@ if st.session_state.page == "main":
 
             st.write(f"**Total: ₱{total}**")
 
+            # Payment method
+            payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
+
             if st.button("Checkout", key="checkout_btn"):
                 order_id = f"ORD{random.randint(10000,99999)}"
                 items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
                 user_id = None if is_guest else user["username"]
 
-                save_receipt(order_id, items_str, total, payment_method="Cash", user_id=user_id)
+                save_receipt(order_id, items_str, total, payment_method=payment_method, user_id=user_id)
 
                 if not is_guest:
                     new_points = update_loyalty_points(user["username"], total // 100)
@@ -633,9 +645,21 @@ if st.session_state.page == "main":
         else:
             st.info("Your cart is empty. Add items from the menu to order.")
 
-# --------------------------- 
-# STAFF UX 
-# ---------------------------
+        # ---------------------------
+        # Order History
+        # ---------------------------
+        st.divider()
+        st.subheader("📜 Your Order History")
+        history = load_receipts_df()
+        if not history.empty:
+            user_orders = history[history["user_id"] == user["username"]]
+            if not user_orders.empty:
+                st.dataframe(user_orders, use_container_width=True)
+            else:
+                st.info("No past orders yet.")
+        else:
+            st.info("No orders have been made yet.")
+
     elif user["role"] == "Staff":
         st.title("🛠️ BiteHub Staff Portal")
         choice = st.sidebar.radio(
@@ -665,7 +689,10 @@ if st.session_state.page == "main":
                     if not pending.empty:
                         for _, row in pending.iterrows():
                             btn_key = f"ready_{row['order_id']}"
-                            st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | Pickup: {row['pickup_time']} | By: {row['user_id']}")
+                            st.write(
+                                f"Order {row['order_id']}: {row['items']} — ₱{row['total']} "
+                                f"| By: {row['user_id']} | Status: {row['status']}"
+                            )
                             if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
                                 set_receipt_status(row['order_id'], "Ready for Pickup")
                                 st.success(f"Order {row['order_id']} marked ready")
@@ -677,7 +704,63 @@ if st.session_state.page == "main":
             except Exception as e:
                 st.error(f"Could not load pending orders: {e}")
 
-        # TODO: Manage Menu, AI Assistant, Feedback Review, Sales Report
+        elif choice == "Manage Menu":
+            st.subheader("📖 Manage Menu")
+            st.info("Add new items or update prices here.")
+            menu_edit_df = pd.DataFrame([
+                {"Category": cat, "Item": item, "Price": price}
+                for cat, items in menu_data.items()
+                for item, price in items.items()
+            ])
+            edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
+
+            if st.button("💾 Save Menu Updates"):
+                try:
+                    edited_df.to_csv("menu.csv", index=False)
+                    st.success("✅ Menu updated successfully!")
+                    # reload menu
+                    new_menu = {}
+                    for _, row in edited_df.iterrows():
+                        if row["Category"] not in new_menu:
+                            new_menu[row["Category"]] = {}
+                        new_menu[row["Category"]][row["Item"]] = row["Price"]
+                    menu_data.clear()
+                    menu_data.update(new_menu)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to update menu: {e}")
+
+        elif choice == "AI Assistant":
+            st.subheader("🤖 Staff AI Assistant")
+            q = st.text_input("Ask AI about sales, menu trends, or customer feedback:")
+            if st.button("Ask Staff AI"):
+                if q:
+                    with st.spinner("Thinking..."):
+                        answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights if possible.")
+                        st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+
+        elif choice == "Feedback Review":
+            st.subheader("📝 All Customer Feedback")
+            fb_df = load_feedbacks_df()
+            if not fb_df.empty:
+                st.dataframe(fb_df, use_container_width=True)
+            else:
+                st.info("No feedback received yet.")
+
+        elif choice == "Sales Report":
+            st.subheader("💹 Sales Report")
+            receipts = load_receipts_df()
+            if not receipts.empty:
+                receipts["date"] = pd.to_datetime(receipts.get("timestamp", datetime.now())).dt.date
+                daily_sales = receipts.groupby("date")["total"].sum().reset_index()
+
+                st.line_chart(daily_sales.set_index("date"))
+
+                st.metric("Total Sales", f"₱{receipts['total'].sum():,.2f}")
+                st.metric("Total Orders", len(receipts))
+            else:
+                st.info("No sales data available yet.")
+
         if st.button("Log Out", key="logout_staff"):
             st.session_state.page = "login"
             st.session_state.user = None
