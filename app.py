@@ -470,35 +470,44 @@ elif st.session_state.page == "signup":
         st.rerun()
 
     st.markdown("</div>", unsafe_allow_html=True)
+# ---------------------------
+# HELPER: Get current user safely
+# ---------------------------
+def get_current_user():
+    user = st.session_state.get("user")
+    if not isinstance(user, dict):
+        # Fallback to guest
+        user = {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0}
+    # Ensure required keys exist
+    user.setdefault("username", "Guest")
+    user.setdefault("role", "Non-Staff")
+    user.setdefault("loyalty_points", 0)
+    return user
 
-# Ensure user is always defined
-user = st.session_state.get("user", {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0})
-is_guest = user["username"] == "Guest"
+# ---------------------------
+# SESSION VARIABLES
+# ---------------------------
+user = get_current_user()
+is_guest = user.get("username") == "Guest"
+page = st.session_state.get("page", "main")
 
 # ---------------------------
 # MAIN PORTAL
 # ---------------------------
-if st.session_state.page == "main":
+if page == "main":
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
+    
     if is_guest:
-        st.warning("🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting.")
+        st.warning(
+            "🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting."
+        )
         st.info("Your cart is empty. Add items from the menu to order.")
 
 # ---------------------------
 # NON-STAFF UX
 # ---------------------------
-if user["role"] == "Non-Staff":
+if user.get("role") == "Non-Staff":
     col_left, col_right = st.columns([1, 1])
-
-    # LEFT: AI Assistant
-    with col_left:
-        st.subheader("🤖 Canteen AI Assistant")
-        q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
-        if st.button("Ask AI", key="ai_button_main"):
-            with st.spinner("Asking AI..."):
-                answer = run_ai(q)
-                st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
-
     # RIGHT: Feedback / Sentiment
     with col_right:
         st.subheader("📝 Feedback Sentiment Analysis")
