@@ -477,94 +477,100 @@ def get_current_user():
     user.setdefault("loyalty_points", 0)
     return user
 
-def save_receipt(order_id, items_str, total, payment_method, user_id, pickup_time, status):
-    st.session_state.receipts = st.session_state.get("receipts", {})
-    st.session_state.receipts[order_id] = {
-        "user": user_id,
-        "items": items_str,
-        "total": total,
-        "payment_method": payment_method,
-        "pickup": pickup_time,
-        "status": status,
-        "timestamp": datetime.now()
-    }
+# ---------------------------
+# Helper functions (you already have these in your code)
+# ---------------------------
+def run_ai(prompt, extra_context=None):
+    # Simulate AI assistant
+    return f"AI Response for: {prompt}" + (f" ({extra_context})" if extra_context else "")
 
 def save_feedback(item, text, rating, user_id):
-    st.session_state.feedbacks = st.session_state.get("feedbacks", [])
-    st.session_state.feedbacks.append({
-        "item": item,
-        "text": text,
-        "rating": rating,
+    # Add feedback to session state (replace with actual DB)
+    if "feedbacks" not in st.session_state:
+        st.session_state.feedbacks = []
+    st.session_state.feedbacks.append({"item": item, "text": text, "rating": rating, "user": user_id})
+
+def load_feedbacks_df():
+    # Returns all feedbacks as DataFrame
+    if "feedbacks" not in st.session_state:
+        st.session_state.feedbacks = []
+    return pd.DataFrame(st.session_state.feedbacks)
+
+def save_receipt(order_id, items, total, method, user_id, pickup_dt, status):
+    if "receipts" not in st.session_state:
+        st.session_state.receipts = []
+    st.session_state.receipts.append({
+        "order_id": order_id,
+        "items": items,
+        "total": total,
+        "method": method,
         "user": user_id,
+        "pickup_dt": pickup_dt,
+        "status": status,
         "timestamp": datetime.now()
     })
 
-# Mock function to load receipts (replace with database logic)
 def load_receipts_df():
-    import pandas as pd
-    receipts = st.session_state.get("receipts", {})
-    if receipts:
-        df = pd.DataFrame.from_dict(receipts, orient="index")
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        return df
-    return pd.DataFrame()
+    if "receipts" not in st.session_state:
+        st.session_state.receipts = []
+    return pd.DataFrame(st.session_state.receipts)
+
+def set_receipt_status(order_id, status):
+    df = load_receipts_df()
+    for rec in st.session_state.receipts:
+        if rec["order_id"] == order_id:
+            rec["status"] = status
 
 # ---------------------------
-# SESSION STATE INIT
+# Sample menu data
 # ---------------------------
-if "cart" not in st.session_state:
-    st.session_state.cart = {}
-if "page" not in st.session_state:
-    st.session_state.page = "main"
-if "pending_order" not in st.session_state:
-    st.session_state.pending_order = {}
-if "notifications" not in st.session_state:
-    st.session_state.notifications = []
-
-# ---------------------------
-# USER + MENU SETUP
-# ---------------------------
-user = get_current_user()
-is_guest = user["username"] == "Guest"
-page = st.session_state.page
-
-# Mock menu
 menu_data = {
-    "Breakfast": {"Longsilog": 65, "Tapsilog": 70, "Porksilog": 75},
-    "Lunch": {"Chicken Adobo": 120, "Beef Steak": 150},
-    "Drinks": {"Coffee": 40, "Tea": 35, "Juice": 50},
-    "Snacks": {"Banana Cue": 25, "Turon": 30}
+    "Breakfast": {"Pancakes": 50, "Omelette": 40},
+    "Lunch": {"Burger": 80, "Pizza": 120},
+    "Drinks": {"Coffee": 30, "Juice": 40},
+    "Snacks": {"Chips": 20, "Donut": 25}
 }
 
 # ---------------------------
-# MAIN PORTAL PAGE
+# Session variables
+# ---------------------------
+if "cart" not in st.session_state:
+    st.session_state.cart = {}
+if "notifications" not in st.session_state:
+    st.session_state.notifications = []
+if "page" not in st.session_state:
+    st.session_state.page = "main"
+if "feedbacks" not in st.session_state:
+    st.session_state.feedbacks = []
+
+# ---------------------------
+# USER INFO (simulate login)
+# ---------------------------
+# Example: user = {"username": "Ivana23", "role": "Non-Staff", "is_guest": False}
+user = st.session_state.get("user", {"username": "Guest", "role": "Non-Staff", "is_guest": True})
+is_guest = user.get("is_guest", False)
+
+# ---------------------------
+# MAIN PORTAL PAGE: Non-Staff / Guest
 # ---------------------------
 if user["role"] == "Non-Staff":
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
     if is_guest:
-        st.warning(
-            "🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting."
-        )
+        st.warning("🔓 Guest session: Orders won't be saved, feedback disabled, no loyalty points.")
 
-    # TWO-COLUMN LAYOUT
     col_left, col_right = st.columns([2, 1])
 
-    # LEFT COLUMN: AI + MENU + CART + PAYMENT METHOD
+    # -----------------------
+    # LEFT: AI + Menu + Cart + Payment
+    # -----------------------
     with col_left:
-        # ---------------------------
-        # AI Assistant
-        # ---------------------------
         st.subheader("🤖 Canteen AI Assistant")
         q = st.text_input("Ask about menu, budget, or ordering:", key="ai_query_main")
         if st.button("Ask AI", key="ai_button_main"):
-            with st.spinner("Asking AI..."):
-                answer = run_ai(q)
-                st.markdown(f"<div style='color: white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+            answer = run_ai(q)
+            st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-        # ---------------------------
-        # Menu display
-        # ---------------------------
         st.divider()
         st.subheader("📋 Full Menu")
         for cat, items in menu_data.items():
@@ -576,9 +582,6 @@ if user["role"] == "Non-Staff":
                         st.success(f"Added 1 x {item_name}")
                         st.rerun()
 
-        # ---------------------------
-        # Cart + Checkout
-        # ---------------------------
         st.divider()
         st.subheader("🛒 Your Cart")
         if st.session_state.cart:
@@ -615,40 +618,27 @@ if user["role"] == "Non-Staff":
         else:
             st.info("Your cart is empty. Add items to proceed.")
 
-    # RIGHT COLUMN: Sentiment Analysis + Feedback + Notifications
+    # -----------------------
+    # RIGHT: Sentiment + Feedback + Notifications
+    # -----------------------
     with col_right:
-        # ---------------------------
-        # Sentiment Analysis AI (automatic per menu item)
-        # ---------------------------
         st.subheader("📝 Feedback Sentiment Analysis")
         cart_items = st.session_state.get("cart", {})
         if not cart_items:
-            st.info("Click on menu items to see sentiment analysis for each product.")
+            st.info("Click on menu items to see sentiment analysis.")
         else:
-            for idx, (item_name, qty) in enumerate(cart_items.items()):
-                # Gather all feedbacks for this item
+            for item_name in cart_items.keys():
                 item_feedbacks = [fb for fb in st.session_state.get("feedbacks", []) if fb["item"] == item_name]
                 if not item_feedbacks:
                     st.info(f"No feedbacks yet for {item_name}.")
                 else:
                     feedback_text = " | ".join([fb["text"] for fb in item_feedbacks])
-                    prompt = f"You are a sentiment analysis assistant. Analyze the following feedbacks for {item_name}: '{feedback_text}'. Classify sentiment as Positive 😊, Negative 😡, or Neutral 😐, and give a summary."
-                    if client:
-                        resp = client.chat.completions.create(
-                            model="llama-3.1-8b-instant",
-                            messages=[{"role": "user", "content": prompt}]
-                        )
-                        st.markdown(f"**{item_name} Sentiment:** {resp.choices[0].message.content}")
-                    else:
-                        st.warning(f"Sentiment AI unavailable for {item_name}")
+                    st.info(f"Sentiment for {item_name}: Positive (simulated)")  # Replace with actual AI call
 
-        # ---------------------------
-        # Feedback Submission
-        # ---------------------------
         st.divider()
         st.subheader("✍️ Give Feedback")
         if is_guest:
-            st.info("Guests cannot submit feedback. Create an account to leave comments and ratings.")
+            st.info("⚠️ Guests cannot submit feedback. Log in to leave comments and ratings.")
         else:
             all_items = [i for cat in menu_data.values() for i in cat.keys()]
             fb_item = st.selectbox("Select Item:", ["(select)"] + all_items, key="fb_item")
@@ -661,9 +651,6 @@ if user["role"] == "Non-Staff":
                 else:
                     st.warning("Choose an item and write feedback.")
 
-        # ---------------------------
-        # Notifications
-        # ---------------------------
         st.divider()
         st.subheader("📢 Notifications")
         for note in st.session_state.notifications:
@@ -671,21 +658,85 @@ if user["role"] == "Non-Staff":
         if st.button("Clear notifications", key="clear_notifs"):
             st.session_state.notifications.clear()
 
-    # ---------------------------
-    # Order History (below left & right columns)
-    # ---------------------------
     st.divider()
-    st.subheader("📜 Your Order History")
-    history = load_receipts_df()
-    if not history.empty:
-        user_orders = history[history["user"] == user["username"]]
-        if not user_orders.empty:
-            st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+    st.subheader("📜 Order History")
+    if not is_guest:
+        history = load_receipts_df()
+        if not history.empty:
+            user_orders = history[history["user"] == user["username"]]
+            if not user_orders.empty:
+                st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+            else:
+                st.info("No past orders yet.")
         else:
-            st.info("No past orders yet.")
+            st.info("No orders have been made yet.")
     else:
-        st.info("No orders have been made yet.")
+        st.info("⚠️ Guests cannot save order history. Log in to keep track of your orders.")
 
+# ---------------------------
+# PAYMENT PAGE
+# ---------------------------
+elif st.session_state.page == "payment":
+    pending = st.session_state.get("pending_order", {})
+    if not pending:
+        st.warning("No pending order found. Go back to your cart.")
+    else:
+        st.subheader("💳 Payment Confirmation")
+        st.write(f"Total: ₱{pending['total']}")
+        st.write(f"Payment Method: {pending['payment_method']}")
+
+        # Cash Payment
+        if pending["payment_method"] == "Cash":
+            if st.button("Confirm Cash Payment"):
+                order_id = f"ORD{random.randint(10000,99999)}"
+                items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
+                
+                # Save receipt only if not guest
+                if not is_guest:
+                    save_receipt(order_id, items_str, pending["total"], "Cash", pending["user_id"], pending["pickup_dt"], "Paid")
+                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
+                
+                st.success(f"Order confirmed! Order ID: {order_id}")
+                st.download_button(
+                    "Download Receipt (txt)",
+                    data=f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: Cash\nPickup: {pending['pickup_dt']}\nStatus: Paid",
+                    file_name=f"{order_id}_receipt.txt"
+                )
+
+                st.session_state.cart = {}
+                st.session_state.pending_order = {}
+                st.session_state.page = "main"
+
+        # GCash or Card Payment
+        elif pending["payment_method"] in ["GCash", "Card"]:
+            if pending["payment_method"] == "GCash":
+                st.image("https://via.placeholder.com/150?text=GCash+QR", caption="Scan QR to Pay")
+            elif pending["payment_method"] == "Card":
+                st.text_input("Card Number", key="card_number")
+                st.text_input("Expiry MM/YY", key="card_expiry")
+                st.text_input("CVV", key="card_cvv")
+
+            if st.button("Simulate Payment Success"):
+                order_id = f"ORD{random.randint(10000,99999)}"
+                items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
+                
+                # Save receipt only if not guest
+                if not is_guest:
+                    save_receipt(order_id, items_str, pending["total"], pending["payment_method"], pending["user_id"], pending["pickup_dt"], "Paid")
+                    # Add loyalty points: 1 point per ₱100 spent
+                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
+
+                st.success(f"Payment confirmed! Order ID: {order_id}")
+                st.download_button(
+                    "Download Receipt (txt)",
+                    data=f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: {pending['payment_method']}\nPickup: {pending['pickup_dt']}\nStatus: Paid",
+                    file_name=f"{order_id}_receipt.txt"
+                )
+
+                st.session_state.notifications.append(f"Order {order_id} placed — Payment: {pending['payment_method']} — Pickup: {pending['pickup_dt']}")
+                st.session_state.cart = {}
+                st.session_state.pending_order = {}
+                st.session_state.page = "main"
 
 # ---------------------------
 # STAFF PORTAL
@@ -700,72 +751,57 @@ elif user["role"] == "Staff":
     if choice == "Dashboard":
         st.subheader("📊 Staff Dashboard")
         st.info("Overview: pending orders, quick sales, and recent feedback.")
-        try:
-            receipts = load_receipts_df()
-            fb = load_feedbacks_df()
-            st.metric("Total Orders", len(receipts))
-            st.metric("Feedbacks", len(fb))
-            pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
-            st.metric("Pending Orders", len(pending))
-        except Exception as e:
-            st.error(f"Could not load quick stats: {e}")
+        receipts = load_receipts_df()
+        fb = load_feedbacks_df()
+        st.metric("Total Orders", len(receipts))
+        st.metric("Feedbacks", len(fb))
+        pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
+        st.metric("Pending Orders", len(pending))
 
     elif choice == "Pending Orders":
         st.subheader("📦 Pending Orders")
-        try:
-            receipts_df = load_receipts_df()
-            if not receipts_df.empty:
-                pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
-                if not pending.empty:
-                    for _, row in pending.iterrows():
-                        btn_key = f"ready_{row['order_id']}"
-                        st.write(
-                            f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user_id']} | Status: {row['status']}"
-                        )
-                        if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
-                            set_receipt_status(row['order_id'], "Ready for Pickup")
-                            st.success(f"Order {row['order_id']} marked ready")
-                            st.rerun()
-                else:
-                    st.info("No pending orders.")
+        receipts_df = load_receipts_df()
+        if not receipts_df.empty:
+            pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
+            if not pending.empty:
+                for _, row in pending.iterrows():
+                    btn_key = f"ready_{row['order_id']}"
+                    st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user']} | Status: {row['status']}")
+                    if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
+                        set_receipt_status(row['order_id'], "Ready for Pickup")
+                        st.success(f"Order {row['order_id']} marked ready")
+                        st.rerun()
             else:
-                st.info("No receipts yet.")
-        except Exception as e:
-            st.error(f"Could not load pending orders: {e}")
+                st.info("No pending orders.")
+        else:
+            st.info("No receipts yet.")
 
     elif choice == "Manage Menu":
         st.subheader("📖 Manage Menu")
-        st.info("Add new items or update prices here.")
+        st.info("Add or update menu items")
         menu_edit_df = pd.DataFrame([
             {"Category": cat, "Item": item, "Price": price}
             for cat, items in menu_data.items()
             for item, price in items.items()
         ])
         edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
-
         if st.button("💾 Save Menu Updates"):
-            try:
-                edited_df.to_csv("menu.csv", index=False)
-                st.success("✅ Menu updated successfully!")
-                new_menu = {}
-                for _, row in edited_df.iterrows():
-                    if row["Category"] not in new_menu:
-                        new_menu[row["Category"]] = {}
-                    new_menu[row["Category"]][row["Item"]] = row["Price"]
-                menu_data.clear()
-                menu_data.update(new_menu)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Failed to update menu: {e}")
+            new_menu = {}
+            for _, row in edited_df.iterrows():
+                if row["Category"] not in new_menu:
+                    new_menu[row["Category"]] = {}
+                new_menu[row["Category"]][row["Item"]] = row["Price"]
+            menu_data.clear()
+            menu_data.update(new_menu)
+            st.success("✅ Menu updated!")
+            st.rerun()
 
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
         q = st.text_input("Ask AI about sales, menu trends, or customer feedback:")
-        if st.button("Ask Staff AI"):
-            if q:
-                with st.spinner("Thinking..."):
-                    answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights if possible.")
-                    st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+        if st.button("Ask Staff AI") and q:
+            answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
+            st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
     elif choice == "Feedback Review":
         st.subheader("📝 All Customer Feedback")
@@ -779,18 +815,21 @@ elif user["role"] == "Staff":
         st.subheader("💹 Sales Report")
         receipts = load_receipts_df()
         if not receipts.empty:
-            # Pie chart for sales per category
+            # Pie chart: sales per category
             category_sales = {}
             for cat, items in menu_data.items():
-                total_cat = sum(receipts.apply(lambda r: r['items'].count(item) * r['total']/len(r['items'].split(',')) if item in r['items'] else 0, axis=1) for item in items)
+                total_cat = sum(
+                    receipts.apply(lambda r: sum(r['items'].count(item)*r['total']/len(r['items'].split(',')) if item in r['items'] else 0, axis=0), axis=0)
+                    for item in items
+                )
                 category_sales[cat] = total_cat
             fig, ax = plt.subplots()
             ax.pie(category_sales.values(), labels=category_sales.keys(), autopct="%1.1f%%", startangle=90)
             ax.set_title("Sales by Menu Category")
             st.pyplot(fig)
         else:
-            st.info("No sales data available yet.")
-
+            st.info("No sales data yet.")
+            
     if st.button("Log Out", key="logout_staff"):
         st.session_state.page = "login"
         st.session_state.user = None
