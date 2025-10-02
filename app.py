@@ -349,44 +349,55 @@ def run_ai(question: str, extra_context: str = "") -> str:
     except Exception as e:
         return f"⚠️ AI unavailable: {e}"
 
-# Load menu.csv safely
-menu_data = {}
-
-if os.path.exists("menu.csv"):
+# -----------------
+# MENU FUNCTIONS (Snowflake only)
+# -----------------
+def load_menu():
+    """Load menu from Snowflake. If empty, initialize with default menu."""
+    conn = get_snowflake_conn()
     try:
-        menu_df = pd.read_csv("menu.csv")
-        if menu_df.empty:
-            raise pd.errors.EmptyDataError
-        for cat, group in menu_df.groupby("Category"):
-            menu_data[cat] = dict(zip(group["Item"], group["Price"]))
-    except pd.errors.EmptyDataError:
-        # Initialize default menu if CSV is empty
-        default_menu = {
-            "Breakfast": {"Pancakes": 50, "Omelette": 40},
-            "Lunch": {"Burger": 80, "Pizza": 120},
-            "Drinks": {"Coffee": 30, "Juice": 40},
-            "Snacks": {"Chips": 20, "Donut": 25}
-        }
-        menu_data = default_menu.copy()
-        pd.DataFrame([
-            {"Category": cat, "Item": item, "Price": price}
-            for cat, items in menu_data.items()
-            for item, price in items.items()
-        ]).to_csv("menu.csv", index=False)
-else:
-    # CSV doesn't exist yet, create with default menu
-    default_menu = {
-        "Breakfast": {"Pancakes": 50, "Omelette": 40},
-        "Lunch": {"Burger": 80, "Pizza": 120},
-        "Drinks": {"Coffee": 30, "Juice": 40},
-        "Snacks": {"Chips": 20, "Donut": 25}
-    }
-    menu_data = default_menu.copy()
-    pd.DataFrame([
-        {"Category": cat, "Item": item, "Price": price}
-        for cat, items in menu_data.items()
-        for item, price in items.items()
-    ]).to_csv("menu.csv", index=False)
+        df = pd.read_sql("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM", conn)
+        if df.empty:
+            # First-time initialization with default menu
+            default_menu = {
+                "Breakfast": {"Pancakes": 50, "Omelette": 40},
+                "Lunch": {"Burger": 80, "Pizza": 120},
+                "Drinks": {"Coffee": 30, "Juice": 40},
+                "Snacks": {"Chips": 20, "Donut": 25}
+            }
+            cursor = conn.cursor()
+            for cat, items in default_menu.items():
+                for item, price in items.items():
+                    cursor.execute(
+                        "INSERT INTO MENU (CATEGORY, ITEM, PRICE) VALUES (%s, %s, %s)",
+                        (cat, item, price)
+                    )
+            conn.commit()
+            df = pd.read_sql("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM", conn)
+        # Convert to nested dict for easier access
+        menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in df.groupby("CATEGORY")}
+        return menu_data
+    finally:
+        conn.close()
+
+def upsert_menu(edited_df):
+    """Insert/update menu items in Snowflake."""
+    conn = get_snowflake_conn()
+    try:
+        cursor = conn.cursor()
+        for _, row in edited_df.iterrows():
+            if pd.isna(row["CATEGORY"]) or pd.isna(row["ITEM"]) or pd.isna(row["PRICE"]):
+                continue
+            cursor.execute(f"""
+                MERGE INTO MENU t
+                USING (SELECT %s AS CATEGORY, %s AS ITEM, %s AS PRICE) s
+                ON t.CATEGORY = s.CATEGORY AND t.ITEM = s.ITEM
+                WHEN MATCHED THEN UPDATE SET t.PRICE = s.PRICE
+                WHEN NOT MATCHED THEN INSERT (CATEGORY, ITEM, PRICE) VALUES (s.CATEGORY, s.ITEM, s.PRICE)
+            """, (row["CATEGORY"], row["ITEM"], row["PRICE"]))
+        conn.commit()
+    finally:
+        conn.close()
 # ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
@@ -680,124 +691,101 @@ if st.session_state.page == "main":
             st.session_state.user = None
             st.rerun()
 
-    # ---------------------------
-    # NON-STAFF PORTAL
-    # ---------------------------
-    elif role == "Non-Staff":
-        col_left, col_right = st.columns([2, 1])
+# ---------------------------
+# NON-STAFF PORTAL
+# ---------------------------
+elif role == "Non-Staff":
+    col_left, col_right = st.columns([2, 1])
 
-        with col_left:
-            st.subheader("🤖 Canteen AI Assistant")
-            q = st.text_input("Ask about menu, budget, feedback, or ordering:", key="ai_query_main")
-            if st.button("Ask AI", key="ai_button_main"):
-                extra = ""
-                try:
-                    sales_df = load_receipts_df()
-                    feedback_df = load_feedbacks_df()
-                    extra = f"SALES_SUMMARY: {sales_df.head(10).to_dict() if not sales_df.empty else 'No sales'}\nFEEDBACK_SUMMARY: {feedback_df.head(10).to_dict() if not feedback_df.empty else 'No feedback'}"
-                except Exception:
-                    extra = "DB context unavailable."
-                with st.spinner("Asking AI..."):
-                    st.info(run_ai(q, extra))
+    # Load menu from Snowflake
+    menu_df = load_menu()  # CATEGORY, ITEM, PRICE
+    menu_data = {}
+    for cat, group in menu_df.groupby("CATEGORY"):
+        menu_data[cat] = dict(zip(group["ITEM"], group["PRICE"]))
 
-            st.divider()
-            st.subheader("📋 Full Menu")
-            for cat, items in menu_data.items():
-                with st.expander(cat, expanded=False):
-                    for item_name, price in items.items():
-                        add_key = f"add_{cat}_{item_name}".replace(" ", "_")
-                        if st.button(f"Add {item_name} — ₱{price}", key=add_key):
-                            st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + 1
-                            st.success(f"Added 1 x {item_name}")
-                            st.rerun()
+    with col_left:
+        st.subheader("🤖 Canteen AI Assistant")
+        q = st.text_input("Ask about menu, budget, feedback, or ordering:", key="ai_query_main")
+        if st.button("Ask AI", key="ai_button_main") and q:
+            extra = ""
+            try:
+                sales_df = load_receipts_df()
+                feedback_df = load_feedbacks_df()
+                extra = f"SALES_SUMMARY: {sales_df.head(10).to_dict() if not sales_df.empty else 'No sales'}\nFEEDBACK_SUMMARY: {feedback_df.head(10).to_dict() if not feedback_df.empty else 'No feedback'}"
+            except Exception:
+                extra = "DB context unavailable."
+            with st.spinner("Asking AI..."):
+                st.info(run_ai(q, extra))
 
-            # Cart + Checkout
-            st.divider()
-            st.subheader("🛒 Your Cart")
-            if st.session_state.cart:
-                total = sum(
-                    next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0) * qty
-                    for item, qty in st.session_state.cart.items()
+        st.divider()
+        st.subheader("📋 Full Menu")
+        for cat, items in menu_data.items():
+            with st.expander(cat, expanded=False):
+                for item_name, price in items.items():
+                    add_key = f"add_{cat}_{item_name}".replace(" ", "_")
+                    if st.button(f"Add {item_name} — ₱{price}", key=add_key):
+                        st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + 1
+                        st.success(f"Added 1 x {item_name}")
+                        st.experimental_rerun()
+
+        # Cart + Checkout
+        st.divider()
+        st.subheader("🛒 Your Cart")
+        if st.session_state.cart:
+            total = sum(
+                next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0) * qty
+                for item, qty in st.session_state.cart.items()
+            )
+            st.write(f"**Subtotal: ₱{total}**")
+            pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
+            pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
+            payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
+
+            # Proceed to Payment (save pending order first)
+            if st.button("Proceed to Payment", key="checkout_btn"):
+                order_id = f"ORD{random.randint(10000,99999)}"
+                items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
+
+                save_receipt(
+                    order_id=order_id,
+                    items=items_str,
+                    total=total,
+                    payment_method="Pending",
+                    user_id=user["username"],
+                    pickup_time=datetime.combine(pickup_date, pickup_time),
+                    status="Pending"
                 )
-                st.write(f"**Subtotal: ₱{total}**")
-                pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
-                pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
-                payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
 
-                # ---------------------------
-                # Proceed to Payment (save pending order first)
-                # ---------------------------
-                if st.button("Proceed to Payment", key="checkout_btn"):
-                    order_id = f"ORD{random.randint(10000,99999)}"
-                    items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
+                st.session_state.pending_order = {
+                    "order_id": order_id,
+                    "items": dict(st.session_state.cart),
+                    "total": total,
+                    "pickup_time": datetime.combine(pickup_date, pickup_time),
+                    "payment_method": payment_method,
+                    "user_id": user["username"]
+                }
+                st.session_state.page = "payment"
+                st.success("Go to the Payment page to complete your order.")
 
-                    # Save as Pending in DB
-                    save_receipt(
-                        order_id=order_id,
-                        items=items_str,
-                        total=total,
-                        payment_method="Pending",
-                        user_id=user["username"],
-                        pickup_dt=datetime.combine(pickup_date, pickup_time),
-                        status="Pending"
-                    )
+    # RIGHT: Feedback + Notifications + History
+    with col_right:
+        st.subheader("📢 Notifications")
+        for note in st.session_state.notifications:
+            st.info(note)
+        if st.button("Clear notifications", key="clear_notifs"):
+            st.session_state.notifications.clear()
 
-                    # Store pending order in session for actual payment
-                    st.session_state.pending_order = {
-                        "order_id": order_id,
-                        "items": dict(st.session_state.cart),
-                        "total": total,
-                        "pickup_dt": datetime.combine(pickup_date, pickup_time),
-                        "payment_method": payment_method,
-                        "user_id": user["username"]
-                    }
-                    st.session_state.page = "payment"
-                    st.success("Go to the Payment page to complete your order.")
-
-        # RIGHT: Feedback + Notifications + History
-        with col_right:
-            st.subheader("📢 Notifications")
-            for note in st.session_state.notifications:
-                st.info(note)
-            if st.button("Clear notifications", key="clear_notifs"):
-                st.session_state.notifications.clear()
-
-            st.divider()
-            st.subheader("📜 Order History")
-            history = load_receipts_df()
-            if not history.empty:
-                user_orders = history[history["user"] == user["username"]]
-                if not user_orders.empty:
-                    st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                else:
-                    st.info("No past orders yet.")
+        st.divider()
+        st.subheader("📜 Order History")
+        history = load_receipts_df()
+        if not history.empty:
+            user_orders = history[history["user_id"] == user["username"]]
+            if not user_orders.empty:
+                st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
             else:
-                st.info("No orders have been made yet.")
-
-    # ---------------------------
-    # GUEST PORTAL
-    # ---------------------------
-    elif is_guest:
-        col_left, col_right = st.columns([2,1])
-
-        with col_left:
-            st.subheader("🤖 Canteen AI Assistant")
-            q = st.text_input("Ask about menu or budget:", key="ai_query_guest")
-            if st.button("Ask AI", key="ai_button_guest"):
-                answer = run_ai(q)
-                st.info(answer)
-
-            st.divider()
-            st.subheader("📋 Full Menu (Guest)")
-            for cat, items in menu_data.items():
-                with st.expander(cat):
-                    for item_name, price in items.items():
-                        st.write(f"{item_name} — ₱{price}")
-            st.info("⚠️ Guests cannot place orders, leave feedback, or earn loyalty points.")
-
-        with col_right:
-            st.subheader("📢 Notifications")
-            st.info("Guests cannot receive notifications or order history.")
+                st.info("No past orders yet.")
+        else:
+            st.info("No orders have been made yet.")
 
 # ---------------------------
 # PAYMENT PAGE
@@ -900,37 +888,19 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------
-# STAFF PORTAL
+# STAFF PORTAL (inside st.session_state.page == "main")
 # ---------------------------
-if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
-    st.session_state.staff_block_loaded = True
+if st.session_state.role == "Staff":
+    # Load menu from Snowflake
+    menu_df = load_menu()  # Snowflake version
+    menu_data = {}
+    for cat, group in menu_df.groupby("CATEGORY"):
+        menu_data[cat] = dict(zip(group["ITEM"], group["PRICE"]))
 
-    # Load menu.csv or create default menu
-    if os.path.exists("menu.csv"):
-        menu_df = pd.read_csv("menu.csv")
-        menu_data = {cat: dict(zip(group["Item"], group["Price"]))
-                     for cat, group in menu_df.groupby("Category")}
-    else:
-        default_menu = {
-            "Breakfast": {"Pancakes": 50, "Omelette": 40},
-            "Lunch": {"Burger": 80, "Pizza": 120},
-            "Drinks": {"Coffee": 30, "Juice": 40},
-            "Snacks": {"Chips": 20, "Donut": 25}
-        }
-        menu_data = default_menu.copy()
-        pd.DataFrame([
-            {"Category": cat, "Item": item, "Price": price}
-            for cat, items in menu_data.items()
-            for item, price in items.items()
-        ]).to_csv("menu.csv", index=False)
-
-    # ---------------------------
-    # Sidebar menu (unique key)
-    # ---------------------------
+    # Sidebar menu
     choice = st.sidebar.radio(
         "Staff Menu",
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-        key="staff_menu_radio"
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
     )
 
     # ---------------------------
@@ -938,8 +908,8 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     # ---------------------------
     if choice == "Dashboard":
         st.subheader("📊 Staff Dashboard")
-        receipts = load_receipts_df()  # make sure this function exists
-        fb = load_feedbacks_df()       # make sure this function exists
+        receipts = load_receipts_df()  # Snowflake version
+        fb = load_feedbacks_df()       # Snowflake version
         pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
         st.metric("Total Orders", len(receipts))
         st.metric("Feedbacks", len(fb))
@@ -956,7 +926,7 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
             if not pending.empty:
                 for _, row in pending.iterrows():
                     btn_key = f"ready_{row['order_id']}"
-                    st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user']} | Status: {row['status']}")
+                    st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user_id']} | Status: {row['status']}")
                     if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
                         set_receipt_status(row['order_id'], "Ready for Pickup")
                         st.success(f"Order {row['order_id']} marked ready")
@@ -967,37 +937,18 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
             st.info("No receipts yet.")
 
     # ---------------------------
-    # MANAGE MENU
+    # MANAGE MENU (Snowflake)
     # ---------------------------
     elif choice == "Manage Menu":
         st.subheader("📖 Manage Menu")
-        menu_edit_df = pd.DataFrame([
-            {"Category": cat, "Item": item, "Price": price}
-            for cat, items in menu_data.items()
-            for item, price in items.items()
-        ])
-        edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True, key="menu_editor")
+        st.info("Add, edit, or remove menu items")
 
-        if st.button("💾 Save Menu Updates", key="save_menu"):
-            new_menu = {}
-            menu_list_to_save = []
+        # Editable DataFrame from Snowflake
+        edited_df = st.data_editor(menu_df, num_rows="dynamic", use_container_width=True)
 
-            for _, row in edited_df.iterrows():
-                if pd.isna(row["Category"]) or pd.isna(row["Item"]) or pd.isna(row["Price"]):
-                    continue
-                cat = row["Category"]
-                item = row["Item"]
-                price = row["Price"]
-
-                if cat not in new_menu:
-                    new_menu[cat] = {}
-                new_menu[cat][item] = price
-                menu_list_to_save.append({"Category": cat, "Item": item, "Price": price})
-
-            menu_data.clear()
-            menu_data.update(new_menu)
-            pd.DataFrame(menu_list_to_save).to_csv("menu.csv", index=False)
-            st.success("✅ Menu updated and saved!")
+        if st.button("💾 Save Menu Updates"):
+            upsert_menu(edited_df)  # Snowflake upsert function
+            st.success("✅ Menu updated and saved in Snowflake!")
             st.experimental_rerun()
 
     # ---------------------------
@@ -1005,8 +956,8 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     # ---------------------------
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
-        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:", key="ai_question")
-        if st.button("Ask Staff AI", key="ask_ai") and q:
+        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:")
+        if st.button("Ask Staff AI") and q:
             answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
             st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
@@ -1048,7 +999,4 @@ if st.session_state.role == "Staff" and not st.session_state.staff_block_loaded:
     if st.button("Log Out", key="logout_staff"):
         st.session_state.page = "login"
         st.session_state.user = None
-        st.session_state.role = None
-        st.session_state.staff_block_loaded = False
         st.experimental_rerun()
-
