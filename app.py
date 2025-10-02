@@ -544,13 +544,6 @@ if "feedbacks" not in st.session_state:
     st.session_state.feedbacks = []
 
 # ---------------------------
-# USER INFO (simulate login)
-# ---------------------------
-# Example: user = {"username": "Ivana23", "role": "Non-Staff", "is_guest": False}
-user = st.session_state.get("user", {"username": "Guest", "role": "Non-Staff", "is_guest": True})
-is_guest = user.get("is_guest", False)
-
-# ---------------------------
 # USER INFO & GUEST CHECK
 # ---------------------------
 # Retrieve user from session, or default to Guest
