@@ -387,46 +387,47 @@ def password_valid_rules(pw: str):
     return rules
 
 # ---------------------------
-# LOGIN PAGE
+# LOGIN & SIGNUP PAGES (Snowflake + hashed passwords)
 # ---------------------------
-if st.session_state.page == "login":
-    logo = Image.open("bite.jpg")
-    logo = logo.resize((350, 150))
 
-    col1, col2, col3 = st.columns([1, 1, 1])
+# LOGIN PAGE
+if st.session_state.page == "login":
+    logo = Image.open("bite.jpg").resize((350, 150))
+    col1, col2, col3 = st.columns([1,1,1])
     with col2:
         st.image(logo, use_container_width=False)
 
     username = st.text_input("Username", placeholder="Enter username", key="login_username")
     password = st.text_input("Password", type="password", placeholder="Enter password", key="login_password")
 
-    col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
+    col1, col2, col3, col4, col5 = st.columns([1,2,2,2,1])
     with col2:
         if st.button("Log In", use_container_width=True):
             try:
-                user = validate_account(username, password)
+                acc = get_account(username)  # fetch from DB
+                if acc and verify_password(acc["password"], password):
+                    st.session_state.user = acc
+                    st.session_state.page = "main"
+                    st.success(f"✅ Welcome {acc['username']}!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password.")
             except Exception as e:
                 st.error(f"Login error: {e}")
-                user = None
-            if user:
-                st.session_state.user = user
-                st.session_state.page = "main"
-                st.rerun()
-            else:
-                st.error("❌ Invalid username or password.")
+
     with col3:
         if st.button("Guest Account", use_container_width=True):
             st.session_state.user = {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0}
             st.session_state.page = "main"
             st.rerun()
+
     with col4:
         if st.button("Create Account", use_container_width=True):
             st.session_state.page = "signup"
             st.rerun()
 
-# ---------------------------
+
 # SIGNUP PAGE
-# ---------------------------
 elif st.session_state.page == "signup":
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
     st.markdown("<h2>✍️ Create Account</h2>", unsafe_allow_html=True)
@@ -435,6 +436,7 @@ elif st.session_state.page == "signup":
     new_pass = st.text_input("New Password", type="password", key="signup_password")
     new_role = st.selectbox("Role", ["Non-Staff", "Staff"], key="signup_role")
 
+    # show password rules
     rules = password_valid_rules(new_pass)
     st.markdown("**Password rules:** (all must be ✅)")
     st.write(f"- Minimum 12 chars: {'✅' if rules['length'] else '❌'}")
@@ -450,10 +452,12 @@ elif st.session_state.page == "signup":
             st.error("Password does not meet requirements.")
         else:
             try:
+                # check if username exists
                 if get_account(new_username):
                     st.error("Username already exists.")
                 else:
-                    save_account(new_username, new_pass, new_role)
+                    hashed_pw = hash_password(new_pass)
+                    save_account(new_username, hashed_pw, new_role)
                     st.success("✅ Account created! Please log in.")
                     st.session_state.page = "login"
                     st.rerun()
