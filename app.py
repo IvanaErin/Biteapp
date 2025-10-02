@@ -543,37 +543,26 @@ if "page" not in st.session_state:
 if "feedbacks" not in st.session_state:
     st.session_state.feedbacks = []
 
-# ---------------------------
-# USER INFO & SESSION
-# ---------------------------
-user = st.session_state.get("user")
+elif st.session_state.page == "main":
+    user = st.session_state.user or {
+        "username": "Guest",
+        "role": "Non-Staff",
+        "loyalty_points": 0,
+    }
 
-if user is None:
-    # No user logged in → guest portal
-    st.session_state.user = {"username": "Guest", "role": "Guest", "is_guest": True}
-    user = st.session_state.user
-
-# ---------------------------
-# PORTAL ROUTING
-# ---------------------------
-if user["role"] == "Guest":
-    # Guest portal code
-    ...
-elif user["role"] == "Non-Staff":
-    # Logged-in user portal
-    ...
-elif user["role"] == "Staff":
-    # Staff portal
-    ...
-# ---------------------------
-# MAIN PORTAL: NON-STAFF / GUEST
-# ---------------------------
-if user["role"] == "Non-Staff":
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
-    if is_guest:
-        st.warning("🔓 Guest session: Orders won't be saved, feedback disabled, no loyalty points.")
+    # rest of your main portal code...
 
+    if "loyalty_points" not in user:
+        user["loyalty_points"] = user.get("loyalty_points", 0)
+
+    # Guest banner above AI assistant (only one message)
+    if user["username"] == "Guest":
+        st.warning("🔓 You're on a Guest session. Create an account to enjoy loyalty points, promos, and feedback posting.")
+
+    st.title(f"🏫 Welcome {user['username']} to BiteHub")
+    
     col_left, col_right = st.columns([2, 1])
 
     # -----------------------
