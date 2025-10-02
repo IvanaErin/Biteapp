@@ -598,116 +598,129 @@ if st.session_state.page == "main":
     if is_guest:
         st.warning("🔓 Guest session: no feedback, no loyalty points, orders not saved.")
 
-    # ---------------------------
-    # STAFF PORTAL
-    # ---------------------------
-    if role == "Staff":
-        choice = st.sidebar.radio(
-            "Staff Menu",
-            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
-        )
+   if role == "Staff":
+    # Load menu from Snowflake
+    try:
+        menu_df = load_menu()  # This is your Snowflake fetch function
+        if menu_df.empty:
+            menu_data = {}
+        else:
+            menu_data = {cat: dict(zip(g["ITEM"], g["PRICE"])) for cat, g in menu_df.groupby("CATEGORY")}
+    except Exception as e:
+        st.error(f"Failed to load menu: {e}")
+        menu_data = {}
 
-        if choice == "Dashboard":
-            st.subheader("📊 Staff Dashboard")
-            receipts = load_receipts_df()
-            fb = load_feedbacks_df()
-            pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
-            st.metric("Total Orders", len(receipts))
-            st.metric("Feedbacks", len(fb))
-            st.metric("Pending Orders", len(pending))
+    choice = st.sidebar.radio(
+        "Staff Menu",
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+    )
 
-        elif choice == "Pending Orders":
-            st.subheader("📦 Pending Orders")
-            receipts_df = load_receipts_df()
-            if not receipts_df.empty:
-                pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
-                if not pending.empty:
-                    for _, row in pending.iterrows():
-                        btn_key = f"ready_{row['order_id']}"
-                        st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user']} | Status: {row['status']}")
-                        if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
-                            set_receipt_status(row['order_id'], "Ready for Pickup")
-                            st.success(f"Order {row['order_id']} marked ready")
-                            st.rerun()
-                else:
-                    st.info("No pending orders.")
+    if choice == "Dashboard":
+        st.subheader("📊 Staff Dashboard")
+        receipts = load_receipts_df()
+        fb = load_feedbacks_df()
+        pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
+        st.metric("Total Orders", len(receipts))
+        st.metric("Feedbacks", len(fb))
+        st.metric("Pending Orders", len(pending))
+
+    elif choice == "Pending Orders":
+        st.subheader("📦 Pending Orders")
+        receipts_df = load_receipts_df()
+        if not receipts_df.empty:
+            pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
+            if not pending.empty:
+                for _, row in pending.iterrows():
+                    btn_key = f"ready_{row['order_id']}"
+                    st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user_id']} | Status: {row['status']}")
+                    if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
+                        set_receipt_status(row['order_id'], "Ready for Pickup")
+                        st.success(f"Order {row['order_id']} marked ready")
+                        st.experimental_rerun()  # safe rerun
             else:
-                st.info("No receipts yet.")
+                st.info("No pending orders.")
+        else:
+            st.info("No receipts yet.")
 
-        elif choice == "Manage Menu":
-            st.subheader("📖 Manage Menu")
-            menu_edit_df = pd.DataFrame([
-                {"Category": cat, "Item": item, "Price": price}
-                for cat, items in menu_data.items()
-                for item, price in items.items()
-            ])
-            edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
-            if st.button("💾 Save Menu Updates"):
-                new_menu = {}
-                for _, row in edited_df.iterrows():
-                    if row["Category"] not in new_menu:
-                        new_menu[row["Category"]] = {}
-                    new_menu[row["Category"]][row["Item"]] = row["Price"]
-                menu_data.clear()
-                menu_data.update(new_menu)
-                st.success("✅ Menu updated!")
-                st.rerun()
+    elif choice == "Manage Menu":
+        st.subheader("📖 Manage Menu")
+        menu_edit_df = pd.DataFrame([
+            {"CATEGORY": cat, "ITEM": item, "PRICE": price}
+            for cat, items in menu_data.items()
+            for item, price in items.items()
+        ])
+        edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
 
-        elif choice == "AI Assistant":
-            st.subheader("🤖 Staff AI Assistant")
-            q = st.text_input("Ask AI about sales, menu trends, or customer feedback:")
-            if st.button("Ask Staff AI") and q:
-                answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
-                st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
+        if st.button("💾 Save Menu Updates", key="save_menu"):
+            try:
+                upsert_menu(edited_df)  # Save to Snowflake
+                st.success("✅ Menu updated and saved!")
+                st.experimental_rerun()
+            except Exception as e:
+                st.error(f"Failed to save menu: {e}")
 
-        elif choice == "Feedback Review":
-            st.subheader("📝 All Customer Feedback")
-            fb_df = load_feedbacks_df()
-            if not fb_df.empty:
-                st.dataframe(fb_df, use_container_width=True)
-            else:
-                st.info("No feedback received yet.")
+    elif choice == "AI Assistant":
+        st.subheader("🤖 Staff AI Assistant")
+        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:", key="ai_staff")
+        if st.button("Ask Staff AI", key="ai_btn_staff") and q:
+            answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
+            st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-        elif choice == "Sales Report":
-            st.subheader("💹 Sales Report")
-            receipts = load_receipts_df()
-            if not receipts.empty:
-                category_sales = {}
-                for cat, items in menu_data.items():
-                    total_cat = sum(
-                        receipts.apply(lambda r: sum(r['items'].count(item)*r['total']/len(r['items'].split(',')) if item in r['items'] else 0, axis=0), axis=0)
-                        for item in items
-                    )
-                    category_sales[cat] = total_cat
-                fig, ax = plt.subplots()
-                ax.pie(category_sales.values(), labels=category_sales.keys(), autopct="%1.1f%%", startangle=90)
-                ax.set_title("Sales by Menu Category")
-                st.pyplot(fig)
-            else:
-                st.info("No sales data yet.")
+    elif choice == "Feedback Review":
+        st.subheader("📝 All Customer Feedback")
+        fb_df = load_feedbacks_df()
+        if not fb_df.empty:
+            st.dataframe(fb_df, use_container_width=True)
+        else:
+            st.info("No feedback received yet.")
 
-        if st.button("Log Out", key="logout_staff"):
-            st.session_state.page = "login"
-            st.session_state.user = None
-            st.rerun()
+    elif choice == "Sales Report":
+        st.subheader("💹 Sales Report")
+        receipts = load_receipts_df()
+        if not receipts.empty and menu_data:
+            category_sales = {}
+            for cat, items in menu_data.items():
+                total_cat = 0
+                for item in items:
+                    total_cat += receipts.apply(lambda r: r['total'] if item in r['items'] else 0, axis=1).sum()
+                category_sales[cat] = total_cat
+            fig, ax = plt.subplots()
+            ax.pie(category_sales.values(), labels=category_sales.keys(), autopct="%1.1f%%", startangle=90)
+            ax.set_title("Sales by Menu Category")
+            st.pyplot(fig)
+        else:
+            st.info("No sales data yet.")
+
+    if st.button("Log Out", key="logout_staff"):
+        st.session_state.page = "login"
+        st.session_state.user = None
+        st.experimental_rerun()
 
 # ---------------------------
 # NON-STAFF PORTAL
 # ---------------------------
 elif role == "Non-Staff":
-    col_left, col_right = st.columns([2, 1])
-
     # Load menu from Snowflake
-    menu_df = load_menu()  # CATEGORY, ITEM, PRICE
-    menu_data = {}
-    for cat, group in menu_df.groupby("CATEGORY"):
-        menu_data[cat] = dict(zip(group["ITEM"], group["PRICE"]))
+    try:
+        menu_df = load_menu()
+        if menu_df.empty:
+            menu_data = {}
+        else:
+            menu_data = {cat: dict(zip(g["ITEM"], g["PRICE"])) for cat, g in menu_df.groupby("CATEGORY")}
+    except Exception as e:
+        st.error(f"Failed to load menu: {e}")
+        menu_data = {}
+
+    # Initialize cart if not present
+    if "cart" not in st.session_state:
+        st.session_state.cart = {}
+
+    col_left, col_right = st.columns([2, 1])
 
     with col_left:
         st.subheader("🤖 Canteen AI Assistant")
         q = st.text_input("Ask about menu, budget, feedback, or ordering:", key="ai_query_main")
         if st.button("Ask AI", key="ai_button_main") and q:
-            extra = ""
             try:
                 sales_df = load_receipts_df()
                 feedback_df = load_feedbacks_df()
@@ -726,7 +739,7 @@ elif role == "Non-Staff":
                     if st.button(f"Add {item_name} — ₱{price}", key=add_key):
                         st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + 1
                         st.success(f"Added 1 x {item_name}")
-                        st.experimental_rerun()
+                        st.rerun()
 
         # Cart + Checkout
         st.divider()
@@ -741,16 +754,16 @@ elif role == "Non-Staff":
             pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
             payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
 
-            # Proceed to Payment (save pending order first)
             if st.button("Proceed to Payment", key="checkout_btn"):
                 order_id = f"ORD{random.randint(10000,99999)}"
                 items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
 
+                # Save to Snowflake
                 save_receipt(
                     order_id=order_id,
                     items=items_str,
                     total=total,
-                    payment_method="Pending",
+                    payment_method=payment_method,
                     user_id=user["username"],
                     pickup_time=datetime.combine(pickup_date, pickup_time),
                     status="Pending"
@@ -760,16 +773,17 @@ elif role == "Non-Staff":
                     "order_id": order_id,
                     "items": dict(st.session_state.cart),
                     "total": total,
-                    "pickup_time": datetime.combine(pickup_date, pickup_time),
+                    "pickup_dt": datetime.combine(pickup_date, pickup_time),
                     "payment_method": payment_method,
                     "user_id": user["username"]
                 }
                 st.session_state.page = "payment"
                 st.success("Go to the Payment page to complete your order.")
 
-    # RIGHT: Feedback + Notifications + History
     with col_right:
         st.subheader("📢 Notifications")
+        if "notifications" not in st.session_state:
+            st.session_state.notifications = []
         for note in st.session_state.notifications:
             st.info(note)
         if st.button("Clear notifications", key="clear_notifs"):
