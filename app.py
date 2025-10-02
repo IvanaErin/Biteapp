@@ -564,7 +564,7 @@ if st.session_state.page == "main":
                         add_key = f"add_{cat}_{item_name}".replace(" ", "_")
                         if st.button(f"Add {item_name}", key=add_key):
                             st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + 1
-                            st.experimental_rerun()
+                            st.rerun()
 
         with colB:
             st.subheader("✍️ Give Feedback")
@@ -624,7 +624,7 @@ if st.session_state.page == "main":
                             if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
                                 set_receipt_status(row['order_id'], "Ready for Pickup")
                                 st.success(f"Order {row['order_id']} marked ready")
-                                st.experimental_rerun()
+                                st.rerun()
                     else:
                         st.info("No pending orders.")
                 else:
