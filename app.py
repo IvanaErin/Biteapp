@@ -349,9 +349,23 @@ def run_ai(question: str, extra_context: str = "") -> str:
     except Exception as e:
         return f"⚠️ AI unavailable: {e}"
 
-# ---------------------------
-# MENU DATA
-# ---------------------------
+# ----------------------------
+# MENU CSV INITIALIZATION
+# ----------------------------
+default_menu = {
+    "Breakfast": {"Pancakes": 50, "Omelette": 40},
+    "Lunch": {"Burger": 80, "Pizza": 120},
+    "Drinks": {"Coffee": 30, "Juice": 40},
+    "Snacks": {"Chips": 20, "Donut": 25}
+}
+
+if not os.path.exists("menu.csv"):
+    menu_list = []
+    for cat, items in default_menu.items():
+        for item, price in items.items():
+            menu_list.append({"Category": cat, "Item": item, "Price": price})
+    pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
+
 menu_df = pd.read_csv("menu.csv")
 menu_data = {}
 for cat, group in menu_df.groupby("Category"):
@@ -524,16 +538,6 @@ def set_receipt_status(order_id, status):
     for rec in st.session_state.receipts:
         if rec["order_id"] == order_id:
             rec["status"] = status
-
-# ---------------------------
-# Sample menu data
-# ---------------------------
-menu_data = {
-    "Breakfast": {"Pancakes": 50, "Omelette": 40},
-    "Lunch": {"Burger": 80, "Pizza": 120},
-    "Drinks": {"Coffee": 30, "Juice": 40},
-    "Snacks": {"Chips": 20, "Donut": 25}
-}
 
 # ---------------------------
 # Session variables
