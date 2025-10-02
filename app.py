@@ -597,18 +597,18 @@ if st.session_state.page == "main":
 
     if is_guest:
         st.warning("🔓 Guest session: no feedback, no loyalty points, orders not saved.")
-
-   if role == "Staff":
-    # Load menu from Snowflake
-    try:
-        menu_df = load_menu()  # This is your Snowflake fetch function
-        if menu_df.empty:
+        
+    if role == "Staff":
+        # Load menu from Snowflake
+        try:
+            menu_df = load_menu()  # This is your Snowflake fetch function
+            if menu_df.empty:
+                menu_data = {}
+            else:
+                menu_data = {cat: dict(zip(g["ITEM"], g["PRICE"])) for cat, g in menu_df.groupby("CATEGORY")}
+        except Exception as e:
+            st.error(f"Failed to load menu: {e}")
             menu_data = {}
-        else:
-            menu_data = {cat: dict(zip(g["ITEM"], g["PRICE"])) for cat, g in menu_df.groupby("CATEGORY")}
-    except Exception as e:
-        st.error(f"Failed to load menu: {e}")
-        menu_data = {}
 
     choice = st.sidebar.radio(
         "Staff Menu",
