@@ -371,6 +371,35 @@ menu_data = {}
 for cat, group in menu_df.groupby("Category"):
     menu_data[cat] = dict(zip(group["Item"], group["Price"]))
 
+# ----------------------------
+# MENU EDITOR
+# ----------------------------
+edited_df = pd.DataFrame(
+    [(cat, item, price) for cat, items in menu_data.items() for item, price in items.items()],
+    columns=["Category", "Item", "Price"]
+)
+
+edited_df = st.experimental_data_editor(edited_df, num_rows="dynamic")
+
+if st.button("💾 Save Menu Updates"):
+    new_menu = {}
+    menu_list = []
+    for _, row in edited_df.iterrows():
+        if row["Category"] not in new_menu:
+            new_menu[row["Category"]] = {}
+        new_menu[row["Category"]][row["Item"]] = row["Price"]
+        menu_list.append({"Category": row["Category"], "Item": row["Item"], "Price": row["Price"]})
+
+    # Update in-memory menu
+    menu_data.clear()
+    menu_data.update(new_menu)
+
+    # Save to CSV
+    pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
+
+    st.success("✅ Menu updated and saved!")
+    st.rerun()
+
 # ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
