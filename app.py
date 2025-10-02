@@ -551,6 +551,15 @@ user = st.session_state.get("user", {"username": "Guest", "role": "Non-Staff", "
 is_guest = user.get("is_guest", False)
 
 # ---------------------------
+# USER INFO & GUEST CHECK
+# ---------------------------
+# Retrieve user from session, or default to Guest
+user = st.session_state.get("user", {"username": "Guest", "role": "Non-Staff", "is_guest": True})
+
+# Determine if the user is a guest
+is_guest = user.get("is_guest", False)
+
+# ---------------------------
 # MAIN PORTAL PAGE: Non-Staff / Guest
 # ---------------------------
 if user["role"] == "Non-Staff":
