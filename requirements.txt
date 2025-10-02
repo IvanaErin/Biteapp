@@ -1,7 +1,8 @@
-streamlit
+streamlit>=1.26.0
 pandas
 matplotlib
 qrcode[pil]
 groq
 pillow
 snowflake-connector-python
+
