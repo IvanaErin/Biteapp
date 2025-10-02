@@ -552,7 +552,9 @@ if st.session_state.page == "main":
                     else:
                         st.warning("Sentiment AI unavailable")
 
+        # ---------------------------
         # Menu display & Feedback
+        # ---------------------------
         st.divider()
         st.subheader("📋 Full Menu")
         colA, colB = st.columns([2, 1])
@@ -581,16 +583,59 @@ if st.session_state.page == "main":
                 if st.button("Submit Feedback", key="submit_fb_nonstaff"):
                     if fb_item != "(select)" and fb_text.strip():
                         try:
-                            save_feedback(fb_item, fb_text.strip(), rating, username=user["username"])
+                            save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
                             st.success("✅ Feedback submitted!")
                         except Exception as e:
                             st.error(f"Failed to save feedback: {e}")
                     else:
                         st.warning("Choose an item and write feedback.")
 
-    # ---------------------------
-    # STAFF UX
-    # ---------------------------
+        # ---------------------------
+        # Cart & Checkout
+        # ---------------------------
+        st.divider()
+        st.subheader("🛒 Your Cart")
+
+        if st.session_state.cart:
+            total = 0
+            for item, qty in st.session_state.cart.items():
+                price = menu_data[next(cat for cat in menu_data if item in menu_data[cat])][item]
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"{item} x {qty} — ₱{price * qty}")
+                with col2:
+                    if st.button(f"➖ Remove {item}", key=f"remove_{item}"):
+                        if st.session_state.cart[item] > 1:
+                            st.session_state.cart[item] -= 1
+                        else:
+                            del st.session_state.cart[item]
+                        st.rerun()
+                total += price * qty
+
+            st.write(f"**Total: ₱{total}**")
+
+            if st.button("Checkout", key="checkout_btn"):
+                order_id = f"ORD{random.randint(10000,99999)}"
+                items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
+                user_id = None if is_guest else user["username"]
+
+                save_receipt(order_id, items_str, total, payment_method="Cash", user_id=user_id)
+
+                if not is_guest:
+                    new_points = update_loyalty_points(user["username"], total // 100)
+                    st.session_state.loyalty_points = new_points
+                    st.success(f"✅ Order placed! You earned {total//100} loyalty points.")
+                else:
+                    st.success("✅ Order placed! (Guests do not earn loyalty points)")
+
+                st.session_state.cart.clear()
+                st.rerun()
+        else:
+            st.info("Your cart is empty. Add items from the menu to order.")
+
+# --------------------------- 
+# STAFF UX 
+# ---------------------------
     elif user["role"] == "Staff":
         st.title("🛠️ BiteHub Staff Portal")
         choice = st.sidebar.radio(
