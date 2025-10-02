@@ -657,12 +657,11 @@ if st.session_state.page == "main":
             st.rerun()
 
     # ---------------------------
-    # NON-STAFF / GUEST PORTAL
+    # NON-STAFF PORTAL
     # ---------------------------
-    else:
+    elif role == "Non-Staff":
         col_left, col_right = st.columns([2, 1])
 
-        # LEFT: AI + Menu + Cart + Payment
         with col_left:
             st.subheader("🤖 Canteen AI Assistant")
             q = st.text_input("Ask about menu, budget, feedback, or ordering:", key="ai_query_main")
@@ -701,8 +700,27 @@ if st.session_state.page == "main":
                 pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
                 payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
 
+                # ---------------------------
+                # Proceed to Payment (save pending order first)
+                # ---------------------------
                 if st.button("Proceed to Payment", key="checkout_btn"):
+                    order_id = f"ORD{random.randint(10000,99999)}"
+                    items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
+
+                    # Save as Pending in DB
+                    save_receipt(
+                        order_id=order_id,
+                        items=items_str,
+                        total=total,
+                        payment_method="Pending",
+                        user_id=user["username"],
+                        pickup_dt=datetime.combine(pickup_date, pickup_time),
+                        status="Pending"
+                    )
+
+                    # Store pending order in session for actual payment
                     st.session_state.pending_order = {
+                        "order_id": order_id,
                         "items": dict(st.session_state.cart),
                         "total": total,
                         "pickup_dt": datetime.combine(pickup_date, pickup_time),
@@ -712,40 +730,8 @@ if st.session_state.page == "main":
                     st.session_state.page = "payment"
                     st.success("Go to the Payment page to complete your order.")
 
-            else:
-                st.info("Your cart is empty. Add items to proceed.")
-
-        # RIGHT: Sentiment Analysis + Feedback + Notifications
+        # RIGHT: Feedback + Notifications + History
         with col_right:
-            st.subheader("📝 Feedback Sentiment Analysis")
-            cart_items = st.session_state.get("cart", {})
-            if not cart_items:
-                st.info("Click on menu items to see sentiment analysis.")
-            else:
-                for item_name in cart_items.keys():
-                    item_feedbacks = [fb for fb in st.session_state.get("feedbacks", []) if fb["item"] == item_name]
-                    if not item_feedbacks:
-                        st.info(f"No feedbacks yet for {item_name}.")
-                    else:
-                        st.info(f"Sentiment for {item_name}: Positive (simulated)")
-
-            st.divider()
-            st.subheader("✍️ Give Feedback")
-            if is_guest:
-                st.info("⚠️ Guests cannot submit feedback. Log in to leave comments and ratings.")
-            else:
-                all_items = [i for cat in menu_data.values() for i in cat.keys()]
-                fb_item = st.selectbox("Select Item:", ["(select)"] + all_items, key="fb_item")
-                rating = st.slider("Rate this item (1-5):", 1, 5, 3, key="fb_rating")
-                fb_text = st.text_area("Your Feedback:", key="fb_text")
-                if st.button("Submit Feedback", key="submit_fb_nonstaff"):
-                    if fb_item != "(select)" and fb_text.strip():
-                        save_feedback(fb_item, fb_text.strip(), rating, user_id=user["username"])
-                        st.success("✅ Feedback submitted!")
-                    else:
-                        st.warning("Choose an item and write feedback.")
-
-            st.divider()
             st.subheader("📢 Notifications")
             for note in st.session_state.notifications:
                 st.info(note)
@@ -754,18 +740,40 @@ if st.session_state.page == "main":
 
             st.divider()
             st.subheader("📜 Order History")
-            if not is_guest:
-                history = load_receipts_df()
-                if not history.empty:
-                    user_orders = history[history["user"] == user["username"]]
-                    if not user_orders.empty:
-                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                    else:
-                        st.info("No past orders yet.")
+            history = load_receipts_df()
+            if not history.empty:
+                user_orders = history[history["user"] == user["username"]]
+                if not user_orders.empty:
+                    st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
                 else:
-                    st.info("No orders have been made yet.")
+                    st.info("No past orders yet.")
             else:
-                st.info("⚠️ Guests cannot save order history. Log in to keep track of your orders.")
+                st.info("No orders have been made yet.")
+
+    # ---------------------------
+    # GUEST PORTAL
+    # ---------------------------
+    elif is_guest:
+        col_left, col_right = st.columns([2,1])
+
+        with col_left:
+            st.subheader("🤖 Canteen AI Assistant")
+            q = st.text_input("Ask about menu or budget:", key="ai_query_guest")
+            if st.button("Ask AI", key="ai_button_guest"):
+                answer = run_ai(q)
+                st.info(answer)
+
+            st.divider()
+            st.subheader("📋 Full Menu (Guest)")
+            for cat, items in menu_data.items():
+                with st.expander(cat):
+                    for item_name, price in items.items():
+                        st.write(f"{item_name} — ₱{price}")
+            st.info("⚠️ Guests cannot place orders, leave feedback, or earn loyalty points.")
+
+        with col_right:
+            st.subheader("📢 Notifications")
+            st.info("Guests cannot receive notifications or order history.")
 
 # ---------------------------
 # PAYMENT PAGE
@@ -781,15 +789,18 @@ elif st.session_state.page == "payment":
 
         if pending["payment_method"] == "Cash":
             if st.button("Confirm Cash Payment"):
-                order_id = f"ORD{random.randint(10000,99999)}"
-                items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
-                if not is_guest:
-                    save_receipt(order_id, items_str, pending["total"], "Cash", pending["user_id"], pending["pickup_dt"], "Paid")
-                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
-                st.success(f"Order confirmed! Order ID: {order_id}")
-                st.download_button("Download Receipt (txt)",
-                                   data=f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: Cash\nPickup: {pending['pickup_dt']}\nStatus: Paid",
-                                   file_name=f"{order_id}_receipt.txt")
+                # Update status from Pending -> Paid
+                save_receipt(
+                    order_id=pending["order_id"],
+                    items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
+                    total=pending["total"],
+                    payment_method="Cash",
+                    user_id=pending["user_id"],
+                    pickup_dt=pending["pickup_dt"],
+                    status="Paid"
+                )
+                st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
+                st.success(f"Order confirmed! Order ID: {pending['order_id']}")
                 st.session_state.cart = {}
                 st.session_state.pending_order = {}
                 st.session_state.page = "main"
@@ -803,16 +814,20 @@ elif st.session_state.page == "payment":
                 st.text_input("CVV", key="card_cvv")
 
             if st.button("Simulate Payment Success"):
-                order_id = f"ORD{random.randint(10000,99999)}"
-                items_str = ", ".join([f"{i} x{q}" for i,q in pending["items"].items()])
-                if not is_guest:
-                    save_receipt(order_id, items_str, pending["total"], pending["payment_method"], pending["user_id"], pending["pickup_dt"], "Paid")
-                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
-                st.success(f"Payment confirmed! Order ID: {order_id}")
-                st.download_button("Download Receipt (txt)",
-                                   data=f"Order ID: {order_id}\nUser: {pending['user_id']}\nItems: {items_str}\nTotal: ₱{pending['total']}\nPayment: {pending['payment_method']}\nPickup: {pending['pickup_dt']}\nStatus: Paid",
-                                   file_name=f"{order_id}_receipt.txt")
-                st.session_state.notifications.append(f"Order {order_id} placed — Payment: {pending['payment_method']} — Pickup: {pending['pickup_dt']}")
+                save_receipt(
+                    order_id=pending["order_id"],
+                    items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
+                    total=pending["total"],
+                    payment_method=pending["payment_method"],
+                    user_id=pending["user_id"],
+                    pickup_dt=pending["pickup_dt"],
+                    status="Paid"
+                )
+                st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
+                st.success(f"Payment confirmed! Order ID: {pending['order_id']}")
+                st.session_state.notifications.append(
+                    f"Order {pending['order_id']} placed — Payment: {pending['payment_method']} — Pickup: {pending['pickup_dt']}"
+                )
                 st.session_state.cart = {}
                 st.session_state.pending_order = {}
                 st.session_state.page = "main"
