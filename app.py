@@ -363,9 +363,6 @@ def run_ai(question: str, extra_context: str = "") -> str:
     except Exception as e:
         return f"⚠️ AI unavailable: {e}"
 
-# -----------------
-# MENU FUNCTIONS (Snowflake only)
-# -----------------
 def load_menu():
     """Load menu from Snowflake. If empty, initialize with default menu."""
     conn = get_snowflake_conn()
@@ -388,28 +385,8 @@ def load_menu():
                     )
             conn.commit()
             df = pd.read_sql("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM", conn)
-        # Convert to nested dict for easier access
-        menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in df.groupby("CATEGORY")}
-        return menu_data
-    finally:
-        conn.close()
-
-def upsert_menu(edited_df):
-    """Insert/update menu items in Snowflake."""
-    conn = get_snowflake_conn()
-    try:
-        cursor = conn.cursor()
-        for _, row in edited_df.iterrows():
-            if pd.isna(row["CATEGORY"]) or pd.isna(row["ITEM"]) or pd.isna(row["PRICE"]):
-                continue
-            cursor.execute(f"""
-                MERGE INTO MENU t
-                USING (SELECT %s AS CATEGORY, %s AS ITEM, %s AS PRICE) s
-                ON t.CATEGORY = s.CATEGORY AND t.ITEM = s.ITEM
-                WHEN MATCHED THEN UPDATE SET t.PRICE = s.PRICE
-                WHEN NOT MATCHED THEN INSERT (CATEGORY, ITEM, PRICE) VALUES (s.CATEGORY, s.ITEM, s.PRICE)
-            """, (row["CATEGORY"], row["ITEM"], row["PRICE"]))
-        conn.commit()
+        # Convert to nested dict
+        return {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in df.groupby("CATEGORY")}
     finally:
         conn.close()
 # ---------------------------
@@ -447,7 +424,7 @@ def password_valid_rules(pw: str):
 
 # LOGIN PAGE
 if st.session_state.page == "login":
-    logo = Image.open("hub.jpg").resize((350, 150))
+    logo = Image.open("bite.jpg").resize((350, 150))
     col1, col2, col3 = st.columns([1,1,1])
     with col2:
         st.image(logo, use_container_width=False)
@@ -964,20 +941,31 @@ if role == "Staff":
         else:
             st.info("No receipts yet.")
 
-    # ---------------------------
-    # MANAGE MENU (Snowflake)
-    # ---------------------------
-    elif choice == "Manage Menu":
-        st.subheader("📖 Manage Menu")
-        st.info("Add, edit, or remove menu items")
+# ---------------------------
+# MANAGE MENU (Snowflake)
+# ---------------------------
+elif choice == "Manage Menu":
+    st.subheader("📖 Manage Menu")
+    st.info("Add, edit, or remove menu items")
 
-        # Editable DataFrame from Snowflake
-        edited_df = st.data_editor(menu_df, num_rows="dynamic", use_container_width=True)
+    # Load menu_data as nested dict from Snowflake
+    menu_data = load_menu()  # returns {category: {item: price}}
 
-        if st.button("💾 Save Menu Updates"):
-            upsert_menu(edited_df)  # Snowflake upsert function
-            st.success("✅ Menu updated and saved in Snowflake!")
-            st.experimental_rerun()
+    # Convert nested dict to DataFrame for editing
+    menu_df = pd.DataFrame([
+        {"CATEGORY": cat, "ITEM": item, "PRICE": price}
+        for cat, items in menu_data.items()
+        for item, price in items.items()
+    ])
+
+    # Editable DataFrame
+    edited_df = st.data_editor(menu_df, num_rows="dynamic", use_container_width=True)
+
+    # Save updates
+    if st.button("💾 Save Menu Updates"):
+        upsert_menu(edited_df)  # Snowflake upsert function
+        st.success("✅ Menu updated and saved in Snowflake!")
+        st.experimental_rerun()
 
     # ---------------------------
     # AI ASSISTANT
