@@ -570,7 +570,7 @@ if page == "main":
                     if st.button(f"Add {item_name} — ₱{price}", key=add_key):
                         st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + 1
                         st.success(f"Added 1 x {item_name}")
-                        st.experimental_rerun()
+                        st.rerun()
 
         # Cart + Checkout
         st.divider()
@@ -588,7 +588,7 @@ if page == "main":
                             st.session_state.cart[item] -= 1
                         else:
                             del st.session_state.cart[item]
-                        st.experimental_rerun()
+                        st.rerun()
                 total += price * qty
 
             st.write(f"**Subtotal: ₱{total}**")
