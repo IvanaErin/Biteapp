@@ -12,11 +12,6 @@ import secrets
 import re
 from PIL import Image
 
-import os, base64, hashlib, secrets, re
-import streamlit as st
-import pandas as pd
-from PIL import Image
-from groq import Groq
 
 # ---------------------------
 # AI CLIENT
@@ -503,9 +498,9 @@ if page == "main":
         )
         st.info("Your cart is empty. Add items from the menu to order.")
 
-# ---------------------------
-# NON-STAFF UX
-# ---------------------------
+    # ---------------------------
+    # NON-STAFF UX
+    # ---------------------------
 if user.get("role") == "Non-Staff":
     col_left, col_right = st.columns([1, 1])
     # RIGHT: Feedback / Sentiment
