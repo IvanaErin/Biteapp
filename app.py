@@ -349,15 +349,32 @@ def run_ai(question: str, extra_context: str = "") -> str:
     except Exception as e:
         return f"⚠️ AI unavailable: {e}"
 
-# --- Ensure menu_data exists ---
+# Load menu.csv safely
 menu_data = {}
 
 if os.path.exists("menu.csv"):
-    menu_df = pd.read_csv("menu.csv")
-    for cat, group in menu_df.groupby("Category"):
-        menu_data[cat] = dict(zip(group["Item"], group["Price"]))
+    try:
+        menu_df = pd.read_csv("menu.csv")
+        if menu_df.empty:
+            raise pd.errors.EmptyDataError
+        for cat, group in menu_df.groupby("Category"):
+            menu_data[cat] = dict(zip(group["Item"], group["Price"]))
+    except pd.errors.EmptyDataError:
+        # Initialize default menu if CSV is empty
+        default_menu = {
+            "Breakfast": {"Pancakes": 50, "Omelette": 40},
+            "Lunch": {"Burger": 80, "Pizza": 120},
+            "Drinks": {"Coffee": 30, "Juice": 40},
+            "Snacks": {"Chips": 20, "Donut": 25}
+        }
+        menu_data = default_menu.copy()
+        pd.DataFrame([
+            {"Category": cat, "Item": item, "Price": price}
+            for cat, items in menu_data.items()
+            for item, price in items.items()
+        ]).to_csv("menu.csv", index=False)
 else:
-    # Default menu if CSV doesn't exist
+    # CSV doesn't exist yet, create with default menu
     default_menu = {
         "Breakfast": {"Pancakes": 50, "Omelette": 40},
         "Lunch": {"Burger": 80, "Pizza": 120},
@@ -365,13 +382,11 @@ else:
         "Snacks": {"Chips": 20, "Donut": 25}
     }
     menu_data = default_menu.copy()
-    # Save default menu to CSV
-    menu_list = []
-    for cat, items in default_menu.items():
-        for item, price in items.items():
-            menu_list.append({"Category": cat, "Item": item, "Price": price})
-    pd.DataFrame(menu_list).to_csv("menu.csv", index=False)
-
+    pd.DataFrame([
+        {"Category": cat, "Item": item, "Price": price}
+        for cat, items in menu_data.items()
+        for item, price in items.items()
+    ]).to_csv("menu.csv", index=False)
 # ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
