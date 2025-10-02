@@ -546,12 +546,25 @@ if "feedbacks" not in st.session_state:
 # ---------------------------
 # USER INFO & GUEST CHECK
 # ---------------------------
-user = st.session_state.get("user")
-if not isinstance(user, dict):
-    user = {"username": "Guest", "role": "Non-Staff", "is_guest": True}
+user = st.session_state.get("user")  # None if not logged in
 
-is_guest = user.get("is_guest", False)
+if user is None:
+    # Show login page
+    st.title("Welcome to BiteHub! Please log in.")
+    st.info("Login or continue as guest.")
+    if st.button("Continue as Guest"):
+        st.session_state.user = {"username": "Guest", "role": "Non-Staff", "is_guest": True}
+        st.experimental_rerun()
+else:
+    # Determine if guest
+    is_guest = user.get("is_guest", False)
 
+    if user["role"] == "Non-Staff":
+        # Show Non-Staff / Guest portal
+        ...
+    elif user["role"] == "Staff":
+        # Show Staff portal
+        ...
 # ---------------------------
 # MAIN PORTAL: NON-STAFF / GUEST
 # ---------------------------
