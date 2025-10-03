@@ -633,11 +633,23 @@ if st.session_state.page == "main":
 
     if is_guest:
         st.warning("🔓 Guest session: no feedback, no loyalty points, orders not saved.")
-        
+
+    # ---------------------------
+    # Menu selection (Staff only)
+    # ---------------------------
+    if "choice" not in st.session_state:
+        st.session_state.choice = "Home"  # default page
+
     if role == "Staff":
+        # Staff menu sidebar
+        st.session_state.choice = st.sidebar.selectbox(
+            "Menu",
+            ["Home", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review"],
+            index=0
+        )
         # Load menu from Snowflake
         try:
-            menu_df = load_menu()  # This is your Snowflake fetch function
+            menu_df = load_menu()
             if menu_df.empty:
                 menu_data = {}
             else:
@@ -645,7 +657,18 @@ if st.session_state.page == "main":
         except Exception as e:
             st.error(f"Failed to load menu: {e}")
             menu_data = {}
+    else:
+        # Non-staff / guest default
+        st.session_state.choice = "Home"
 
+    choice = st.session_state.choice  # always defined now
+
+    # ---------------------------
+    # Page logic
+    # ---------------------------
+    if choice == "Home":
+        st.write("Welcome to BiteHub!")
+    
     elif choice == "Pending Orders":
         st.subheader("📦 Pending Orders")
         receipts_df = load_receipts_df()
@@ -658,7 +681,7 @@ if st.session_state.page == "main":
                     if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
                         set_receipt_status(row['order_id'], "Ready for Pickup")
                         st.success(f"Order {row['order_id']} marked ready")
-                        st.rerun()  # safe rerun
+                        st.rerun()
             else:
                 st.info("No pending orders.")
         else:
@@ -672,10 +695,9 @@ if st.session_state.page == "main":
             for item, price in items.items()
         ])
         edited_df = st.data_editor(menu_edit_df, num_rows="dynamic", use_container_width=True)
-
         if st.button("💾 Save Menu Updates", key="save_menu"):
             try:
-                upsert_menu(edited_df)  # Save to Snowflake
+                upsert_menu(edited_df)
                 st.success("✅ Menu updated and saved!")
                 st.rerun()
             except Exception as e:
