@@ -199,7 +199,11 @@ def validate_account(username: str, password: str):
 # ---------------------------
 # RECEIPTS
 # ---------------------------
-def save_receipt(order_id: str, items: str, total: float, payment_method: str, user_id: str, pickup_dt: str, status: str):
+
+def save_receipt(order_id: str, items, total: float, payment_method: str, user_id: str, pickup_dt: str, status: str):
+    # Convert items dict to JSON string
+    items_json = json.dumps(items)
+
     conn = get_connection()
     if not conn:
         _ensure_local_db()
@@ -207,8 +211,8 @@ def save_receipt(order_id: str, items: str, total: float, payment_method: str, u
             st.session_state._local_receipts = []
         st.session_state._local_receipts.append({
             "order_id": order_id,
-            "items": items,
-            "total": total,
+            "items": items_json,  # save as JSON string
+            "total": float(total),
             "payment_method": payment_method,
             "user_id": user_id,
             "pickup_dt": pickup_dt,
@@ -216,18 +220,18 @@ def save_receipt(order_id: str, items: str, total: float, payment_method: str, u
             "timestamp": datetime.now()
         })
         return
+
     try:
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (order_id, items, total, payment_method, user_id, pickup_dt, status)
+            (order_id, items_json, float(total), payment_method, user_id, pickup_dt, status)
         )
         conn.commit()
     finally:
         cur.close()
         conn.close()
-
 
 def load_receipts_df():
     conn = get_connection()
