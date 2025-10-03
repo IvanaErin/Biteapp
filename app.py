@@ -401,6 +401,33 @@ def load_menu():
 
     finally:
         conn.close()
+
+
+# ---------------------------
+# UPSERT MENU FUNCTION
+# ---------------------------
+def upsert_menu(df: pd.DataFrame):
+    """
+    Upsert menu items into Snowflake MENU table.
+    Expects df with columns: CATEGORY, ITEM, PRICE
+    """
+    conn = get_snowflake_conn()
+    try:
+        cur = conn.cursor()
+        for _, row in df.iterrows():
+            cur.execute("""
+                MERGE INTO MENU AS target
+                USING (SELECT %s AS CATEGORY, %s AS ITEM, %s AS PRICE) AS source
+                ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
+                WHEN MATCHED THEN
+                    UPDATE SET PRICE = source.PRICE
+                WHEN NOT MATCHED THEN
+                    INSERT (CATEGORY, ITEM, PRICE) VALUES (source.CATEGORY, source.ITEM, source.PRICE)
+            """, (row["CATEGORY"], row["ITEM"], row["PRICE"]))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 # ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
