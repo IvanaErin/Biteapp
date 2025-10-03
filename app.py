@@ -792,50 +792,51 @@ elif role == "Non-Staff":
         # ...
 
         # ---------------------------
-        # Cart + Checkout (NOW inside Non-Staff only)
-        # ---------------------------
-        st.divider()
-        st.subheader("🛒 Your Cart")
+# Cart + Checkout (inside Non-Staff only)
+# ---------------------------
+st.divider()
+st.subheader("🛒 Your Cart")
 
-        if st.session_state.cart:
-            total = sum(
-                next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0) * qty
-                for item, qty in st.session_state.cart.items()
-            )
-            st.write(f"**Subtotal: ₱{total}**")
+if st.session_state.cart:
+    total = sum(
+        next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0) * qty
+        for item, qty in st.session_state.cart.items()
+    )
+    st.write(f"**Subtotal: ₱{total}**")
 
-            pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
-            pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
-            payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
+    pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
+    pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
+    payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
 
-            if st.button("Proceed to Payment", key="checkout_btn"):
-                order_id = f"ORD{random.randint(10000,99999)}"
-                items_str = ", ".join([f"{i} x{q}" for i, q in st.session_state.cart.items()])
+    if st.button("Proceed to Payment", key="checkout_btn"):
+        order_id = f"ORD{random.randint(10000,99999)}"
+        items_str = ", ".join([f"{i} x{q}" for i, q in st.session_state.cart.items()])
 
-                save_receipt(
-                    order_id=order_id,
-                    items=items_str,
-                    total=total,
-                    payment_method=payment_method,
-                    user_id=user["username"],
-                    pickup_dt=f"{pickup_date} {pickup_time}",
-                    status="Pending"
-                )
+        # ✅ Call save_receipt with positional arguments
+        save_receipt(
+            order_id,
+            items_str,
+            total,
+            payment_method,
+            user["username"],
+            f"{pickup_date} {pickup_time}",
+            "Pending"
+        )
 
-                st.session_state.pending_order = {
-                    "order_id": order_id,
-                    "items": st.session_state.cart,
-                    "total": total,
-                    "payment_method": payment_method,
-                    "user_id": user["username"],
-                    "pickup_dt": f"{pickup_date} {pickup_time}",
-                }
+        st.session_state.pending_order = {
+            "order_id": order_id,
+            "items": st.session_state.cart,
+            "total": total,
+            "payment_method": payment_method,
+            "user_id": user["username"],
+            "pickup_dt": f"{pickup_date} {pickup_time}",
+        }
 
-                st.session_state.cart = {}
-                st.session_state.page = "payment"
-                st.rerun()
-        else:
-            st.info("Your cart is empty.")
+        st.session_state.cart = {}
+        st.session_state.page = "payment"
+        st.rerun()
+else:
+    st.info("Your cart is empty.")
 # ---------------------------
 # USER SETUP
 # ---------------------------
