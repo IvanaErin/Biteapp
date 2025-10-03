@@ -791,6 +791,7 @@ if st.session_state.cart:
         # Save order to Snowflake
         save_receipt(
             order_id=order_id,
+        )
 # ---------------------------
 # NON-STAFF PORTAL
 # ---------------------------
