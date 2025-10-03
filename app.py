@@ -830,22 +830,23 @@ else:
     feedback = st.text_area("Leave your feedback:")
     rating = st.slider("Rate (1 = poor, 5 = excellent)", 1, 5, 3)
 
-    if st.button("Submit Feedback", key="feedback_btn") and feedback and item_choice:
-        save_feedback(
-            item=item_choice,
-            feedback=feedback,
-            rating=rating,
-            user_id=user["username"]   # change to user["id"] if schema uses numeric IDs
-        )
-        st.success("✅ Feedback submitted!")
-            st.divider()
-            st.subheader("📢 Notifications")
-            if "notifications" not in st.session_state:
-                st.session_state.notifications = []
-            for note in st.session_state.notifications:
-                st.info(note)
-            if st.button("Clear notifications", key="clear_notifs"):
-                st.session_state.notifications.clear()
+if st.button("Submit Feedback", key="feedback_btn") and feedback and item_choice:
+    save_feedback(
+        item=item_choice,
+        feedback=feedback,
+        rating=rating,
+        user_id=user["username"]   # change to user["id"] if schema uses numeric IDs
+    )
+    st.success("✅ Feedback submitted!")
+
+st.divider()
+st.subheader("📢 Notifications")
+if "notifications" not in st.session_state:
+    st.session_state.notifications = []
+for note in st.session_state.notifications:
+    st.info(note)
+if st.button("Clear notifications", key="clear_notifs"):
+    st.session_state.notifications.clear()
 
             st.divider()
             st.subheader("📜 Order History")
