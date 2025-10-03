@@ -11,7 +11,6 @@ import hashlib
 import secrets
 import re
 from PIL import Image
-from io import BytesIO
 
 
 
@@ -280,70 +279,49 @@ def load_feedbacks_df():
 # ---------------------------
 # RECEIPTS
 # ---------------------------
+# Local fallback receipts - standardized column names to match Snowflake schema
 def save_receipt(order_id: str, items: str, total: float, payment_method: str,
-                 user_id: int = None, details: str = "", pickup_time=None, status="Pending"):
-    conn = get_connection()
-    if not conn:
-        _ensure_local_db()
-        st.session_state._local_receipts.append({
-            "order_id": order_id,
-            "items": items,
-            "total": total,
-            "payment_method": payment_method,
-            "user_id": user_id,
-            "details": details,
-            "pickup_time": pickup_time,
-            "status": status
-        })
-        return
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO receipts (order_id, items, total, payment_method, user_id, details, pickup_time, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (order_id, items, float(total), payment_method, user_id, details, pickup_time, status)
-        )
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
+                 user_id: str = None, details: str = "", pickup_time=None, status="Pending"):
+    if "receipts" not in st.session_state:
+        st.session_state.receipts = []
+    st.session_state.receipts.append({
+        "order_id": order_id,
+        "items": items,
+        "total": float(total),
+        "payment_method": payment_method,
+        "user_id": user_id,
+        "details": details,
+        "pickup_time": pickup_time,
+        "status": status,
+        "timestamp": datetime.now()
+    })
 
 def load_receipts_df():
-    conn = get_connection()
-    if not conn:
-        _ensure_local_db()
-        rows = st.session_state._local_receipts
-        return pd.DataFrame(rows) if rows else pd.DataFrame(
-            columns=["order_id","items","total","payment_method","user_id","details","pickup_time","status"])
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT order_id, items, total, payment_method, user_id, details, pickup_time, status, timestamp FROM receipts ORDER BY timestamp DESC")
-        rows = cur.fetchall()
-        return pd.DataFrame(rows, columns=["order_id","items","total","payment_method","user_id","details","pickup_time","status","timestamp"])
-    finally:
-        cur.close()
-        conn.close()
+    # Return DataFrame with consistent columns
+    if "receipts" not in st.session_state:
+        st.session_state.receipts = []
+    rows = st.session_state.receipts
+    # Ensure DataFrame has expected columns (keeps order)
+    cols = ["order_id","items","total","payment_method","user_id","details","pickup_time","status","timestamp"]
+    if rows:
+        df = pd.DataFrame(rows)
+        # add any missing columns to keep consistent schema
+        for c in cols:
+            if c not in df.columns:
+                df[c] = pd.NA
+        return df[cols]
+    else:
+        return pd.DataFrame(columns=cols)
 
 def set_receipt_status(order_id: str, new_status: str):
-    conn = get_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute("UPDATE receipts SET status=%s WHERE order_id=%s", (new_status, order_id))
-            conn.commit()
+    if "receipts" not in st.session_state:
+        st.session_state.receipts = []
+    for rec in st.session_state.receipts:
+        if rec.get("order_id") == order_id:
+            rec["status"] = new_status
             return True
-        finally:
-            cur.close()
-            conn.close()
-    else:
-        _ensure_local_db()
-        for r in st.session_state._local_receipts:
-            if r["order_id"] == order_id:
-                r["status"] = new_status
-                return True
-        return False
+    return False
+
 
 # ---------------------------
 # AI HELPER
@@ -834,15 +812,28 @@ if st.session_state.page == "main":
 
             st.divider()
             st.subheader("📜 Order History")
-            history = load_receipts_df()
-            if not history.empty and not is_guest:
-                user_orders = history[history["user_id"] == user["username"]]
-                if not user_orders.empty:
-                    st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                else:
-                    st.info("No past orders yet.")
-            else:
-                st.info("Guests cannot save order history.")
+history = load_receipts_df()
+if not history.empty and not is_guest:
+    # Normalize column name to 'user_id' if alternatives exist
+    if "user_id" not in history.columns:
+        for alt in ("user", "user_name", "username", "userID", "userId"):
+            if alt in history.columns:
+                history = history.rename(columns={alt: "user_id"})
+                break
+
+    # if still missing, log columns and show friendly message
+    if "user_id" not in history.columns:
+        st.write("Order history has unexpected columns:", history.columns.tolist())
+        st.info("Order history unavailable due to missing user identifier.")
+    else:
+        user_orders = history[history["user_id"] == user["username"]]
+        if not user_orders.empty:
+            st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+        else:
+            st.info("No past orders yet.")
+else:
+    st.info("Guests cannot save order history.")
+
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
