@@ -420,31 +420,49 @@ elif st.session_state.page == "main":
         # NON-STAFF + GUEST PORTAL
         col1, col2 = st.columns([2,1])
 
-        # --------- LEFT SIDE (AI + Menu + Ordering + Payment)
-        with col1:
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:")
-            if st.button("Ask AI", key="ask_ai_user"):
-                st.write(run_ai(q))
+st.subheader("📖 Menu & Ordering")
+menu_df = load_menu()
 
-            st.divider()
-            st.subheader("📖 Menu & Ordering")
-            menu_df = load_menu()
-            st.dataframe(menu_df, use_container_width=True)
+# Initialize cart
+if "cart" not in st.session_state:
+    st.session_state.cart = {}
 
-            for idx, row in menu_df.iterrows():
-                if st.button(f"Add {row['ITEM']} - ₱{row['PRICE']}", key=f"add_{idx}"):
-                    st.session_state.cart[row['ITEM']] = st.session_state.cart.get(row['ITEM'], 0) + 1
+# Show menu items with inline add-to-cart buttons
+for idx, row in menu_df.iterrows():
+    cols = st.columns([3, 1, 1])
+    with cols[0]:
+        st.write(row["ITEM"])
+    with cols[1]:
+        st.write(f"₱{row['PRICE']}")
+    with cols[2]:
+        if st.button("Add", key=f"add_{idx}"):
+            st.session_state.cart[row["ITEM"]] = st.session_state.cart.get(row["ITEM"], 0) + 1
 
-            st.write("🛒 Cart:", st.session_state.cart)
+st.divider()
+st.subheader("🛒 Your Cart")
+if st.session_state.cart:
+    for item, qty in list(st.session_state.cart.items()):
+        cols = st.columns([3, 1, 1, 1])
+        with cols[0]:
+            st.write(item)
+        with cols[1]:
+            st.write(f"x{qty}")
+        with cols[2]:
+            if st.button("+", key=f"plus_{item}"):
+                st.session_state.cart[item] += 1
+        with cols[3]:
+            if st.button("🗑️", key=f"remove_{item}"):
+                del st.session_state.cart[item]
+else:
+    st.info("Your cart is empty.")
 
-            if st.button("Proceed to Payment"):
-                if not st.session_state.cart:
-                    st.warning("Your cart is empty!")
-                else:
-                    st.session_state.page = "payment"
-                    st.experimental_rerun()
-
+if st.button("Proceed to Payment"):
+    if not st.session_state.cart:
+        st.warning("Your cart is empty!")
+    else:
+        st.session_state.page = "payment"
+        st.experimental_rerun()
+        
         # --------- RIGHT SIDE (Sentiment + Feedback + Notifications + Order History)
         with col2:
             st.subheader("📊 Sentiment Analysis")
