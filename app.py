@@ -534,24 +534,26 @@ if st.session_state.page == "main":
 
             st.write("🛒 Cart:", st.session_state.cart)
 
-            if st.button("Proceed to Payment"):
-                if not st.session_state.cart:
-                    st.warning("Your cart is empty!")
-                else:
-                    # compute total properly using menu prices
-                    menu_prices = dict(zip(menu_df["ITEM"], menu_df["PRICE"]))
-                    total_cost = sum(menu_prices[item] * qty for item, qty in st.session_state.cart.items())
+if st.button("Proceed to Payment"):
+    if not st.session_state.cart:
+        st.warning("Your cart is empty!")
+    else:
+        # compute total properly using menu prices
+        menu_prices = dict(zip(menu_df["ITEM"], menu_df["PRICE"]))
+        total_cost = sum(menu_prices[item] * qty for item, qty in st.session_state.cart.items())
 
-                    st.session_state.pending_order = {
-                        "order_id": f"ORD{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                        "items": st.session_state.cart.copy(),
-                        "total": total_cost,
-                        "payment_method": "Cash",  # default
-                        "user_id": user["username"],
-                        "pickup_dt": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    }
-                    st.session_state.page = "payment"
-                    st.rerun()
+        # <--- Insert status here
+        st.session_state.pending_order = {
+            "order_id": f"ORD{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "items": st.session_state.cart.copy(),
+            "total": total_cost,
+            "payment_method": "Cash",  # default
+            "user_id": user["username"],
+            "pickup_dt": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "status": "Pending"  # <-- ADD THIS LINE
+        }
+        st.session_state.page = "payment"
+        st.rerun()
 
         # -------- RIGHT SIDE: Sentiment + Feedback + Notifications
         with col2:
