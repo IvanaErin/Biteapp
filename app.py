@@ -547,7 +547,7 @@ if st.session_state.page == "main":
                         "pickup_dt": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     }
                     st.session_state.page = "payment"
-                    st.experimental_rerun()
+                    st.rerun()
 
         # -------- RIGHT SIDE: Sentiment + Feedback + Notifications
         with col2:
