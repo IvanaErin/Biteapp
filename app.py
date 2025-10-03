@@ -717,29 +717,7 @@ if st.session_state.page == "main":
             st.dataframe(fb_df, use_container_width=True)
         else:
             st.info("No feedback received yet.")
-
-    elif choice == "Sales Report":
-        st.subheader("💹 Sales Report")
-        receipts = load_receipts_df()
-        if not receipts.empty and menu_data:
-            category_sales = {}
-            for cat, items in menu_data.items():
-                total_cat = 0
-                for item in items:
-                    total_cat += receipts.apply(lambda r: r['total'] if item in r['items'] else 0, axis=1).sum()
-                category_sales[cat] = total_cat
-            fig, ax = plt.subplots()
-            ax.pie(category_sales.values(), labels=category_sales.keys(), autopct="%1.1f%%", startangle=90)
-            ax.set_title("Sales by Menu Category")
-            st.pyplot(fig)
-        else:
-            st.info("No sales data yet.")
-
-    if st.button("Log Out", key="logout_staff"):
-        st.session_state.page = "login"
-        st.session_state.user = None
-        st.experimental_rerun()
-
+        
 # ---------------------------
 # NON-STAFF PORTAL
 # ---------------------------
