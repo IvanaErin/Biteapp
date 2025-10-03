@@ -987,45 +987,46 @@ if st.session_state.page == "main":
                             st.success(f"Added 1 x {item_name}")
                             st.rerun()
 
-            # Cart + Checkout
-            st.divider()
-            st.subheader("🛒 Your Cart")
-            if st.session_state.cart:
-                total = sum(
-                    next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0) * qty
-                    for item, qty in st.session_state.cart.items()
-                )
-                st.write(f"**Subtotal: ₱{total}**")
-                pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
-                pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
-                payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
+# Cart + Checkout
+st.divider()
+st.subheader("🛒 Your Cart")
+if st.session_state.cart:
+    total = sum(
+        next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0) * qty
+        for item, qty in st.session_state.cart.items()
+    )
+    st.write(f"**Subtotal: ₱{total}**")
 
-                if st.button("Proceed to Payment", key="checkout_btn"):
-                    order_id = f"ORD{random.randint(10000,99999)}"
-                    items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
+    pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
+    pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
+    payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
 
-                    # Save only if not guest
-                    if not is_guest:
-save_receipt(
-    order_id=order_id,
-    items=items_str,
-    total=total,
-    method=payment_method,   # match function param
-    user_id=user["username"],
-    pickup_dt=datetime.combine(pickup_date, pickup_time),  # match function param
-    status="Pending"
-)
-                    st.session_state.pending_order = {
-                        "order_id": order_id,
-                        "items": dict(st.session_state.cart),
-                        "total": total,
-                        "pickup_dt": datetime.combine(pickup_date, pickup_time),
-                        "payment_method": payment_method,
-                        "user_id": user["username"]
-                    }
-                    st.session_state.page = "payment"
-                    st.success("Go to the Payment page to complete your order.")
+    if st.button("Proceed to Payment", key="checkout_btn"):
+        order_id = f"ORD{random.randint(10000,99999)}"
+        items_str = ", ".join([f"{i} x{q}" for i, q in st.session_state.cart.items()])
 
+        # Save only if not guest
+        if not is_guest:
+            save_receipt(
+                order_id=order_id,
+                items=items_str,
+                total=total,
+                method=payment_method,   # ✅ matches function param
+                user_id=user["username"],
+                pickup_dt=datetime.combine(pickup_date, pickup_time),  # ✅ matches function param
+                status="Pending"
+            )
+
+        st.session_state.pending_order = {
+            "order_id": order_id,
+            "items": dict(st.session_state.cart),
+            "total": total,
+            "pickup_dt": datetime.combine(pickup_date, pickup_time),
+            "payment_method": payment_method,
+            "user_id": user["username"]
+        }
+        st.session_state.page = "payment"
+        st.success("Go to the Payment page to complete your order.")
         with col_right:
             # Right side content
             st.subheader("📈 Sentiment Analysis")
