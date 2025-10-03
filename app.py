@@ -613,20 +613,6 @@ if st.session_state.page == "main":
             st.error(f"Failed to load menu: {e}")
             menu_data = {}
 
-    choice = st.sidebar.radio(
-        "Staff Menu",
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
-    )
-
-    if choice == "Dashboard":
-        st.subheader("📊 Staff Dashboard")
-        receipts = load_receipts_df()
-        fb = load_feedbacks_df()
-        pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
-        st.metric("Total Orders", len(receipts))
-        st.metric("Feedbacks", len(fb))
-        st.metric("Pending Orders", len(pending))
-
     elif choice == "Pending Orders":
         st.subheader("📦 Pending Orders")
         receipts_df = load_receipts_df()
@@ -908,37 +894,30 @@ if "user" not in st.session_state:
 # STAFF PORTAL (Clean Version)
 # ---------------------------
 
-# Sidebar (rendered exactly once)
-with st.sidebar:
-    # Log Out button at the top
-    if "user" in st.session_state and st.session_state.user:
-        if st.button("Log Out", key="logout_staff_btn"):
-            st.session_state.page = "login"
-            st.session_state.user = None
-            st.experimental_rerun()
-
-    # Staff Menu radio (only for staff)
-    if role == "Staff":
-        if "staff_choice" not in st.session_state:
-            st.session_state.staff_choice = "Dashboard"  # default
-        st.session_state.staff_choice = st.radio(
-            "Staff Menu",
-            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(st.session_state.staff_choice),
-            key="staff_menu_radio"
-        )
-
-# Main content (only for staff)
 if role == "Staff":
+    # --- Sidebar ---
+    if "staff_choice" not in st.session_state:
+        st.session_state.staff_choice = "Dashboard"  # default
+
+    st.session_state.staff_choice = st.sidebar.radio(
+        "Staff Menu",
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+        index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
+            st.session_state.staff_choice
+        )
+    )
+
     choice = st.session_state.staff_choice
 
-    # Load menu once
-    menu_df = load_menu()
-    menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in menu_df.groupby("CATEGORY")}
+    # --- Load menu once ---
+    try:
+        menu_df = load_menu()
+        menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in menu_df.groupby("CATEGORY")}
+    except Exception as e:
+        st.error(f"Failed to load menu: {e}")
+        menu_data = {}
 
-    # ---------------------------
-    # DASHBOARD
-    # ---------------------------
+    # --- Render selected page ---
     if choice == "Dashboard":
         st.subheader("📊 Staff Dashboard")
         receipts = load_receipts_df()
@@ -948,9 +927,6 @@ if role == "Staff":
         st.metric("Feedbacks", len(fb))
         st.metric("Pending Orders", len(pending))
 
-    # ---------------------------
-    # PENDING ORDERS
-    # ---------------------------
     elif choice == "Pending Orders":
         st.subheader("📦 Pending Orders")
         receipts_df = load_receipts_df()
@@ -969,36 +945,21 @@ if role == "Staff":
         else:
             st.info("No receipts yet.")
 
-    # ---------------------------
-    # MANAGE MENU
-    # ---------------------------
     elif choice == "Manage Menu":
         st.subheader("📖 Manage Menu")
-        st.info("Add, edit, or remove menu items")
-        edited_df = st.data_editor(
-            menu_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="menu_data_editor"
-        )
+        edited_df = st.data_editor(menu_df, num_rows="dynamic", use_container_width=True, key="menu_editor")
         if st.button("💾 Save Menu Updates", key="save_menu_btn"):
             upsert_menu(edited_df)
-            st.success("✅ Menu updated and saved in Snowflake!")
+            st.success("✅ Menu updated and saved!")
             st.experimental_rerun()
 
-    # ---------------------------
-    # AI ASSISTANT
-    # ---------------------------
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
-        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:", key="ai_input")
-        if st.button("Ask Staff AI", key="ask_ai_btn") and q:
+        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:", key="ai_input_staff")
+        if st.button("Ask AI", key="ai_btn_staff") and q:
             answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
             st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-    # ---------------------------
-    # FEEDBACK REVIEW
-    # ---------------------------
     elif choice == "Feedback Review":
         st.subheader("📝 All Customer Feedback")
         fb_df = load_feedbacks_df()
@@ -1007,22 +968,14 @@ if role == "Staff":
         else:
             st.info("No feedback received yet.")
 
-    # ---------------------------
-    # SALES REPORT
-    # ---------------------------
     elif choice == "Sales Report":
         st.subheader("💹 Sales Report")
         receipts = load_receipts_df()
-        if not receipts.empty:
+        if not receipts.empty and menu_data:
             category_sales = {}
             for cat, items in menu_data.items():
                 total_cat = sum(
-                    receipts.apply(
-                        lambda r: sum(
-                            r['items'].count(item) * r['total'] / len(r['items'].split(',')) if item in r['items'] else 0
-                            for item in items
-                        ), axis=1
-                    )
+                    receipts.apply(lambda r: sum(r['items'].count(item) * r['total'] / len(r['items'].split(',')) if item in r['items'] else 0 for item in items), axis=1)
                 )
                 category_sales[cat] = total_cat
             fig, ax = plt.subplots()
@@ -1031,3 +984,9 @@ if role == "Staff":
             st.pyplot(fig)
         else:
             st.info("No sales data yet.")
+
+    # --- Log Out button ---
+    if st.button("Log Out", key="logout_staff_btn"):
+        st.session_state.page = "login"
+        st.session_state.user = None
+        st.experimental_rerun()
