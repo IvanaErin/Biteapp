@@ -569,7 +569,7 @@ if st.session_state.page == "main":
                         item=item_choice,
                         feedback=feedback,
                         rating=rating,
-                        user_id=user["username"]   # or user["id"] if schema uses numeric IDs
+                        user_id=user["username"]
                     )
                     st.success("✅ Feedback submitted!")
             else:
@@ -587,41 +587,34 @@ if st.session_state.page == "main":
         st.divider()
         st.subheader("📜 Order History")
 
-history = load_receipts_df()
-if is_guest:
-    st.info("Guests cannot save order history.")
-else:
-    if history.empty:
-        st.info("No past orders yet.")
-    else:
-        # filter orders for the current user
-        if "user_id" not in history.columns:
-            st.info("Order history unavailable due to missing user identifier.")
+        history = load_receipts_df()
+        if is_guest:
+            st.info("Guests cannot save order history.")
         else:
-            user_orders = history[history["user_id"] == user["username"]]
-            if not user_orders.empty:
-                st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-            else:
+            if history.empty:
                 st.info("No past orders yet.")
+            else:
+                if "user_id" not in history.columns:
+                    st.info("Order history unavailable due to missing user identifier.")
+                else:
+                    user_orders = history[history["user_id"] == user["username"]]
+                    if not user_orders.empty:
+                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+                    else:
+                        st.info("No past orders yet.")
+
         # -------- Logout Button
         if st.button("🚪 Log Out"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.experimental_rerun()
+
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
 elif st.session_state.page == "payment":
-    pending = {
-        "order_id": random.randint(1000,9999),
-        "items": st.session_state.cart,
-        "total": sum(50 for _ in st.session_state.cart), # placeholder
-        "payment_method": "Cash",
-        "user_id": st.session_state.user["username"] if st.session_state.user else "Guest",
-        "pickup_dt": datetime.now().strftime("%Y-%m-%d %H:%M")
-    }
-
-    if not pending["items"]:
+    pending = st.session_state.get("pending_order", None)
+    if not pending or not pending["items"]:
         st.warning("No pending order found. Go back to your cart.")
     else:
         st.subheader("💳 Payment Confirmation")
@@ -631,20 +624,28 @@ elif st.session_state.page == "payment":
 
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
+                save_receipt(**pending)
                 st.success(f"Order confirmed! Order ID: {pending['order_id']}")
                 st.session_state.cart = {}
                 st.session_state.page = "main"
+                st.rerun()
+
         elif method == "GCash":
             st.image("https://via.placeholder.com/150?text=GCash+QR", caption="Scan QR to Pay")
             if st.button("Simulate GCash Payment Success"):
+                save_receipt(**pending)
                 st.success(f"Order confirmed! Order ID: {pending['order_id']}")
                 st.session_state.cart = {}
                 st.session_state.page = "main"
+                st.rerun()
+
         elif method == "Card":
             st.text_input("Card Number")
             st.text_input("Expiry MM/YY")
             st.text_input("CVV")
             if st.button("Simulate Card Payment Success"):
+                save_receipt(**pending)
                 st.success(f"Order confirmed! Order ID: {pending['order_id']}")
                 st.session_state.cart = {}
                 st.session_state.page = "main"
+                st.rerun()
