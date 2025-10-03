@@ -915,12 +915,22 @@ if role == "Staff":
     menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) 
                  for cat, group in menu_df.groupby("CATEGORY")}
 
-    # Sidebar menu with unique key
-    choice = st.sidebar.radio(
-        "Staff Menu",
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-        key="staff_menu_radio"
-    )
+    # ---------------------------
+    # SIDEBAR
+    # ---------------------------
+    with st.sidebar:
+        # Staff menu radio with unique key
+        choice = st.radio(
+            "Staff Menu",
+            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+            key="staff_menu_radio"
+        )
+
+        # Log Out button with unique key
+        if st.button("Log Out", key="logout_staff_btn"):
+            st.session_state.page = "login"
+            st.session_state.user = None
+            st.experimental_rerun()
 
     # ---------------------------
     # DASHBOARD
@@ -944,6 +954,7 @@ if role == "Staff":
             pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
             if not pending.empty:
                 for _, row in pending.iterrows():
+                    # Dynamic key for each button to avoid duplicates
                     btn_key = f"ready_{row['order_id']}"
                     st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user_id']} | Status: {row['status']}")
                     if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
@@ -962,28 +973,27 @@ if role == "Staff":
         st.subheader("📖 Manage Menu")
         st.info("Add, edit, or remove menu items")
 
-        # Load menu_data as nested dict from Snowflake
-        menu_df = load_menu()  # DataFrame version
-
-        # Editable DataFrame
+        # Editable DataFrame with unique key
         edited_df = st.data_editor(
             menu_df,
             num_rows="dynamic",
-            use_container_width=True
+            use_container_width=True,
+            key="menu_data_editor"
         )
 
-        # Save updates
+        # Save updates with unique button key
         if st.button("💾 Save Menu Updates", key="save_menu_btn"):
             upsert_menu(edited_df)  # Snowflake upsert function
             st.success("✅ Menu updated and saved in Snowflake!")
             st.experimental_rerun()
+
     # ---------------------------
     # AI ASSISTANT
     # ---------------------------
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
-        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:")
-        if st.button("Ask Staff AI") and q:
+        q = st.text_input("Ask AI about sales, menu trends, or customer feedback:", key="ai_input")
+        if st.button("Ask Staff AI", key="ask_ai_btn") and q:
             answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
             st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
@@ -1008,8 +1018,12 @@ if role == "Staff":
             category_sales = {}
             for cat, items in menu_data.items():
                 total_cat = sum(
-                    receipts.apply(lambda r: sum(r['items'].count(item)*r['total']/len(r['items'].split(',')) if item in r['items'] else 0, axis=0), axis=0)
-                    for item in items
+                    receipts.apply(
+                        lambda r: sum(
+                            r['items'].count(item) * r['total'] / len(r['items'].split(',')) if item in r['items'] else 0
+                            for item in items
+                        ), axis=1
+                    )
                 )
                 category_sales[cat] = total_cat
             fig, ax = plt.subplots()
@@ -1018,7 +1032,6 @@ if role == "Staff":
             st.pyplot(fig)
         else:
             st.info("No sales data yet.")
-
     # ---------------------------
     # LOGOUT
     # ---------------------------
