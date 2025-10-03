@@ -238,7 +238,11 @@ def load_receipts_df():
         )
     try:
         cur = conn.cursor()
-        cur.execute("SELECT order_id, items, total, payment_method, user_id, pickup_dt, status, timestamp FROM receipts ORDER BY timestamp DESC")
+        cur.execute("""
+SELECT order_id, items, total, payment_method, user_id, pickup_time AS pickup_dt, status, timestamp
+FROM receipts
+ORDER BY timestamp DESC
+""")
         rows = cur.fetchall()
         return pd.DataFrame(rows, columns=["order_id","items","total","payment_method","user_id","pickup_dt","status","timestamp"])
     finally:
