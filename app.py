@@ -367,9 +367,14 @@ def load_menu():
     """Load menu from Snowflake. If empty, initialize with default menu."""
     conn = get_snowflake_conn()
     try:
-        df = pd.read_sql("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM", conn)
+        # Fetch menu from Snowflake
+        df = pd.read_sql(
+            "SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM",
+            conn
+        )
+
+        # If table is empty, insert default menu
         if df.empty:
-            # First-time initialization with default menu
             default_menu = {
                 "Breakfast": {"Pancakes": 50, "Omelette": 40},
                 "Lunch": {"Burger": 80, "Pizza": 120},
@@ -384,9 +389,16 @@ def load_menu():
                         (cat, item, price)
                     )
             conn.commit()
-            df = pd.read_sql("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM", conn)
-        # Convert to nested dict
-        return {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in df.groupby("CATEGORY")}
+
+            # Reload menu after insertion
+            df = pd.read_sql(
+                "SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM",
+                conn
+            )
+
+        # Always return DataFrame
+        return df
+
     finally:
         conn.close()
 # ---------------------------
