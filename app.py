@@ -908,16 +908,18 @@ if "user" not in st.session_state:
 # STAFF PORTAL
 # ---------------------------
 if role == "Staff":
-    # Load menu from Snowflake
-    menu_df = load_menu()  # Snowflake version
-    menu_data = {}
-    for cat, group in menu_df.groupby("CATEGORY"):
-        menu_data[cat] = dict(zip(group["ITEM"], group["PRICE"]))
+    # Load menu from Snowflake (returns DataFrame)
+    menu_df = load_menu()  # Always returns DataFrame
 
-    # Sidebar menu
+    # Convert DataFrame to nested dict for quick access
+    menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) 
+                 for cat, group in menu_df.groupby("CATEGORY")}
+
+    # Sidebar menu with unique key
     choice = st.sidebar.radio(
         "Staff Menu",
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+        key="staff_menu_radio"
     )
 
     # ---------------------------
@@ -953,32 +955,28 @@ if role == "Staff":
         else:
             st.info("No receipts yet.")
 
-# ---------------------------
-# MANAGE MENU (Snowflake)
-# ---------------------------
-elif choice == "Manage Menu":
-    st.subheader("📖 Manage Menu")
-    st.info("Add, edit, or remove menu items")
+    # ---------------------------
+    # MANAGE MENU
+    # ---------------------------
+    elif choice == "Manage Menu":
+        st.subheader("📖 Manage Menu")
+        st.info("Add, edit, or remove menu items")
 
-    # Load menu_data as nested dict from Snowflake
-    menu_data = load_menu()  # returns {category: {item: price}}
+        # Load menu_data as nested dict from Snowflake
+        menu_df = load_menu()  # DataFrame version
 
-    # Convert nested dict to DataFrame for editing
-    menu_df = pd.DataFrame([
-        {"CATEGORY": cat, "ITEM": item, "PRICE": price}
-        for cat, items in menu_data.items()
-        for item, price in items.items()
-    ])
+        # Editable DataFrame
+        edited_df = st.data_editor(
+            menu_df,
+            num_rows="dynamic",
+            use_container_width=True
+        )
 
-    # Editable DataFrame
-    edited_df = st.data_editor(menu_df, num_rows="dynamic", use_container_width=True)
-
-    # Save updates
-    if st.button("💾 Save Menu Updates"):
-        upsert_menu(edited_df)  # Snowflake upsert function
-        st.success("✅ Menu updated and saved in Snowflake!")
-        st.experimental_rerun()
-
+        # Save updates
+        if st.button("💾 Save Menu Updates", key="save_menu_btn"):
+            upsert_menu(edited_df)  # Snowflake upsert function
+            st.success("✅ Menu updated and saved in Snowflake!")
+            st.experimental_rerun()
     # ---------------------------
     # AI ASSISTANT
     # ---------------------------
