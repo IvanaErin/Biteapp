@@ -905,21 +905,24 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------
-# SIDEBAR (rendered once)
+# SIDEBAR
 # ---------------------------
 with st.sidebar:
-    # Log Out button at the top (only rendered once)
+    # Log Out button at the top
     if "user" in st.session_state and st.session_state.user:
         if st.button("Log Out", key="logout_staff_btn"):
             st.session_state.page = "login"
             st.session_state.user = None
             st.experimental_rerun()
 
-    # Staff menu radio (only if staff)
+    # Staff Menu radio (only once)
     if role == "Staff":
-        choice = st.radio(
+        if "staff_choice" not in st.session_state:
+            st.session_state.staff_choice = "Dashboard"  # default
+        st.session_state.staff_choice = st.radio(
             "Staff Menu",
             ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(st.session_state.staff_choice),
             key="staff_menu_radio"
         )
 
@@ -927,7 +930,8 @@ with st.sidebar:
 # STAFF PORTAL
 # ---------------------------
 if role == "Staff":
-    # Load menu from Snowflake (returns DataFrame)
+    choice = st.session_state.staff_choice
+
     menu_df = load_menu()
     menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in menu_df.groupby("CATEGORY")}
 
