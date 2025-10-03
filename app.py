@@ -200,10 +200,9 @@ def validate_account(username: str, password: str):
 # RECEIPTS
 # ---------------------------
 
-def save_receipt(order_id: str, items, total: float, payment_method: str, user_id: str, pickup_dt: str, status: str):
-    # Convert items dict to JSON string
+def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status):
     items_json = json.dumps(items)
-
+    
     conn = get_connection()
     if not conn:
         _ensure_local_db()
@@ -211,11 +210,11 @@ def save_receipt(order_id: str, items, total: float, payment_method: str, user_i
             st.session_state._local_receipts = []
         st.session_state._local_receipts.append({
             "order_id": order_id,
-            "items": items_json,  # save as JSON string
+            "items": items_json,
             "total": float(total),
             "payment_method": payment_method,
             "user_id": user_id,
-            "pickup_dt": pickup_dt,
+            "pickup_time": datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M"),  # convert string → datetime
             "status": status,
             "timestamp": datetime.now()
         })
@@ -224,9 +223,20 @@ def save_receipt(order_id: str, items, total: float, payment_method: str, user_i
     try:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (order_id, items_json, float(total), payment_method, user_id, pickup_dt, status)
+            """
+            INSERT INTO receipts 
+            (order_id, items, total, payment_method, user_id, pickup_time, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                order_id,
+                items_json,
+                float(total),
+                payment_method,
+                user_id,
+                datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M"),  # convert string → timestamp
+                status
+            )
         )
         conn.commit()
     finally:
