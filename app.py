@@ -610,18 +610,18 @@ if st.session_state.page == "main":
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
     if role == "Staff":
-# ---------------- STAFF PORTAL ----------------
-if "staff_choice" not in st.session_state:
-    st.session_state.staff_choice = "Dashboard"
+        # ---------------- STAFF PORTAL ----------------
+        if "staff_choice" not in st.session_state:
+            st.session_state.staff_choice = "Dashboard"
 
-st.session_state.staff_choice = st.sidebar.radio(
-    "Staff Menu",
-    ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-    index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-        st.session_state.staff_choice
-    )
-)
-choice = st.session_state.staff_choice
+        st.session_state.staff_choice = st.sidebar.radio(
+            "Staff Menu",
+            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+            index=[
+                "Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"
+            ].index(st.session_state.staff_choice)
+        )
+        choice = st.session_state.staff_choice
 
 try:
     menu_df = load_menu()
