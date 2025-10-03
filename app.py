@@ -457,10 +457,8 @@ def password_valid_rules(pw: str):
     }
     return rules
 
-# ---------------------------
-# LOGIN & SIGNUP PAGES (Snowflake + hashed passwords)
-# ---------------------------
-             if st.session_state.page == "login":
+# LOGIN PAGE
+if st.session_state.page == "login":
     logo = Image.open("hub.png").convert("RGBA").resize((350, 150))  # RGBA keeps transparency
     col1, col2, col3 = st.columns([1,1,1])
     with col2:
