@@ -463,7 +463,7 @@ def password_valid_rules(pw: str):
 
 # LOGIN PAGE
 if st.session_state.page == "login":
-    logo = Image.open("bite.jpg").resize((350, 150))
+    logo = Image.open("hub.jpg").resize((350, 150))
     col1, col2, col3 = st.columns([1,1,1])
     with col2:
         st.image(logo, use_container_width=False)
@@ -652,7 +652,7 @@ if st.session_state.page == "main":
                     if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
                         set_receipt_status(row['order_id'], "Ready for Pickup")
                         st.success(f"Order {row['order_id']} marked ready")
-                        st.experimental_rerun()  # safe rerun
+                        st.rerun()  # safe rerun
             else:
                 st.info("No pending orders.")
         else:
@@ -671,7 +671,7 @@ if st.session_state.page == "main":
             try:
                 upsert_menu(edited_df)  # Save to Snowflake
                 st.success("✅ Menu updated and saved!")
-                st.experimental_rerun()
+                st.rerun()
             except Exception as e:
                 st.error(f"Failed to save menu: {e}")
 
@@ -966,7 +966,7 @@ if role == "Staff":
                     if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
                         set_receipt_status(row['order_id'], "Ready for Pickup")
                         st.success(f"Order {row['order_id']} marked ready")
-                        st.experimental_rerun()
+                        st.rerun()
             else:
                 st.info("No pending orders.")
         else:
@@ -978,7 +978,7 @@ if role == "Staff":
         if st.button("💾 Save Menu Updates", key="save_menu_btn"):
             upsert_menu(edited_df)
             st.success("✅ Menu updated and saved!")
-            st.experimental_rerun()
+            st.rerun()
 
     elif choice == "AI Assistant":
         st.subheader("🤖 Staff AI Assistant")
@@ -1016,4 +1016,4 @@ if role == "Staff":
     if st.button("Log Out", key="logout_staff_btn"):
         st.session_state.page = "login"
         st.session_state.user = None
-        st.experimental_rerun()
+        st.rerun()
