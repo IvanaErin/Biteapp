@@ -764,35 +764,6 @@ elif role == "Non-Staff":
                         st.rerun()
 
 # ---------------------------
-# Cart + Checkout
-# ---------------------------
-st.divider()
-st.subheader("🛒 Your Cart")
-
-if st.session_state.cart:
-    total = sum(
-        next((menu_data[cat][item] for cat in menu_data if item in menu_data[cat]), 0) * qty
-        for item, qty in st.session_state.cart.items()
-    )
-    st.write(f"**Subtotal: ₱{total}**")
-
-    # Pickup details
-    pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
-    pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
-
-    # Payment method
-    payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
-
-    # Checkout button
-    if st.button("Proceed to Payment", key="checkout_btn"):
-        order_id = f"ORD{random.randint(10000,99999)}"
-        items_str = ", ".join([f"{i} x{q}" for i, q in st.session_state.cart.items()])
-
-        # Save order to Snowflake
-        save_receipt(
-            order_id=order_id,
-        )
-# ---------------------------
 # NON-STAFF PORTAL
 # ---------------------------
 elif role == "Non-Staff":
