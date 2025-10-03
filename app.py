@@ -905,40 +905,39 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------
-# STAFF PORTAL
+# SIDEBAR (rendered once)
 # ---------------------------
-if role == "Staff":
-    # Load menu from Snowflake (returns DataFrame)
-    menu_df = load_menu()  # Always returns DataFrame
+with st.sidebar:
+    # Log Out button at the top (only rendered once)
+    if "user" in st.session_state and st.session_state.user:
+        if st.button("Log Out", key="logout_staff_btn"):
+            st.session_state.page = "login"
+            st.session_state.user = None
+            st.experimental_rerun()
 
-    # Convert DataFrame to nested dict for quick access
-    menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) 
-                 for cat, group in menu_df.groupby("CATEGORY")}
-
-    # ---------------------------
-    # SIDEBAR
-    # ---------------------------
-    with st.sidebar:
-        # Staff menu radio with unique key
+    # Staff menu radio (only if staff)
+    if role == "Staff":
         choice = st.radio(
             "Staff Menu",
             ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
             key="staff_menu_radio"
         )
 
-        # Log Out button with unique key
-        if st.button("Log Out", key="logout_staff_btn"):
-            st.session_state.page = "login"
-            st.session_state.user = None
-            st.experimental_rerun()
+# ---------------------------
+# STAFF PORTAL
+# ---------------------------
+if role == "Staff":
+    # Load menu from Snowflake (returns DataFrame)
+    menu_df = load_menu()
+    menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in menu_df.groupby("CATEGORY")}
 
     # ---------------------------
     # DASHBOARD
     # ---------------------------
     if choice == "Dashboard":
         st.subheader("📊 Staff Dashboard")
-        receipts = load_receipts_df()  # Snowflake version
-        fb = load_feedbacks_df()       # Snowflake version
+        receipts = load_receipts_df()
+        fb = load_feedbacks_df()
         pending = receipts[receipts["status"].str.lower() == "pending"] if not receipts.empty else pd.DataFrame()
         st.metric("Total Orders", len(receipts))
         st.metric("Feedbacks", len(fb))
@@ -983,7 +982,7 @@ if role == "Staff":
 
         # Save updates with unique button key
         if st.button("💾 Save Menu Updates", key="save_menu_btn"):
-            upsert_menu(edited_df)  # Snowflake upsert function
+            upsert_menu(edited_df)
             st.success("✅ Menu updated and saved in Snowflake!")
             st.experimental_rerun()
 
@@ -1032,10 +1031,3 @@ if role == "Staff":
             st.pyplot(fig)
         else:
             st.info("No sales data yet.")
-    # ---------------------------
-    # LOGOUT
-    # ---------------------------
-    if st.button("Log Out", key="logout_staff"):
-        st.session_state.page = "login"
-        st.session_state.user = None
-        st.experimental_rerun()
