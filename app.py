@@ -1006,16 +1006,15 @@ if st.session_state.page == "main":
 
                     # Save only if not guest
                     if not is_guest:
-                        save_receipt(
-                            order_id=order_id,
-                            items=items_str,
-                            total=total,
-                            payment_method=payment_method,
-                            user_id=user["username"],
-                            pickup_time=datetime.combine(pickup_date, pickup_time),
-                            status="Pending"
-                        )
-
+save_receipt(
+    order_id=order_id,
+    items=items_str,
+    total=total,
+    method=payment_method,   # match function param
+    user_id=user["username"],
+    pickup_dt=datetime.combine(pickup_date, pickup_time),  # match function param
+    status="Pending"
+)
                     st.session_state.pending_order = {
                         "order_id": order_id,
                         "items": dict(st.session_state.cart),
