@@ -905,8 +905,10 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------
-# SIDEBAR
+# STAFF PORTAL (Clean Version)
 # ---------------------------
+
+# Sidebar (rendered exactly once)
 with st.sidebar:
     # Log Out button at the top
     if "user" in st.session_state and st.session_state.user:
@@ -915,7 +917,7 @@ with st.sidebar:
             st.session_state.user = None
             st.experimental_rerun()
 
-    # Staff Menu radio (only once)
+    # Staff Menu radio (only for staff)
     if role == "Staff":
         if "staff_choice" not in st.session_state:
             st.session_state.staff_choice = "Dashboard"  # default
@@ -926,12 +928,11 @@ with st.sidebar:
             key="staff_menu_radio"
         )
 
-# ---------------------------
-# STAFF PORTAL
-# ---------------------------
+# Main content (only for staff)
 if role == "Staff":
     choice = st.session_state.staff_choice
 
+    # Load menu once
     menu_df = load_menu()
     menu_data = {cat: dict(zip(group["ITEM"], group["PRICE"])) for cat, group in menu_df.groupby("CATEGORY")}
 
@@ -957,7 +958,6 @@ if role == "Staff":
             pending = receipts_df[receipts_df["status"].str.lower() == "pending"]
             if not pending.empty:
                 for _, row in pending.iterrows():
-                    # Dynamic key for each button to avoid duplicates
                     btn_key = f"ready_{row['order_id']}"
                     st.write(f"Order {row['order_id']}: {row['items']} — ₱{row['total']} | By: {row['user_id']} | Status: {row['status']}")
                     if st.button(f"Mark Ready {row['order_id']}", key=btn_key):
@@ -975,16 +975,12 @@ if role == "Staff":
     elif choice == "Manage Menu":
         st.subheader("📖 Manage Menu")
         st.info("Add, edit, or remove menu items")
-
-        # Editable DataFrame with unique key
         edited_df = st.data_editor(
             menu_df,
             num_rows="dynamic",
             use_container_width=True,
             key="menu_data_editor"
         )
-
-        # Save updates with unique button key
         if st.button("💾 Save Menu Updates", key="save_menu_btn"):
             upsert_menu(edited_df)
             st.success("✅ Menu updated and saved in Snowflake!")
