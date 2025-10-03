@@ -459,10 +459,32 @@ def password_valid_rules(pw: str):
 
 # LOGIN PAGE
 if st.session_state.page == "login":
-    logo = Image.open("hub.png").convert("RGBA").resize((350, 150))  # RGBA keeps transparency
-    col1, col2, col3 = st.columns([1,1,1])
-    with col2:
-        st.image(logo, use_container_width=False)
+
+    # Use HTML to display the logo
+    st.markdown(
+        """
+        <div style="text-align:center;">
+            <img src="hub.png" width="350" style="background: transparent;">
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Optional: remove the Streamlit white container background
+    st.markdown(
+        """
+        <style>
+        /* Makes the main Streamlit background transparent */
+        .css-18e3th9 {  /* main background */
+            background-color: transparent;
+        }
+        .css-1d391kg {  /* image containers */
+            background-color: transparent;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     username = st.text_input("Username", placeholder="Enter username", key="login_username")
     password = st.text_input("Password", type="password", placeholder="Enter password", key="login_password")
