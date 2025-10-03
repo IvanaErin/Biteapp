@@ -11,6 +11,7 @@ import hashlib
 import secrets
 import re
 from PIL import Image
+import json
 
 # ---------------------------
 # AI CLIENT
@@ -614,22 +615,30 @@ if st.button("Proceed to Payment"):
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
-elif st.session_state.page == "payment":
-    pending = {
-        "order_id": random.randint(1000, 9999),
-        "items": st.session_state.cart,
-        "total": sum(50 for _ in st.session_state.cart),  # placeholder
-        "payment_method": "Cash",
-        "user_id": st.session_state.user["username"] if st.session_state.user else "Guest",
-        "pickup_dt": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "status": "Pending"  # added
-    }
+if st.session_state.page == "payment":
+    user = st.session_state.user
+    cart = st.session_state.cart
 
-    if not pending["items"]:
+    if not cart:
         st.warning("No pending order found. Go back to your cart.")
     else:
+        # compute total properly
+        menu_df = load_menu()
+        menu_prices = dict(zip(menu_df["ITEM"], menu_df["PRICE"]))
+        total_cost = sum(menu_prices[item] * qty for item, qty in cart.items())
+
+        pending = {
+            "order_id": f"ORD{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "items": json.dumps(cart),  # <-- convert dict to JSON string
+            "total": total_cost,
+            "payment_method": "Cash",  # default, will update below
+            "user_id": user["username"] if user else "Guest",
+            "pickup_dt": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "status": "Pending"
+        }
+
         st.subheader("💳 Payment Confirmation")
-        st.write(f"Total: ₱{pending['total']}")
+        st.write(f"Total: ₱{total_cost}")
         method = st.radio("Payment Method", ["Cash", "GCash", "Card"], key="pay_method")
         pending["payment_method"] = method
 
