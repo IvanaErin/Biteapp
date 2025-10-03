@@ -615,8 +615,17 @@ if st.button("Proceed to Payment"):
 # PAYMENT PAGE
 # ---------------------------
 elif st.session_state.page == "payment":
-    pending = st.session_state.get("pending_order", None)
-    if not pending or not pending["items"]:
+    pending = {
+        "order_id": random.randint(1000, 9999),
+        "items": st.session_state.cart,
+        "total": sum(50 for _ in st.session_state.cart),  # placeholder
+        "payment_method": "Cash",
+        "user_id": st.session_state.user["username"] if st.session_state.user else "Guest",
+        "pickup_dt": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "status": "Pending"  # added
+    }
+
+    if not pending["items"]:
         st.warning("No pending order found. Go back to your cart.")
     else:
         st.subheader("💳 Payment Confirmation")
