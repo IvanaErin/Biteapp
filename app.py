@@ -587,24 +587,22 @@ if st.session_state.page == "main":
         st.divider()
         st.subheader("📜 Order History")
 
-        history = load_receipts_df()
-        if not history.empty and not is_guest:
-            if "user_id" not in history.columns:
-                for alt in ("user", "user_name", "username", "userID", "userId"):
-                    if alt in history.columns:
-                        history = history.rename(columns={alt: "user_id"})
-                        break
-            if "user_id" not in history.columns:
-                st.info("Order history unavailable due to missing user identifier.")
-            else:
-                user_orders = history[history["user_id"] == user["username"]]
-                if not user_orders.empty:
-                    st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                else:
-                    st.info("No past orders yet.")
+history = load_receipts_df()
+if is_guest:
+    st.info("Guests cannot save order history.")
+else:
+    if history.empty:
+        st.info("No past orders yet.")
+    else:
+        # filter orders for the current user
+        if "user_id" not in history.columns:
+            st.info("Order history unavailable due to missing user identifier.")
         else:
-            st.info("Guests cannot save order history.")
-
+            user_orders = history[history["user_id"] == user["username"]]
+            if not user_orders.empty:
+                st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+            else:
+                st.info("No past orders yet.")
         # -------- Logout Button
         if st.button("🚪 Log Out"):
             for key in list(st.session_state.keys()):
