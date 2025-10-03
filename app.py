@@ -814,31 +814,14 @@ elif role == "Non-Staff":
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
+        # Assistant + Menu
         st.subheader("🤖 Canteen AI Assistant")
-        q = st.text_input("Ask about menu, budget, feedback, or ordering:", key="ai_query_main")
-        if st.button("Ask AI", key="ai_button_main") and q:
-            try:
-                sales_df = load_receipts_df()
-                feedback_df = load_feedbacks_df()
-                extra = f"SALES_SUMMARY: {sales_df.head(10).to_dict() if not sales_df.empty else 'No sales'}\nFEEDBACK_SUMMARY: {feedback_df.head(10).to_dict() if not feedback_df.empty else 'No feedback'}"
-            except Exception:
-                extra = "DB context unavailable."
-            with st.spinner("Asking AI..."):
-                st.info(run_ai(q, extra))
-
-        st.divider()
+        # ...
         st.subheader("📋 Full Menu")
-        for cat, items in menu_data.items():
-            with st.expander(cat, expanded=False):
-                for item_name, price in items.items():
-                    add_key = f"add_{cat}_{item_name}".replace(" ", "_")
-                    if st.button(f"Add {item_name} — ₱{price}", key=add_key):
-                        st.session_state.cart[item_name] = st.session_state.cart.get(item_name, 0) + 1
-                        st.success(f"Added 1 x {item_name}")
-                        st.rerun()
+        # ...
 
         # ---------------------------
-        # Cart + Checkout
+        # Cart + Checkout (NOW inside Non-Staff only)
         # ---------------------------
         st.divider()
         st.subheader("🛒 Your Cart")
@@ -850,30 +833,24 @@ elif role == "Non-Staff":
             )
             st.write(f"**Subtotal: ₱{total}**")
 
-            # Pickup details
             pickup_date = st.date_input("Pickup date", value=date.today(), key="pickup_date")
             pickup_time = st.time_input("Pickup time", value=datetime.now().time(), key="pickup_time")
-
-            # Payment method
             payment_method = st.radio("Select Payment Method:", ["Cash", "GCash", "Card"], key="pay_method")
 
-            # Checkout button
             if st.button("Proceed to Payment", key="checkout_btn"):
                 order_id = f"ORD{random.randint(10000,99999)}"
                 items_str = ", ".join([f"{i} x{q}" for i, q in st.session_state.cart.items()])
 
-                # Save order to Snowflake
                 save_receipt(
                     order_id=order_id,
                     items=items_str,
                     total=total,
                     payment_method=payment_method,
-                    user_id=user["username"],   # use logged in non-staff username
+                    user_id=user["username"],
                     pickup_dt=f"{pickup_date} {pickup_time}",
                     status="Pending"
                 )
 
-                # Store order details in session for payment page
                 st.session_state.pending_order = {
                     "order_id": order_id,
                     "items": st.session_state.cart,
@@ -883,10 +860,7 @@ elif role == "Non-Staff":
                     "pickup_dt": f"{pickup_date} {pickup_time}",
                 }
 
-                # Clear the cart after saving
                 st.session_state.cart = {}
-
-                # Go to payment confirmation page
                 st.session_state.page = "payment"
                 st.rerun()
         else:
