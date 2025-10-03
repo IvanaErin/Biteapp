@@ -399,9 +399,22 @@ elif st.session_state.page == "signup":
 # MAIN PORTAL (Staff / Non-Staff / Guest)
 # ---------------------------
 if st.session_state.page == "main":
+    # ensure user exists in session
+    if "user" not in st.session_state or not st.session_state.user:
+        st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
+
+    user = st.session_state.user
+    role = user.get("role", "Guest")
+
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
     if role == "Staff":
+        st.write("👩‍💼 Staff dashboard here...")
+    elif role == "Non-Staff":
+        st.write("👤 Non-Staff features here...")
+    else:
+        st.write("👥 Guest view here...")
+        
         # ---------------- STAFF PORTAL ----------------
         if "staff_choice" not in st.session_state:
             st.session_state.staff_choice = "Dashboard"
