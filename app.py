@@ -11,6 +11,8 @@ import hashlib
 import secrets
 import re
 from PIL import Image
+from io import BytesIO
+
 
 
 # ---------------------------
