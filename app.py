@@ -405,11 +405,12 @@ if st.session_state.page == "main":
 
     user = st.session_state.user
     role = user.get("role", "Guest")
+    is_guest = (role == "Guest")
 
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
     # ---------------- STAFF PORTAL ----------------
-    
+    if role == "Staff":
         if "staff_choice" not in st.session_state:
             st.session_state.staff_choice = "Dashboard"
 
@@ -422,7 +423,7 @@ if st.session_state.page == "main":
         )
         choice = st.session_state.staff_choice
 
-        # Handle staff page selection here...
+        # Handle staff page selection
         if choice == "Dashboard":
             st.subheader("📊 Staff Dashboard")
             # staff-specific content...
@@ -457,8 +458,8 @@ if st.session_state.page == "main":
             else:
                 st.info("No sales yet.")
 
+    # ---------------- NON-STAFF & GUEST PORTAL ----------------
     else:
-        # ---------------- NON-STAFF & GUEST PORTAL ----------------
         col1, col2 = st.columns([2, 1])
 
         # -------- LEFT SIDE: AI + Menu + Ordering + Payment
@@ -501,7 +502,6 @@ if st.session_state.page == "main":
         # -------- RIGHT SIDE: Sentiment + Feedback + Notifications
         with col2:
             st.subheader("📝 Sentiment Analysis")
-            # placeholder sentiment analysis logic...
             st.write("Coming soon...")
 
             st.divider()
@@ -535,7 +535,6 @@ if st.session_state.page == "main":
 
         history = load_receipts_df()
         if not history.empty and not is_guest:
-            # Normalize user_id column
             if "user_id" not in history.columns:
                 for alt in ("user", "user_name", "username", "userID", "userId"):
                     if alt in history.columns:
