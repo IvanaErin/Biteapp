@@ -460,27 +460,30 @@ def password_valid_rules(pw: str):
 # LOGIN PAGE
 if st.session_state.page == "login":
 
-    # Use HTML to display the logo
+    # Load image
+    logo = Image.open("hub.png").convert("RGBA").resize((350, 150))
+
+    # Convert image to base64
+    buffered = BytesIO()
+    logo.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+
+    # Display with HTML
     st.markdown(
-        """
+        f"""
         <div style="text-align:center;">
-            <img src="hub.png" width="350" style="background: transparent;">
+            <img src="data:image/png;base64,{img_str}" width="350" style="background: transparent;">
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    # Optional: remove the Streamlit white container background
+    # Optional: remove Streamlit container background
     st.markdown(
         """
         <style>
-        /* Makes the main Streamlit background transparent */
-        .css-18e3th9 {  /* main background */
-            background-color: transparent;
-        }
-        .css-1d391kg {  /* image containers */
-            background-color: transparent;
-        }
+        .css-18e3th9 { background-color: transparent; }
+        .css-1d391kg { background-color: transparent; }
         </style>
         """,
         unsafe_allow_html=True
