@@ -837,7 +837,7 @@ if st.session_state.page == "main":
     # ---------------------------
     # PAYMENT PAGE
     # ---------------------------
-    elif st.session_state.page == "payment":
+    if st.session_state.page == "payment":
         pending = st.session_state.get("pending_order", {})
         if not pending:
             st.warning("No pending order found. Go back to your cart.")
