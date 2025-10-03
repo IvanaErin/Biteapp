@@ -672,13 +672,28 @@ if st.session_state.page == "main":
                 answer = run_ai(q, extra_context="STAFF MODE: Provide analytics insights")
                 st.markdown(f"<div style='color:white; font-size:16px'>{answer}</div>", unsafe_allow_html=True)
 
-        elif choice == "Feedback Review":
-            st.subheader("📝 All Customer Feedback")
-            fb_df = load_feedbacks_df()
-            if not fb_df.empty:
-                st.dataframe(fb_df, use_container_width=True)
-            else:
-                st.info("No feedback received yet.")
+elif choice == "Feedback Review":
+    st.subheader("📝 All Customer Feedback")
+    fb_df = load_feedbacks_df()
+    if not fb_df.empty:
+        # Clean table display
+        fb_df = fb_df.rename(columns={
+            "item": "Item",
+            "feedback": "Feedback",
+            "rating": "Rating",
+            "user_id": "User",
+            "timestamp": "Submitted At"
+        })
+        st.dataframe(fb_df, use_container_width=True)
+
+        # Optional: summary stats
+        st.divider()
+        st.metric("Total Feedback", len(fb_df))
+        avg_rating = fb_df["Rating"].mean() if "Rating" in fb_df else None
+        if avg_rating:
+            st.metric("Average Rating", f"{avg_rating:.1f} ⭐")
+    else:
+        st.info("No feedback received yet.")
 
         elif choice == "Sales Report":
             st.subheader("💹 Sales Report")
@@ -789,18 +804,32 @@ if st.session_state.page == "main":
             st.write("🔍 Placeholder for sentiment analysis visualization")
 
             st.divider()
-            st.subheader("📝 Feedback")
-            if is_guest:
-                st.info("Guests can only view feedback (not submit).")
-                fb_df = load_feedbacks_df()
-                if not fb_df.empty:
-                    st.dataframe(fb_df.tail(5), use_container_width=True)
-            else:
-                feedback = st.text_area("Leave feedback about your order:")
-                if st.button("Submit Feedback", key="feedback_btn") and feedback:
-                    save_feedback(user["username"], feedback)
-                    st.success("Feedback submitted!")
+st.subheader("📝 Feedback")
+if is_guest:
+    st.info("Guests can only view feedback (not submit).")
+    fb_df = load_feedbacks_df()
+    if not fb_df.empty:
+        st.dataframe(fb_df.tail(5), use_container_width=True)
+else:
+    # Select item to review
+    try:
+        menu_df = load_menu()
+        items_list = menu_df["ITEM"].unique().tolist() if not menu_df.empty else []
+    except Exception:
+        items_list = []
 
+    item_choice = st.selectbox("Which item are you reviewing?", items_list) if items_list else None
+    feedback = st.text_area("Leave your feedback:")
+    rating = st.slider("Rate (1 = poor, 5 = excellent)", 1, 5, 3)
+
+    if st.button("Submit Feedback", key="feedback_btn") and feedback and item_choice:
+        save_feedback(
+            item=item_choice,
+            feedback=feedback,
+            rating=rating,
+            user_id=user["username"]   # change to user["id"] if schema uses numeric IDs
+        )
+        st.success("✅ Feedback submitted!")
             st.divider()
             st.subheader("📢 Notifications")
             if "notifications" not in st.session_state:
