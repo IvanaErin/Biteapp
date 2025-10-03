@@ -196,6 +196,56 @@ def validate_account(username: str, password: str):
     return None
 
 # ---------------------------
+# RECEIPTS
+# ---------------------------
+def save_receipt(order_id: str, items: str, total: float, payment_method: str, user_id: str, pickup_dt: str, status: str):
+    conn = get_connection()
+    if not conn:
+        _ensure_local_db()
+        if "_local_receipts" not in st.session_state:
+            st.session_state._local_receipts = []
+        st.session_state._local_receipts.append({
+            "order_id": order_id,
+            "items": items,
+            "total": total,
+            "payment_method": payment_method,
+            "user_id": user_id,
+            "pickup_dt": pickup_dt,
+            "status": status,
+            "timestamp": datetime.now()
+        })
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (order_id, items, total, payment_method, user_id, pickup_dt, status)
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def load_receipts_df():
+    conn = get_connection()
+    if not conn:
+        _ensure_local_db()
+        rows = st.session_state.get("_local_receipts", [])
+        return pd.DataFrame(rows) if rows else pd.DataFrame(
+            columns=["order_id","items","total","payment_method","user_id","pickup_dt","status","timestamp"]
+        )
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT order_id, items, total, payment_method, user_id, pickup_dt, status, timestamp FROM receipts ORDER BY timestamp DESC")
+        rows = cur.fetchall()
+        return pd.DataFrame(rows, columns=["order_id","items","total","payment_method","user_id","pickup_dt","status","timestamp"])
+    finally:
+        cur.close()
+        conn.close()
+
+# ---------------------------
 # FEEDBACK
 # ---------------------------
 def save_feedback(item: str, feedback: str, rating: int, user_id: int):
