@@ -780,12 +780,16 @@ elif role == "Non-Staff":
                 order_id = f"ORD{random.randint(10000,99999)}"
                 items_str = ", ".join([f"{i} x{q}" for i,q in st.session_state.cart.items()])
 
-                # Save to Snowflake
-                save_receipt(
-                    order_id=order_id,
-                    items=items_str,
-                    total=total,
-                    payment_method=payment_method,
+# Save to Snowflake
+save_receipt(
+    order_id=order_id,
+    items=items_str,
+    total=total,
+    payment_method=payment_method,
+    user_id=st.session_state.get("current_user", "guest"),  # or whatever user_id you’re tracking
+    pickup_dt=f"{pickup_date} {pickup_time}",
+    status="Pending"
+    )
 # ---------------------------
 # USER SETUP
 # ---------------------------
