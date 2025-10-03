@@ -1029,17 +1029,16 @@ elif st.session_state.page == "payment":
 
         if pending["payment_method"] == "Cash":
             if st.button("Confirm Cash Payment"):
-                if not is_guest:
-                    save_receipt(
-                        order_id=pending["order_id"],
-                        items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
-                        total=pending["total"],
-                        payment_method="Cash",
-                        user_id=pending["user_id"],
-                        pickup_dt=pending["pickup_dt"],
-                        status="Paid"
-                    )
-                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
+                save_receipt(
+                    order_id=pending["order_id"],
+                    items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
+                    total=pending["total"],
+                    payment_method="Cash",
+                    user_id=pending["user_id"],
+                    pickup_dt=pending["pickup_dt"],
+                    status="Paid"
+                )
+                st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
                 st.success(f"Order confirmed! Order ID: {pending['order_id']}")
                 st.session_state.cart = {}
                 st.session_state.pending_order = {}
@@ -1054,18 +1053,16 @@ elif st.session_state.page == "payment":
                 st.text_input("CVV", key="card_cvv")
 
             if st.button("Simulate Payment Success"):
-                if not is_guest:
-                    save_receipt(
-                        order_id=pending["order_id"],
-                        items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
-                        total=pending["total"],
-                        payment_method=pending["payment_method"],
-                        user_id=pending["user_id"],
-                        pickup_dt=pending["pickup_dt"],
-                        status="Paid"
-                    )
-                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
-
+                save_receipt(
+                    order_id=pending["order_id"],
+                    items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
+                    total=pending["total"],
+                    payment_method=pending["payment_method"],
+                    user_id=pending["user_id"],
+                    pickup_dt=pending["pickup_dt"],
+                    status="Paid"
+                )
+                st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
                 st.success(f"Payment confirmed! Order ID: {pending['order_id']}")
                 st.session_state.notifications.append(
                     f"Order {pending['order_id']} placed — Payment: {pending['payment_method']} — Pickup: {pending['pickup_dt']}"
