@@ -408,14 +408,8 @@ if st.session_state.page == "main":
 
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
-    if role == "Staff":
-        st.write("👩‍💼 Staff dashboard here...")
-    elif role == "Non-Staff":
-        st.write("👤 Non-Staff features here...")
-    else:
-        st.write("👥 Guest view here...")
-        
-        # ---------------- STAFF PORTAL ----------------
+    # ---------------- STAFF PORTAL ----------------
+    
         if "staff_choice" not in st.session_state:
             st.session_state.staff_choice = "Dashboard"
 
