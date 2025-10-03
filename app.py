@@ -326,24 +326,49 @@ def password_valid_rules(pw: str):
     }
     return rules
 
-# ---------------------------
 # LOGIN PAGE
-# ---------------------------
 if st.session_state.page == "login":
-    st.markdown("<h1 style='text-align: center; color: white;'>☕ BiteHub — Login</h1>", unsafe_allow_html=True)
-    with st.container():
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            acc = validate_account(username, password)
-            if acc:
-                st.session_state.user = acc
-                st.session_state.page = "main"
-                st.experimental_rerun()
-            else:
-                st.error("Invalid username or password.")
-        if st.button("Sign up"):
+    # Centered title text instead of image
+    st.markdown(
+        """
+        <h1 style='text-align: center; color: #FF6F61; font-size: 60px; margin-top: 20px;'>
+            ☕ BiteHub
+        </h1>
+        <p style='text-align: center; color: #888888; font-size: 18px;'>
+            Welcome! Please log in below.
+        </p>
+        """,
+        unsafe_allow_html=True
+    )
+
+    username = st.text_input("Username", placeholder="Enter username", key="login_username")
+    password = st.text_input("Password", type="password", placeholder="Enter password", key="login_password")
+
+    col1, col2, col3, col4, col5 = st.columns([1,2,2,2,1])
+    with col2:
+        if st.button("Log In", use_container_width=True):
+            try:
+                acc = get_account(username)  # fetch from DB
+                if acc and verify_password(acc["password"], password):
+                    st.session_state.user = acc
+                    st.session_state.page = "main"
+                    st.success(f"✅ Welcome {acc['username']}!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password.")
+            except Exception as e:
+                st.error(f"Login error: {e}")
+
+    with col3:
+        if st.button("Guest Account", use_container_width=True):
+            st.session_state.user = {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0}
+            st.session_state.page = "main"
+            st.rerun()
+
+    with col4:
+        if st.button("Create Account", use_container_width=True):
             st.session_state.page = "signup"
+            st.rerun()
 
 # ---------------------------
 # SIGNUP PAGE
