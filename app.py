@@ -13,7 +13,6 @@ import re
 from PIL import Image
 
 
-
 # ---------------------------
 # AI CLIENT
 # ---------------------------
@@ -839,6 +838,7 @@ if st.button("Submit Feedback", key="feedback_btn") and feedback and item_choice
     )
     st.success("✅ Feedback submitted!")
 
+# --- Notifications Section ---
 st.divider()
 st.subheader("📢 Notifications")
 if "notifications" not in st.session_state:
@@ -848,79 +848,80 @@ for note in st.session_state.notifications:
 if st.button("Clear notifications", key="clear_notifs"):
     st.session_state.notifications.clear()
 
-            st.divider()
-            st.subheader("📜 Order History")
+# --- Order History Section ---
+st.divider()
+st.subheader("📜 Order History")
 
-            history = load_receipts_df()
-            if not history.empty and not is_guest:
-                # Normalize column name to 'user_id'
-                if "user_id" not in history.columns:
-                    for alt in ("user", "user_name", "username", "userID", "userId"):
-                        if alt in history.columns:
-                            history = history.rename(columns={alt: "user_id"})
-                            break
+history = load_receipts_df()
+if not history.empty and not is_guest:
+    # Normalize column name to 'user_id'
+    if "user_id" not in history.columns:
+        for alt in ("user", "user_name", "username", "userID", "userId"):
+            if alt in history.columns:
+                history = history.rename(columns={alt: "user_id"})
+                break
 
-                if "user_id" not in history.columns:
-                    st.write("Order history has unexpected columns:", history.columns.tolist())
-                    st.info("Order history unavailable due to missing user identifier.")
-                else:
-                    user_orders = history[history["user_id"] == user["username"]]
-                    if not user_orders.empty:
-                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                    else:
-                        st.info("No past orders yet.")
-            else:
-                st.info("Guests cannot save order history.")
-
-    # ---------------------------
-    # PAYMENT PAGE
-    # ---------------------------
-    if st.session_state.page == "payment":
-        pending = st.session_state.get("pending_order", {})
-        if not pending:
-            st.warning("No pending order found. Go back to your cart.")
+    if "user_id" not in history.columns:
+        st.write("Order history has unexpected columns:", history.columns.tolist())
+        st.info("Order history unavailable due to missing user identifier.")
+    else:
+        user_orders = history[history["user_id"] == user["username"]]
+        if not user_orders.empty:
+            st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
         else:
-            st.subheader("💳 Payment Confirmation")
-            st.write(f"Total: ₱{pending['total']}")
-            st.write(f"Payment Method: {pending['payment_method']}")
+            st.info("No past orders yet.")
+else:
+    st.info("Guests cannot save order history.")
 
-            if pending["payment_method"] == "Cash":
-                if st.button("Confirm Cash Payment"):
-                    save_receipt(
-                        order_id=pending["order_id"],
-                        items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
-                        total=pending["total"],
-                        payment_method="Cash",
-                        user_id=pending["user_id"],
-                        pickup_dt=pending["pickup_dt"],
-                        status="Paid"
-                    )
-                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
-                    st.success(f"Order confirmed! Order ID: {pending['order_id']}")
-                    st.session_state.cart = {}
-                    st.session_state.pending_order = {}
-                    st.session_state.page = "main"
+# ---------------------------
+# PAYMENT PAGE
+# ---------------------------
+if st.session_state.page == "payment":
+    pending = st.session_state.get("pending_order", {})
+    if not pending:
+        st.warning("No pending order found. Go back to your cart.")
+    else:
+        st.subheader("💳 Payment Confirmation")
+        st.write(f"Total: ₱{pending['total']}")
+        st.write(f"Payment Method: {pending['payment_method']}")
 
-            elif pending["payment_method"] in ["GCash", "Card"]:
-                if pending["payment_method"] == "GCash":
-                    st.image("https://via.placeholder.com/150?text=GCash+QR", caption="Scan QR to Pay")
-                elif pending["payment_method"] == "Card":
-                    st.text_input("Card Number", key="card_number")
-                    st.text_input("Expiry MM/YY", key="card_expiry")
-                    st.text_input("CVV", key="card_cvv")
+        if pending["payment_method"] == "Cash":
+            if st.button("Confirm Cash Payment"):
+                save_receipt(
+                    order_id=pending["order_id"],
+                    items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
+                    total=pending["total"],
+                    payment_method="Cash",
+                    user_id=pending["user_id"],
+                    pickup_dt=pending["pickup_dt"],
+                    status="Paid"
+                )
+                st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
+                st.success(f"Order confirmed! Order ID: {pending['order_id']}")
+                st.session_state.cart = {}
+                st.session_state.pending_order = {}
+                st.session_state.page = "main"
 
-                if st.button("Simulate Payment Success"):
-                    save_receipt(
-                        order_id=pending["order_id"],
-                        items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
-                        total=pending["total"],
-                        payment_method=pending["payment_method"],
-                        user_id=pending["user_id"],
-                        pickup_dt=pending["pickup_dt"],
-                        status="Paid"
-                    )
-                    st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
-                    st.success(f"Order confirmed! Order ID: {pending['order_id']}")
-                    st.session_state.cart = {}
-                    st.session_state.pending_order = {}
-                    st.session_state.page = "main"
+        elif pending["payment_method"] in ["GCash", "Card"]:
+            if pending["payment_method"] == "GCash":
+                st.image("https://via.placeholder.com/150?text=GCash+QR", caption="Scan QR to Pay")
+            elif pending["payment_method"] == "Card":
+                st.text_input("Card Number", key="card_number")
+                st.text_input("Expiry MM/YY", key="card_expiry")
+                st.text_input("CVV", key="card_cvv")
+
+            if st.button("Simulate Payment Success"):
+                save_receipt(
+                    order_id=pending["order_id"],
+                    items=", ".join([f"{i} x{q}" for i,q in pending["items"].items()]),
+                    total=pending["total"],
+                    payment_method=pending["payment_method"],
+                    user_id=pending["user_id"],
+                    pickup_dt=pending["pickup_dt"],
+                    status="Paid"
+                )
+                st.session_state.loyalty_points = st.session_state.get("loyalty_points", 0) + pending['total']//100
+                st.success(f"Order confirmed! Order ID: {pending['order_id']}")
+                st.session_state.cart = {}
+                st.session_state.pending_order = {}
+                st.session_state.page = "main"
