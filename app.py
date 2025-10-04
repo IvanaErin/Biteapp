@@ -390,20 +390,31 @@ def password_valid_rules(pw: str):
     return rules
 
 # ---------------------------
+# LOGIN + SIGNUP + MAIN PORTAL + PAYMENT
+# ---------------------------
+
+if "page" not in st.session_state:
+    st.session_state.page = "login"
+
+# ---------------------------
 # LOGIN PAGE
 # ---------------------------
 if st.session_state.page == "login":
     st.markdown(
-        "<h1 style='text-align: center; color: #FF6F61; font-size: 60px; margin-top: 20px;'>☕ BiteHub</h1>"
-        "<p style='text-align: center; color: #888888; font-size: 18px;'>Welcome! Please log in below.</p>",
+        """
+        <h1 style='text-align: center; color: #FF6F61; font-size: 60px; margin-top: 20px;'>☕ BiteHub</h1>
+        <p style='text-align: center; color: #888888; font-size: 18px;'>Welcome! Please log in below.</p>
+        """,
         unsafe_allow_html=True
     )
+
     username = st.text_input("Username", placeholder="Enter username", key="login_username")
     password = st.text_input("Password", type="password", placeholder="Enter password", key="login_password")
 
-    col1, col2, col3, col4, col5 = st.columns([1,2,2,2,1])
+    col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
+
     with col2:
-        if st.button("Log In", use_container_width=True):
+        if st.button("🔑 Log In", use_container_width=True):
             acc = get_account(username)
             if acc and verify_password(acc["password"], password):
                 st.session_state.user = acc
@@ -412,39 +423,48 @@ if st.session_state.page == "login":
                 st.rerun()
             else:
                 st.error("❌ Invalid username or password.")
+
     with col3:
-        if st.button("Guest Account", use_container_width=True):
+        if st.button("🎟️ Guest Account", use_container_width=True):
             st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
             st.session_state.page = "main"
             st.rerun()
+
     with col4:
-        if st.button("Create Account", use_container_width=True):
+        if st.button("📝 Create Account", use_container_width=True):
             st.session_state.page = "signup"
             st.rerun()
+
 
 # ---------------------------
 # SIGNUP PAGE
 # ---------------------------
 elif st.session_state.page == "signup":
-    st.markdown("<h1 style='text-align: center; color: white;'>📝 BiteHub — Signup</h1>", unsafe_allow_html=True)
-    new_user = st.text_input("New Username")
-    new_pass = st.text_input("New Password", type="password")
-    confirm_pass = st.text_input("Confirm Password", type="password")
-    if st.button("Create Account"):
+    st.markdown("<h1 style='text-align: center; color: #FF6F61;'>📝 BiteHub — Sign Up</h1>", unsafe_allow_html=True)
+    new_user = st.text_input("New Username", placeholder="Enter username")
+    new_pass = st.text_input("New Password", placeholder="Enter password", type="password")
+    confirm_pass = st.text_input("Confirm Password", placeholder="Re-enter password", type="password")
+
+    if st.button("Create Account ✅", use_container_width=True):
         if not new_user or not new_pass:
-            st.error("Username and password required.")
+            st.error("⚠️ Username and password required.")
         elif new_pass != confirm_pass:
-            st.error("Passwords do not match.")
+            st.error("❌ Passwords do not match.")
         elif get_account(new_user):
-            st.error("Username already exists.")
+            st.error("🚫 Username already exists.")
         else:
             hashed = hash_password(new_pass)
             save_account(new_user, hashed, "Non-Staff")
-            st.success("Account created! Please login.")
+            st.success("🎉 Account created successfully! Please log in below.")
             st.session_state.page = "login"
+            st.rerun()
 
-    if st.button("Back to Login"):
+    st.markdown("---")
+    if st.button("⬅️ Back to Login", use_container_width=True):
         st.session_state.page = "login"
+        st.rerun()
+
+
 # ---------------------------
 # MAIN PORTAL (Staff / Non-Staff / Guest)
 # ---------------------------
@@ -495,7 +515,7 @@ elif st.session_state.page == "main":
                 if st.button("Save Menu Updates"):
                     upsert_menu(edited)
                     st.success("Menu updated successfully!")
-                    st.experimental_rerun()
+                    st.rerun()
             else:
                 st.info("No menu items available.")
 
@@ -523,21 +543,15 @@ elif st.session_state.page == "main":
 
     # ---------- NON-STAFF & GUEST PORTAL ----------
     else:
-        # Ensure session state keys exist
         if "cart" not in st.session_state:
             st.session_state.cart = {}
         if "notifications" not in st.session_state:
             st.session_state.notifications = []
 
-        # Load menu once
         menu_df = load_menu()
-
-        # Create two columns
         col1, col2 = st.columns([1, 1])
 
-        # -------- LEFT: AI + Menu & Ordering + Cart + Payment --------
         with col1:
-            # AI Assistant
             st.subheader("🤖 AI Assistant")
             q = st.text_area("Ask AI something:", key="user_ai_q")
             if st.button("Ask AI", key="ask_ai_user"):
@@ -562,23 +576,29 @@ elif st.session_state.page == "main":
             else:
                 st.info("No menu items available.")
 
-            # Show current cart
             if st.session_state.cart:
                 st.subheader("🛒 Cart")
                 cart_df = pd.DataFrame([
-                    {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
+                    {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"] * v["price"]}
                     for k, v in st.session_state.cart.items()
                 ])
                 st.dataframe(cart_df, use_container_width=True)
-                total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
+                total = sum(v["qty"] * v["price"] for v in st.session_state.cart.values())
                 st.markdown(f"*Total: ₱{total}*")
+
                 if st.button("Proceed to Payment"):
                     st.session_state.page = "payment"
+                    st.session_state.pending_order = {
+                        "order_id": f"ORD{random.randint(1000,9999)}",
+                        "user_id": user["username"],
+                        "items": json.dumps({k: v["qty"] for k, v in st.session_state.cart.items()}),
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "status": "Pending"
+                    }
                     st.rerun()
             else:
                 st.info("Your cart is empty.")
 
-        # -------- RIGHT: Feedback + Notifications + Order History --------
         with col2:
             st.subheader("⭐ Feedbacks")
             if not is_guest:
@@ -629,10 +649,12 @@ elif st.session_state.page == "main":
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
+
+
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
-if st.session_state.page == "payment":
+elif st.session_state.page == "payment":
     user = st.session_state.user
     pending = st.session_state.get("pending_order", {})
 
@@ -642,6 +664,7 @@ if st.session_state.page == "payment":
         menu_df = load_menu()
         menu_prices = dict(zip(menu_df["ITEM"], menu_df["PRICE"]))
         total_cost = sum(menu_prices[item] * qty for item, qty in json.loads(pending["items"]).items())
+
         st.subheader("💳 Payment Confirmation")
         st.write(f"Total: ₱{total_cost}")
         method = st.radio("Payment Method", ["Cash", "GCash", "Card"], key="pay_method")
@@ -672,4 +695,4 @@ if st.session_state.page == "payment":
                 st.success(f"✅ Order confirmed! Order ID: {pending['order_id']}")
                 st.session_state.cart = {}
                 st.session_state.page = "main"
-                st.rerun() 
+                st.rerun()
