@@ -468,7 +468,7 @@ elif st.session_state.page == "signup":
 # MAIN PORTAL (Staff / Non-Staff / Guest)
 # ---------------------------
 elif st.session_state.page == "main":
-    # Ensure user exists in session
+    # Ensure user exists
     if "user" not in st.session_state or not st.session_state.user:
         st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
 
@@ -478,9 +478,9 @@ elif st.session_state.page == "main":
 
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
-    # ---------------------------
+    # =======================
     # STAFF PORTAL
-    # ---------------------------
+    # =======================
     if role == "Staff":
         if "staff_choice" not in st.session_state:
             st.session_state.staff_choice = "Dashboard"
@@ -542,9 +542,9 @@ elif st.session_state.page == "main":
             else:
                 st.info("No sales yet.")
 
-    # ---------------------------
-    # NON-STAFF & GUEST PORTAL
-    # ---------------------------
+    # =======================
+    # NON-STAFF / GUEST PORTAL
+    # =======================
     else:
         if "cart" not in st.session_state:
             st.session_state.cart = {}
@@ -552,19 +552,20 @@ elif st.session_state.page == "main":
             st.session_state.notifications = []
 
         menu_df = load_menu()
-        col1, col2 = st.columns([1, 1])
+        left, right = st.columns([1.1, 1])  # adjust proportion for balance
 
-        # --- LEFT: AI Assistant ---
-        with col1:
+        # -----------------------
+        # LEFT COLUMN
+        # -----------------------
+        with left:
+            # AI Assistant
             st.subheader("🤖 AI Assistant")
             q = st.text_area("Ask AI something:", key="user_ai_q")
             if st.button("Ask AI", key="ask_ai_user"):
                 st.write(run_ai(q))
 
-        # --- RIGHT: Menu + Cart ---
-        with col2:
+            # Menu & Ordering
             st.subheader("📖 Menu & Ordering")
-
             if not menu_df.empty:
                 categories = menu_df["CATEGORY"].unique()
                 for cat in categories:
@@ -578,7 +579,7 @@ elif st.session_state.page == "main":
                         with colB:
                             st.write(f"₱{row['PRICE']}")
                         with colC:
-                            if st.button("➕ Add", key=f"add_{cat}_{row['ITEM']}"):
+                            if st.button("➕", key=f"add_{cat}_{row['ITEM']}"):
                                 if row["ITEM"] in st.session_state.cart:
                                     st.session_state.cart[row["ITEM"]]["qty"] += 1
                                 else:
@@ -588,7 +589,7 @@ elif st.session_state.page == "main":
                                     }
                                 st.success(f"Added {row['ITEM']} to cart!")
 
-                # --- CART DISPLAY ---
+                # Cart
                 if st.session_state.cart:
                     st.divider()
                     st.subheader("🛒 Your Cart")
@@ -621,54 +622,70 @@ elif st.session_state.page == "main":
             else:
                 st.info("No menu items available.")
 
-        # --- FEEDBACK SECTION ---
-        st.divider()
-        st.subheader("⭐ Feedbacks")
+        # -----------------------
+        # RIGHT COLUMN
+        # -----------------------
+        with right:
+            # Sentiment Analysis
+            st.subheader("🧠 Sentiment Analysis")
+            if not menu_df.empty:
+                item_choice = st.selectbox("Select an item to view sentiment:", menu_df["ITEM"].tolist(), key="sentiment_item")
+                fb_df = load_feedbacks_df()
+                if not fb_df.empty and item_choice in fb_df["item"].values:
+                    item_feedbacks = fb_df[fb_df["item"] == item_choice]
+                    st.write(f"Showing {len(item_feedbacks)} feedback entries.")
+                    st.bar_chart(item_feedbacks["rating"])
+                else:
+                    st.info(f"{item_choice}: No feedback yet.")
+            else:
+                st.info("No menu data available.")
 
-        if not menu_df.empty:
-            with st.form("feedback_form"):
-                item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
-                feedback = st.text_area("Your feedback:", key="feedback_text")
-                rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
-                submitted = st.form_submit_button("Submit Feedback")
-                if submitted:
-                    if feedback:
-                        save_feedback(item_choice, feedback, rating, user["username"])
-                        st.success("✅ Feedback submitted!")
+            st.divider()
+            # Feedback Form
+            st.subheader("⭐ Leave Feedback")
+            if not menu_df.empty:
+                with st.form("feedback_form"):
+                    item_choice = st.selectbox("Item:", menu_df["ITEM"].tolist(), key="feedback_item")
+                    feedback = st.text_area("Your feedback:", key="feedback_text")
+                    rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                    submitted = st.form_submit_button("Submit Feedback")
+                    if submitted:
+                        if feedback:
+                            save_feedback(item_choice, feedback, rating, user["username"])
+                            st.success("✅ Feedback submitted!")
+                        else:
+                            st.warning("Feedback cannot be empty.")
+            else:
+                st.info("Menu unavailable for feedback.")
+
+            st.divider()
+            # Notifications
+            st.subheader("📢 Notifications")
+            if st.session_state.notifications:
+                for i, note in enumerate(st.session_state.notifications):
+                    st.info(note, key=f"notif_{i}")
+            else:
+                st.info("No notifications.")
+            if st.button("Clear Notifications", key="clear_notifs"):
+                st.session_state.notifications.clear()
+
+            st.divider()
+            # Order History
+            st.subheader("📜 Order History")
+            if not is_guest:
+                history = load_receipts_df()
+                if not history.empty and "user_id" in history.columns:
+                    user_orders = history[history["user_id"] == user["username"]]
+                    if not user_orders.empty:
+                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
                     else:
-                        st.warning("Feedback cannot be empty.")
-        else:
-            st.info("Menu is empty. Feedback cannot be submitted.")
-
-        # --- NOTIFICATIONS ---
-        st.divider()
-        st.subheader("📢 Notifications")
-        if st.session_state.notifications:
-            for i, note in enumerate(st.session_state.notifications):
-                st.info(note, key=f"notif_{i}")
-        else:
-            st.info("No notifications.")
-
-        if st.button("Clear notifications", key="clear_notifs"):
-            st.session_state.notifications.clear()
-
-        # --- ORDER HISTORY ---
-        st.divider()
-        st.subheader("📜 Order History")
-        if not is_guest:
-            history = load_receipts_df()
-            if not history.empty and "user_id" in history.columns:
-                user_orders = history[history["user_id"] == user["username"]]
-                if not user_orders.empty:
-                    st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+                        st.info("No past orders yet.")
                 else:
                     st.info("No past orders yet.")
             else:
-                st.info("No past orders yet.")
-        else:
-            st.info("Guests cannot save order history.")
+                st.info("Guests cannot save order history.")
 
-        # --- LOGOUT BUTTON ---
+        # Logout Button
         st.divider()
         if st.button("🚪 Log Out"):
             for key in list(st.session_state.keys()):
