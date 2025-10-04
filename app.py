@@ -512,7 +512,7 @@ elif st.session_state.page == "main":
             if not menu_df.empty:
                 menu_edit_df = menu_df.copy()
                 menu_edit_df["PRICE"] = menu_edit_df["PRICE"].astype(float)
-                edited = st.experimental_data_editor(menu_edit_df, num_rows="dynamic")
+                edited = st.data_editor(menu_edit_df, num_rows="dynamic")
                 if st.button("Save Menu Updates"):
                     upsert_menu(edited)
                     st.success("Menu updated successfully!")
