@@ -553,7 +553,7 @@ st.subheader("📖 Menu & Ordering")
 if not menu_df.empty:
     categories = menu_df["CATEGORY"].unique()
     for cat in categories:
-        with st.expander(cat, expanded=True):  # collapsible categories for more compact layout
+        with st.expander(cat, expanded=True):  # collapsible categories for compact layout
             cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
 
             # Table headers
@@ -568,22 +568,20 @@ if not menu_df.empty:
                 item_col.write(row["ITEM"])
                 price_col.write(f"₱{row['PRICE']}")
 
-                # Quantity input
+                # Compact quantity input using text_input
                 qty_key = f"Qty_{cat}_{row['ITEM']}"
-                qty = action_col.number_input(
-                    "",
-                    min_value=0,
-                    value=0,
-                    step=1,
-                    key=qty_key
-                )
+                qty = action_col.text_input("", "0", max_chars=2, key=qty_key, help="Enter qty")
 
                 # Add button
                 if action_col.button("Add", key=f"Add_{cat}_{row['ITEM']}"):
-                    if row["ITEM"] in st.session_state.cart:
-                        st.session_state.cart[row["ITEM"]]["qty"] += qty
-                    else:
-                        st.session_state.cart[row["ITEM"]] = {"qty": qty, "price": row["PRICE"]}
+                    qty_int = int(qty) if qty.isdigit() else 0
+                    if qty_int > 0:
+                        if "cart" not in st.session_state:
+                            st.session_state.cart = {}
+                        if row["ITEM"] in st.session_state.cart:
+                            st.session_state.cart[row["ITEM"]]["qty"] += qty_int
+                        else:
+                            st.session_state.cart[row["ITEM"]] = {"qty": qty_int, "price": row["PRICE"]}
 
 else:
     st.info("No menu items available.")
