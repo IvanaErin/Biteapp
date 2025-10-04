@@ -565,50 +565,53 @@ elif st.session_state.page == "main":
             elif st.button("Proceed to Payment") and not st.session_state.cart:
                 st.warning("Your cart is empty!")
 
-        # -------- RIGHT: Feedback + Notifications --------
-        with col2:
-            st.subheader("⭐ Feedbacks")
-            if not is_guest:
-                if not menu_df.empty:
-                    item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist())
-                    feedback = st.text_area("Your feedback:")
-                    rating = st.slider("Rate (1-5)", 1, 5, 3)
-                    if st.button("Submit Feedback", key="feedback_btn"):
-                        if feedback:
-                            save_feedback(item_choice, feedback, rating, user["username"])
-                            st.success("✅ Feedback submitted!")
-                        else:
-                            st.warning("Feedback cannot be empty.")
-            else:
-                st.info("Guests cannot submit feedback.")
-
-            st.divider()
-            st.subheader("📢 Notifications")
-            for note in st.session_state.notifications:
-                st.info(note)
-            if st.button("Clear notifications", key="clear_notifs"):
-                st.session_state.notifications.clear()
-
-            st.divider()
-            st.subheader("📜 Order History")
-            if not is_guest:
-                history = load_receipts_df()
-                if not history.empty and "user_id" in history.columns:
-                    user_orders = history[history["user_id"] == user["username"]]
-                    if not user_orders.empty:
-                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+# -------- RIGHT: Feedback + Notifications --------
+with col2:
+    st.subheader("⭐ Feedbacks")
+    if not is_guest:
+        if not menu_df.empty:
+            # Use form to avoid layout issues
+            with st.form("feedback_form"):
+                item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
+                feedback = st.text_area("Your feedback:", key="feedback_text")
+                rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                submitted = st.form_submit_button("Submit Feedback")
+                if submitted:
+                    if feedback:
+                        save_feedback(item_choice, feedback, rating, user["username"])
+                        st.success("✅ Feedback submitted!")
                     else:
-                        st.info("No past orders yet.")
-                else:
-                    st.info("No past orders yet.")
-            else:
-                st.info("Guests cannot save order history.")
+                        st.warning("Feedback cannot be empty.")
+    else:
+        st.info("Guests cannot submit feedback.")
 
-            st.divider()
-            if st.button("🚪 Log Out"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.experimental_rerun()
+    st.divider()
+    st.subheader("📢 Notifications")
+    for i, note in enumerate(st.session_state.notifications):
+        st.info(note, key=f"notif_{i}")
+    if st.button("Clear notifications", key="clear_notifs"):
+        st.session_state.notifications.clear()
+
+    st.divider()
+    st.subheader("📜 Order History")
+    if not is_guest:
+        history = load_receipts_df()
+        if not history.empty and "user_id" in history.columns:
+            user_orders = history[history["user_id"] == user["username"]]
+            if not user_orders.empty:
+                st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+            else:
+                st.info("No past orders yet.")
+        else:
+            st.info("No past orders yet.")
+    else:
+        st.info("Guests cannot save order history.")
+
+    st.divider()
+    if st.button("🚪 Log Out"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.experimental_rerun()
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
