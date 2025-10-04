@@ -445,81 +445,6 @@ elif st.session_state.page == "signup":
 
     if st.button("Back to Login"):
         st.session_state.page = "login"
-# ---------------------------
-# MAIN PORTAL (Staff / Non-Staff / Guest)
-# ---------------------------
-elif st.session_state.page == "main":
-    if "user" not in st.session_state or not st.session_state.user:
-        st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
-
-    user = st.session_state.user
-    role = user.get("role", "Guest")
-    is_guest = (role == "Guest")
-
-    st.title(f"🏫 Welcome {user['username']} to BiteHub")
-
-    # ---------- STAFF PORTAL ----------
-    if role == "Staff":
-        if "staff_choice" not in st.session_state:
-            st.session_state.staff_choice = "Dashboard"
-
-        st.session_state.staff_choice = st.sidebar.radio(
-            "Staff Menu",
-            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-                st.session_state.staff_choice
-            )
-        )
-        choice = st.session_state.staff_choice
-
-        if choice == "Dashboard":
-            st.subheader("📊 Staff Dashboard")
-            st.info("Metrics and KPIs coming soon.")
-
-        elif choice == "Pending Orders":
-            st.subheader("📦 Pending Orders")
-            receipts = load_receipts_df()
-            pending_orders = receipts[receipts["status"]=="Pending"] if not receipts.empty else pd.DataFrame()
-            if not pending_orders.empty:
-                st.dataframe(pending_orders, use_container_width=True)
-            else:
-                st.info("No pending orders.")
-
-        elif choice == "Manage Menu":
-            st.subheader("📖 Manage Menu")
-            menu_df = load_menu()
-            if not menu_df.empty:
-                menu_edit_df = menu_df.copy()
-                menu_edit_df["PRICE"] = menu_edit_df["PRICE"].astype(float)
-                edited = st.experimental_data_editor(menu_edit_df, num_rows="dynamic")
-                if st.button("Save Menu Updates"):
-                    upsert_menu(edited)
-                    st.success("Menu updated successfully!")
-                    st.experimental_rerun()
-            else:
-                st.info("No menu items available.")
-
-        elif choice == "AI Assistant":
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:", key="staff_ai_q")
-            if st.button("Ask AI", key="ask_ai_staff"):
-                st.write(run_ai(q))
-
-        elif choice == "Feedback Review":
-            st.subheader("📢 Feedback Review")
-            fb = load_feedbacks_df()
-            if not fb.empty:
-                st.dataframe(fb, use_container_width=True)
-            else:
-                st.info("No feedbacks yet.")
-
-        elif choice == "Sales Report":
-            st.subheader("💰 Sales Report")
-            receipts = load_receipts_df()
-            if not receipts.empty:
-                st.dataframe(receipts, use_container_width=True)
-            else:
-                st.info("No sales yet.")
 # ---------- NON-STAFF & GUEST PORTAL ----------
 if st.session_state.page == "main" and role != "Staff":
     user = st.session_state.user
@@ -605,7 +530,151 @@ if st.session_state.page == "main" and role != "Staff":
                     st.experimental_rerun()
             elif not is_guest:
                 st.info("Your cart is empty.")
-    
+You sent
+# ---------------------------
+# MAIN PORTAL (Staff / Non-Staff / Guest)
+# ---------------------------
+elif st.session_state.page == "main":
+    if "user" not in st.session_state or not st.session_state.user:
+        st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
+
+    user = st.session_state.user
+    role = user.get("role", "Guest")
+    is_guest = (role == "Guest")
+
+    st.title(f"🏫 Welcome {user['username']} to BiteHub")
+
+    # ---------- STAFF PORTAL ----------
+    if role == "Staff":
+        if "staff_choice" not in st.session_state:
+            st.session_state.staff_choice = "Dashboard"
+
+        st.session_state.staff_choice = st.sidebar.radio(
+            "Staff Menu",
+            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
+                st.session_state.staff_choice
+            )
+        )
+        choice = st.session_state.staff_choice
+
+        if choice == "Dashboard":
+            st.subheader("📊 Staff Dashboard")
+            st.info("Metrics and KPIs coming soon.")
+
+        elif choice == "Pending Orders":
+            st.subheader("📦 Pending Orders")
+            receipts = load_receipts_df()
+            pending_orders = receipts[receipts["status"]=="Pending"] if not receipts.empty else pd.DataFrame()
+            if not pending_orders.empty:
+                st.dataframe(pending_orders, use_container_width=True)
+            else:
+                st.info("No pending orders.")
+
+        elif choice == "Manage Menu":
+            st.subheader("📖 Manage Menu")
+            menu_df = load_menu()
+            if not menu_df.empty:
+                menu_edit_df = menu_df.copy()
+                menu_edit_df["PRICE"] = menu_edit_df["PRICE"].astype(float)
+                edited = st.experimental_data_editor(menu_edit_df, num_rows="dynamic")
+                if st.button("Save Menu Updates"):
+                    upsert_menu(edited)
+                    st.success("Menu updated successfully!")
+                    st.experimental_rerun()
+            else:
+                st.info("No menu items available.")
+
+        elif choice == "AI Assistant":
+            st.subheader("🤖 AI Assistant")
+            q = st.text_area("Ask AI something:", key="staff_ai_q")
+            if st.button("Ask AI", key="ask_ai_staff"):
+                st.write(run_ai(q))
+
+        elif choice == "Feedback Review":
+            st.subheader("📢 Feedback Review")
+            fb = load_feedbacks_df()
+            if not fb.empty:
+                st.dataframe(fb, use_container_width=True)
+            else:
+                st.info("No feedbacks yet.")
+
+        elif choice == "Sales Report":
+            st.subheader("💰 Sales Report")
+            receipts = load_receipts_df()
+            if not receipts.empty:
+                st.dataframe(receipts, use_container_width=True)
+            else:
+                st.info("No sales yet.")
+
+    # ---------- NON-STAFF & GUEST PORTAL ----------
+    else:
+        # Ensure session state keys exist
+        if "cart" not in st.session_state:
+            st.session_state.cart = {}
+        if "notifications" not in st.session_state:
+            st.session_state.notifications = []
+            
+        # Load menu
+        menu_df = load_menu()  # or your example menu
+
+        # Create two columns
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # 🤖 AI Assistant
+            st.subheader("🤖 AI Assistant")
+            ai_question = st.text_area("Ask AI something:", key="ai_q", height=100)
+            if st.button("Ask AI", key="ask_ai"):
+                st.write(run_ai(ai_question))
+            
+            st.divider()
+
+            # 📖 Menu & Ordering (White Card)
+            with st.container():
+                st.markdown(
+                    """
+                    <div style='background-color:white; padding:15px; border-radius:10px;'>
+                    <h3 style='margin-bottom:10px;'>📖 Menu & Ordering</h3>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                if not menu_df.empty:
+                    for idx, row in menu_df.iterrows():
+                        cat_col, item_col, price_col, cart_col = st.columns([2,3,1,1], gap="small")
+                        cat_col.write(row["CATEGORY"])
+                        item_col.write(row["ITEM"])
+                        price_col.write(f"₱{row['PRICE']}")
+                        
+                        if cart_col.button("Add", key=f"Add_{idx}"):
+                            item = row["ITEM"]
+                            price = row["PRICE"]
+                            if item in st.session_state.cart:
+                                st.session_state.cart[item]["qty"] += 1
+                            else:
+                                st.session_state.cart[item] = {"qty": 1, "price": price}
+                else:
+                    st.info("No menu items available.")
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # 🛒 Cart & Payment
+                if st.session_state.cart:
+                    st.subheader("🛒 Cart")
+                    cart_df = pd.DataFrame([
+                        {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
+                        for k, v in st.session_state.cart.items()
+                    ])
+                    st.dataframe(cart_df, use_container_width=True)
+                    total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
+                    st.markdown(f"Total: ₱{total}")
+                    if st.button("Proceed to Payment"):
+                        st.session_state.page = "payment"
+                        st.experimental_rerun()
+                else:
+                    st.info("Your cart is empty.")
+                    
 # -------- RIGHT COLUMN: Sentiment, Feedback, Notifications, Order History --------
 with col2:
     st.subheader("🧠 Sentiment Analysis")
