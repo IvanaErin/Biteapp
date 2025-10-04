@@ -529,21 +529,14 @@ else:
     if "notifications" not in st.session_state:
         st.session_state.notifications = []
 
-    # Load menu once
+    # Load menu
     menu_df = load_menu()
 
     # Create two columns
     col1, col2 = st.columns([1, 1])
 
-    # -------- LEFT: AI + Menu & Ordering + Cart + Payment --------
+    # -------- LEFT: Menu & Ordering + Cart + Payment --------
     with col1:
-        # AI Assistant
-        st.subheader("🤖 AI Assistant")
-        q = st.text_area("Ask AI something:", key="user_ai_q")
-        if st.button("Ask AI", key="ask_ai_user"):
-            st.write(run_ai(q))
-
-        st.divider()
         st.subheader("📖 Menu & Ordering")
 
         if not menu_df.empty:
@@ -551,19 +544,25 @@ else:
             for cat in categories:
                 st.markdown(f"### {cat}")
                 cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
-                st.dataframe(cat_items, use_container_width=True)
 
+                # Table headers
+                cols = st.columns([3, 2, 2])
+                cols[0].markdown("**Item**")
+                cols[1].markdown("**Price**")
+                cols[2].markdown("**Qty / Insert Cart**")
+
+                # Rows per item
                 for idx, row in cat_items.iterrows():
-                    item_name = row["ITEM"]
-                    price = row["PRICE"]
-                    qty = st.number_input(f"Qty for {item_name}", min_value=0, value=0, step=1, key=f"{cat}_{item_name}")
+                    cols = st.columns([3, 2, 2])
+                    cols[0].write(row["ITEM"])
+                    cols[1].write(f"₱{row['PRICE']}")
+                    qty = cols[2].number_input(f"Qty_{cat}_{row['ITEM']}", min_value=0, value=0, step=1, key=f"{cat}_{row['ITEM']}")
                     if qty > 0:
-                        # Add/update cart
-                        st.session_state.cart[item_name] = {"qty": qty, "price": price}
+                        st.session_state.cart[row["ITEM"]] = {"qty": qty, "price": row["PRICE"]}
         else:
             st.info("No menu items available.")
 
-        # Show current cart
+        # Show cart
         if st.session_state.cart:
             st.subheader("🛒 Cart")
             cart_df = pd.DataFrame([
