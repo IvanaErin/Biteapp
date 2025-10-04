@@ -609,7 +609,6 @@ if "cart" in st.session_state and st.session_state.cart:
         st.experimental_rerun()
 else:
     st.info("Your cart is empty.")
-
         with col2:
             st.subheader("⭐ Feedbacks")
             if not is_guest:
