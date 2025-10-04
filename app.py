@@ -520,66 +520,50 @@ elif st.session_state.page == "main":
                 st.dataframe(receipts, use_container_width=True)
             else:
                 st.info("No sales yet.")
-# ---------- NON-STAFF & GUEST PORTAL ----------
-if st.session_state.page == "main" and role != "Staff":
-    user = st.session_state.user
-    role = user.get("role", "Guest")
-    is_guest = (role == "Guest")
 
+# ---------- NON-STAFF & GUEST PORTAL ----------
+else:
     # Ensure session state keys exist
     if "cart" not in st.session_state:
         st.session_state.cart = {}
     if "notifications" not in st.session_state:
         st.session_state.notifications = []
 
-    # Load menu
+    # Load menu once
     menu_df = load_menu()
 
     # Create two columns
     col1, col2 = st.columns([1, 1])
 
-    # -------- LEFT COLUMN: AI, Menu, Cart/Payment --------
+    # -------- LEFT: AI + Menu & Ordering + Cart + Payment --------
     with col1:
         # AI Assistant
         st.subheader("🤖 AI Assistant")
-        ai_question = st.text_area("Ask AI something:", key="ai_q", height=100)
-        if st.button("Ask AI", key="ask_ai"):
-            st.write(run_ai(ai_question))
+        q = st.text_area("Ask AI something:", key="user_ai_q")
+        if st.button("Ask AI", key="ask_ai_user"):
+            st.write(run_ai(q))
 
         st.divider()
-
-        # Menu & Ordering
         st.subheader("📖 Menu & Ordering")
+
         if not menu_df.empty:
             categories = menu_df["CATEGORY"].unique()
             for cat in categories:
                 st.markdown(f"### {cat}")
                 cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
+                st.dataframe(cat_items, use_container_width=True)
 
-                # Table headers
-                cols = st.columns([3, 2, 2])
-                cols[0].markdown("**Item**")
-                cols[1].markdown("**Price**")
-                cols[2].markdown("**Qty / Insert Cart**")
-
-                # Item rows
                 for idx, row in cat_items.iterrows():
-                    cols = st.columns([3, 2, 2])
-                    cols[0].write(row["ITEM"])
-                    cols[1].write(f"₱{row['PRICE']}")
-                    qty = cols[2].number_input(
-                        f"Qty_{cat}_{row['ITEM']}",
-                        min_value=0,
-                        value=0,
-                        step=1,
-                        key=f"{cat}_{row['ITEM']}"
-                    )
+                    item_name = row["ITEM"]
+                    price = row["PRICE"]
+                    qty = st.number_input(f"Qty for {item_name}", min_value=0, value=0, step=1, key=f"{cat}_{item_name}")
                     if qty > 0:
-                        st.session_state.cart[row["ITEM"]] = {"qty": qty, "price": row["PRICE"]}
+                        # Add/update cart
+                        st.session_state.cart[item_name] = {"qty": qty, "price": price}
         else:
             st.info("No menu items available.")
 
-        # Cart & Payment
+        # Show current cart
         if st.session_state.cart:
             st.subheader("🛒 Cart")
             cart_df = pd.DataFrame([
@@ -591,27 +575,12 @@ if st.session_state.page == "main" and role != "Staff":
             st.markdown(f"*Total: ₱{total}*")
             if st.button("Proceed to Payment"):
                 st.session_state.page = "payment"
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.info("Your cart is empty.")
 
-    # -------- RIGHT COLUMN: Sentiment, Feedback, Notifications, Order History --------
+    # -------- RIGHT: Feedback + Notifications + Order History --------
     with col2:
-        # Sentiment Analysis
-        st.subheader("🧠 Sentiment Analysis")
-        if not menu_df.empty:
-            feedbacks_df = load_feedbacks_df()
-            for item in menu_df["ITEM"].unique():
-                item_feedbacks = feedbacks_df[feedbacks_df["item"] == item]
-                if not item_feedbacks.empty:
-                    feedback_texts = "\n".join(item_feedbacks["feedback"].tolist())
-                    result = run_ai(f"Analyze sentiment of these reviews:\n{feedback_texts}")
-                    st.markdown(f"**{item}:** {result}")
-                else:
-                    st.markdown(f"**{item}:** No feedback yet.")
-                st.divider()
-
-        # Feedback Form
         st.subheader("⭐ Feedbacks")
         if not is_guest:
             if not menu_df.empty:
@@ -632,8 +601,6 @@ if st.session_state.page == "main" and role != "Staff":
             st.info("Guests cannot submit feedback.")
 
         st.divider()
-
-        # Notifications
         st.subheader("📢 Notifications")
         if st.session_state.notifications:
             for i, note in enumerate(st.session_state.notifications):
@@ -644,8 +611,6 @@ if st.session_state.page == "main" and role != "Staff":
             st.session_state.notifications.clear()
 
         st.divider()
-
-        # Order History
         st.subheader("📜 Order History")
         if not is_guest:
             history = load_receipts_df()
@@ -661,8 +626,6 @@ if st.session_state.page == "main" and role != "Staff":
             st.info("Guests cannot save order history.")
 
         st.divider()
-
-        # Logout
         if st.button("🚪 Log Out"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
