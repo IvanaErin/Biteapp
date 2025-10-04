@@ -613,8 +613,9 @@ with col2:
             st.markdown(f"**{item_choice}:** {result}")
         else:
             st.markdown(f"**{item_choice}:** No feedback yet.")
-            
-                st.divider()
+        
+        # Divider should align with the outer 'if', not inside else
+        st.divider()
 
         # Feedback Form
         st.subheader("⭐ Feedbacks")
