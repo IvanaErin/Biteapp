@@ -547,53 +547,62 @@ if st.session_state.page == "main" and role != "Staff":
             st.write(run_ai(ai_question))
 
         st.divider()
+        
+# Menu & Ordering
+st.subheader("📖 Menu & Ordering")
+if not menu_df.empty:
+    categories = menu_df["CATEGORY"].unique()
+    for cat in categories:
+        with st.expander(cat, expanded=True):  # collapsible categories for more compact layout
+            cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
 
-        # Menu & Ordering
-        st.subheader("📖 Menu & Ordering")
-        if not menu_df.empty:
-            categories = menu_df["CATEGORY"].unique()
-            for cat in categories:
-                st.markdown(f"### {cat}")
-                cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
+            # Table headers
+            header_cols = st.columns([3, 2, 2])
+            header_cols[0].markdown("**Item**")
+            header_cols[1].markdown("**Price**")
+            header_cols[2].markdown("**Qty / Insert Cart**")
 
-                # Table headers
-                cols = st.columns([3, 2, 2])
-                cols[0].markdown("**Item**")
-                cols[1].markdown("**Price**")
-                cols[2].markdown("**Qty / Insert Cart**")
+            # Item rows
+            for idx, row in cat_items.iterrows():
+                item_col, price_col, action_col = st.columns([3, 2, 2])
+                item_col.write(row["ITEM"])
+                price_col.write(f"₱{row['PRICE']}")
 
-                # Item rows
-                for idx, row in cat_items.iterrows():
-                    cols = st.columns([3, 2, 2])
-                    cols[0].write(row["ITEM"])
-                    cols[1].write(f"₱{row['PRICE']}")
-                    qty = cols[2].number_input(
-                        f"Qty_{cat}_{row['ITEM']}",
-                        min_value=0,
-                        value=0,
-                        step=1,
-                        key=f"{cat}_{row['ITEM']}"
-                    )
-                    if qty > 0:
+                # Quantity input
+                qty_key = f"Qty_{cat}_{row['ITEM']}"
+                qty = action_col.number_input(
+                    "",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key=qty_key
+                )
+
+                # Add button
+                if action_col.button("Add", key=f"Add_{cat}_{row['ITEM']}"):
+                    if row["ITEM"] in st.session_state.cart:
+                        st.session_state.cart[row["ITEM"]]["qty"] += qty
+                    else:
                         st.session_state.cart[row["ITEM"]] = {"qty": qty, "price": row["PRICE"]}
-        else:
-            st.info("No menu items available.")
 
-        # Cart & Payment
-        if st.session_state.cart:
-            st.subheader("🛒 Cart")
-            cart_df = pd.DataFrame([
-                {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
-                for k, v in st.session_state.cart.items()
-            ])
-            st.dataframe(cart_df, use_container_width=True)
-            total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
-            st.markdown(f"*Total: ₱{total}*")
-            if st.button("Proceed to Payment"):
-                st.session_state.page = "payment"
-                st.experimental_rerun()
-        else:
-            st.info("Your cart is empty.")
+else:
+    st.info("No menu items available.")
+
+# Cart & Payment
+if st.session_state.cart:
+    st.subheader("🛒 Cart")
+    cart_df = pd.DataFrame([
+        {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
+        for k, v in st.session_state.cart.items()
+    ])
+    st.dataframe(cart_df, use_container_width=True)
+    total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
+    st.markdown(f"*Total: ₱{total}*")
+    if st.button("Proceed to Payment"):
+        st.session_state.page = "payment"
+        st.experimental_rerun()
+else:
+    st.info("Your cart is empty.")
 
 # -------- RIGHT COLUMN: Sentiment, Feedback, Notifications, Order History --------
 with col2:
