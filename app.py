@@ -548,19 +548,28 @@ with col1:
         st.write(run_ai(ai_question))
     st.divider()
 
-    # ---------------------------
-    # 📖 Menu & Ordering (Compact Table)
-    # ---------------------------
-    st.subheader("📖 Menu & Ordering")
+# ---------------------------
+# 📖 Menu & Ordering (White Card, Compact)
+# ---------------------------
+with st.container():
+    # White background container for menu
+    st.markdown(
+        """
+        <div style='background-color:white; padding:15px; border-radius:10px;'>
+        <h3 style='margin-bottom:10px;'>📖 Menu & Ordering</h3>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     if not menu_df.empty:
-        # Use smaller columns to save vertical space
         for idx, row in menu_df.iterrows():
+            # Use smaller gaps to save space
             cat_col, item_col, price_col, cart_col = st.columns([2, 3, 1, 1], gap="small")
             cat_col.write(row["CATEGORY"])
             item_col.write(row["ITEM"])
             price_col.write(f"₱{row['PRICE']}")
-            
+
             if cart_col.button("Add", key=f"Add_{idx}"):
                 item = row["ITEM"]
                 price = row["PRICE"]
