@@ -521,7 +521,11 @@ elif st.session_state.page == "main":
             else:
                 st.info("No sales yet.")
 # ---------- NON-STAFF & GUEST PORTAL ----------
-if role != "Staff":
+if st.session_state.page == "main" and role != "Staff":
+    user = st.session_state.user
+    role = user.get("role", "Guest")
+    is_guest = (role == "Guest")
+
     # Ensure session state keys exist
     if "cart" not in st.session_state:
         st.session_state.cart = {}
@@ -534,23 +538,25 @@ if role != "Staff":
     # Create two columns
     col1, col2 = st.columns([1, 1])
 
-    # -------- LEFT: Menu & Ordering + Cart + Payment --------
+    # -------- LEFT COLUMN: AI, Menu, Cart/Payment --------
     with col1:
-        st.subheader("📖 Menu & Ordering")
+        st.subheader("🤖 AI Assistant")
+        ai_question = st.text_area("Ask AI something:", key="ai_q")
+        if st.button("Ask AI", key="ask_ai"):
+            st.write(run_ai(ai_question))
 
+        st.divider()
+        st.subheader("📖 Menu & Ordering")
         if not menu_df.empty:
             categories = menu_df["CATEGORY"].unique()
             for cat in categories:
                 st.markdown(f"### {cat}")
                 cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
-
-                # Table headers
                 cols = st.columns([3, 2, 2])
                 cols[0].markdown("**Item**")
                 cols[1].markdown("**Price**")
                 cols[2].markdown("**Qty / Insert Cart**")
 
-                # Rows per item
                 for idx, row in cat_items.iterrows():
                     cols = st.columns([3, 2, 2])
                     cols[0].write(row["ITEM"])
@@ -561,7 +567,7 @@ if role != "Staff":
         else:
             st.info("No menu items available.")
 
-        # Show cart
+        # Cart & Payment
         if st.session_state.cart:
             st.subheader("🛒 Cart")
             cart_df = pd.DataFrame([{"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]} 
@@ -575,8 +581,20 @@ if role != "Staff":
         else:
             st.info("Your cart is empty.")
 
-    # -------- RIGHT: Feedback + Notifications + Order History --------
+    # -------- RIGHT COLUMN: Sentiment, Feedback, Notifications, Order History --------
     with col2:
+        st.subheader("🧠 Sentiment Analysis")
+        if not menu_df.empty:
+            with st.form("sentiment_form"):
+                sentiment_item = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="sentiment_item")
+                sentiment_text = st.text_area("Your text for sentiment analysis:", key="sentiment_text")
+                submitted_sentiment = st.form_submit_button("Analyze Sentiment")
+                if submitted_sentiment and sentiment_text:
+                    # You can use AI to analyze sentiment here
+                    result = run_ai(f"Analyze sentiment: {sentiment_text}")
+                    st.info(result)
+
+        st.divider()
         st.subheader("⭐ Feedbacks")
         if not is_guest:
             if not menu_df.empty:
@@ -611,7 +629,6 @@ if role != "Staff":
         if not is_guest:
             history = load_receipts_df()
             if not history.empty and "user_id" in history.columns:
-                # Match user_id correctly: if you store username, use it; if numeric id, fetch id
                 user_orders = history[history["user_id"] == user["username"]]
                 if not user_orders.empty:
                     st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
