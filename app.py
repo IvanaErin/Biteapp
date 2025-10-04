@@ -541,107 +541,116 @@ elif st.session_state.page == "main":
                 st.info("No sales yet.")
 
     # ---------- NON-STAFF & GUEST PORTAL ----------
-else:
-    if "cart" not in st.session_state:
-        st.session_state.cart = {}
-    if "notifications" not in st.session_state:
-        st.session_state.notifications = []
+    else:
+        if "cart" not in st.session_state:
+            st.session_state.cart = {}
+        if "notifications" not in st.session_state:
+            st.session_state.notifications = []
 
-    menu_df = load_menu()
-    col1, col2 = st.columns([1, 1])
+        menu_df = load_menu()
+        col1, col2 = st.columns([1, 1])
 
-    # ---------------------------
-    # LEFT SIDE: AI ASSISTANT
-    # ---------------------------
-    with col1:
-        st.subheader("🤖 AI Assistant")
-        q = st.text_area("Ask AI something:", key="user_ai_q")
-        if st.button("Ask AI", key="ask_ai_user"):
-            st.write(run_ai(q))
+        # ---------------------------
+        # LEFT SIDE: AI ASSISTANT
+        # ---------------------------
+        with col1:
+            st.subheader("🤖 AI Assistant")
+            q = st.text_area("Ask AI something:", key="user_ai_q")
+            if st.button("Ask AI", key="ask_ai_user"):
+                st.write(run_ai(q))
 
-    # ---------------------------
-    # RIGHT SIDE: MENU + CART
-    # ---------------------------
-    with col2:
-        st.subheader("📖 Menu & Ordering")
+        # ---------------------------
+        # RIGHT SIDE: MENU + CART
+        # ---------------------------
+        with col2:
+            st.subheader("📖 Menu & Ordering")
+
+            if not menu_df.empty:
+                categories = menu_df["CATEGORY"].unique()
+                for cat in categories:
+                    st.markdown(f"### 🍽️ {cat}")
+                    cat_df = menu_df[menu_df["CATEGORY"] == cat]
+
+                    for _, row in cat_df.iterrows():
+                        colA, colB, colC = st.columns([3, 2, 1])
+                        with colA:
+                            st.write(row["ITEM"])
+                        with colB:
+                            st.write(f"₱{row['PRICE']}")
+                        with colC:
+                            if st.button("➕ Add", key=f"add_{cat}_{row['ITEM']}"):
+                                if row["ITEM"] in st.session_state.cart:
+                                    st.session_state.cart[row["ITEM"]]["qty"] += 1
+                                else:
+                                    st.session_state.cart[row["ITEM"]] = {
+                                        "qty": 1,
+                                        "price": row["PRICE"]
+                                    }
+                                st.success(f"Added {row['ITEM']} to cart!")
+
+                # ---------------------------
+                # CART DISPLAY
+                # ---------------------------
+                if st.session_state.cart:
+                    st.divider()
+                    st.subheader("🛒 Your Cart")
+
+                    cart_data = []
+                    total_price = 0
+                    for item, details in st.session_state.cart.items():
+                        subtotal = details["qty"] * details["price"]
+                        total_price += subtotal
+                        cart_data.append({
+                            "Item": item,
+                            "Quantity": details["qty"],
+                            "Price": f"₱{details['price']}",
+                            "Subtotal": f"₱{subtotal}"
+                        })
+
+                    st.dataframe(pd.DataFrame(cart_data))
+                    st.markdown(f"### 💵 Total: ₱{total_price}")
+
+                    colX, colY = st.columns([1, 1])
+                    with colX:
+                        if st.button("🧾 Checkout"):
+                            st.success("✅ Order placed successfully!")
+                            st.session_state.cart.clear()
+                    with colY:
+                        if st.button("❌ Clear Cart"):
+                            st.session_state.cart.clear()
+                            st.info("Cart cleared.")
+                else:
+                    st.info("Your cart is empty.")
+            else:
+                st.info("No menu items available.")
+
+        # ---------------------------
+        # FEEDBACK SECTION (MOVED INSIDE)
+        # ---------------------------
+        st.divider()
+        st.subheader("⭐ Feedbacks")
 
         if not menu_df.empty:
-            categories = menu_df["CATEGORY"].unique()
-
-            for cat in categories:
-                st.markdown(f"### 🍽️ {cat}")
-                cat_df = menu_df[menu_df["CATEGORY"] == cat]
-
-                for _, row in cat_df.iterrows():
-                    colA, colB, colC = st.columns([3, 2, 1])
-                    with colA:
-                        st.write(row["ITEM"])
-                    with colB:
-                        st.write(f"₱{row['PRICE']}")
-                    with colC:
-                        if st.button("➕ Add", key=f"add_{cat}_{row['ITEM']}"):
-                            if row["ITEM"] in st.session_state.cart:
-                                st.session_state.cart[row["ITEM"]]["qty"] += 1
-                            else:
-                                st.session_state.cart[row["ITEM"]] = {"qty": 1, "price": row["PRICE"]}
-                            st.success(f"Added {row['ITEM']} to cart!")
-
-            # ---------------------------
-            # CART DISPLAY
-            # ---------------------------
-            if st.session_state.cart:
-                st.divider()
-                st.subheader("🛒 Your Cart")
-
-                cart_data = []
-                total_price = 0
-                for item, details in st.session_state.cart.items():
-                    subtotal = details["qty"] * details["price"]
-                    total_price += subtotal
-                    cart_data.append({
-                        "Item": item,
-                        "Quantity": details["qty"],
-                        "Price": f"₱{details['price']}",
-                        "Subtotal": f"₱{subtotal}"
-                    })
-
-                st.dataframe(pd.DataFrame(cart_data))
-                st.markdown(f"### 💵 Total: ₱{total_price}")
-
-                colX, colY = st.columns([1, 1])
-                with colX:
-                    if st.button("🧾 Checkout"):
-                        st.success("✅ Order placed successfully!")
-                        st.session_state.cart.clear()
-                with colY:
-                    if st.button("❌ Clear Cart"):
-                        st.session_state.cart.clear()
-                        st.info("Cart cleared.")
-            else:
-                st.info("Your cart is empty.")
+            with st.form("feedback_form"):
+                item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
+                feedback = st.text_area("Your feedback:", key="feedback_text")
+                rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                submitted = st.form_submit_button("Submit Feedback")
+                if submitted:
+                    if feedback:
+                        save_feedback(item_choice, feedback, rating, user["username"])
+                        st.success("✅ Feedback submitted!")
+                    else:
+                        st.warning("Feedback cannot be empty.")
         else:
-            st.info("No menu items available.")
+            st.info("Menu is empty. Feedback cannot be submitted.")
 
-# ---------------------------
-# FEEDBACK SECTION (GLOBAL)
-# ---------------------------
-st.divider()
-st.subheader("⭐ Feedbacks")
-
-if not menu_df.empty:
-    with st.form("feedback_form"):
-        item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
-        feedback = st.text_area("Your feedback:", key="feedback_text")
-        rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
-        submitted = st.form_submit_button("Submit Feedback")
-        if submitted:
-            if feedback:
-                save_feedback(item_choice, feedback, rating, user["username"])
-                st.success("✅ Feedback submitted!")
-            else:
-                st.warning("Feedback cannot be empty.")
-else:
-    st.info("Menu is empty. Feedback cannot be submitted.")
+        st.divider()
+        if st.button("🚪 Log Out"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.session_state.page = "login"
+            st.rerun()
 
 # ---------------------------
 # NOTIFICATIONS (GLOBAL)
