@@ -612,26 +612,25 @@ if "cart" in st.session_state and st.session_state.cart:
 else:
     st.info("Your cart is empty.")
 
-# Feedbacks Section in col2
 with col2:
     st.subheader("⭐ Feedbacks")
-       if not is_guest:
-                if not menu_df.empty:
-                    with st.form("feedback_form"):
-                        item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
-                        feedback = st.text_area("Your feedback:", key="feedback_text")
-                        rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
-                        submitted = st.form_submit_button("Submit Feedback")
-                        if submitted:
-                            if feedback:
-                                save_feedback(item_choice, feedback, rating, user["username"])
-                                st.success("✅ Feedback submitted!")
-                            else:
-                                st.warning("Feedback cannot be empty.")
-                else:
-                    st.info("Menu is empty. Feedback cannot be submitted.")
-            else:
-                st.info("Guests cannot submit feedback.")
+    if not is_guest:
+        if not menu_df.empty:
+            with st.form("feedback_form"):
+                item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
+                feedback = st.text_area("Your feedback:", key="feedback_text")
+                rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                submitted = st.form_submit_button("Submit Feedback")
+                if submitted:
+                    if feedback:
+                        save_feedback(item_choice, feedback, rating, user["username"])
+                        st.success("✅ Feedback submitted!")
+                    else:
+                        st.warning("Feedback cannot be empty.")
+        else:
+            st.info("Menu is empty. Feedback cannot be submitted.")
+    else:
+        st.info("Guests cannot submit feedback.")
 
             st.divider()
             st.subheader("📢 Notifications")
