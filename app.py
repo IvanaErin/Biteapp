@@ -632,37 +632,37 @@ with col2:
     else:
         st.info("Guests cannot submit feedback.")
 
-            st.divider()
-            st.subheader("📢 Notifications")
-            if st.session_state.notifications:
-                for i, note in enumerate(st.session_state.notifications):
-                    st.info(note, key=f"notif_{i}")
+    # ✅ These lines were over-indented before
+    st.divider()
+    st.subheader("📢 Notifications")
+    if st.session_state.notifications:
+        for i, note in enumerate(st.session_state.notifications):
+            st.info(note, key=f"notif_{i}")
+    else:
+        st.info("No notifications.")
+    if st.button("Clear notifications", key="clear_notifs"):
+        st.session_state.notifications.clear()
+
+    st.divider()
+    st.subheader("📜 Order History")
+    if not is_guest:
+        history = load_receipts_df()
+        if not history.empty and "user_id" in history.columns:
+            user_orders = history[history["user_id"] == user["username"]]
+            if not user_orders.empty:
+                st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
             else:
-                st.info("No notifications.")
-            if st.button("Clear notifications", key="clear_notifs"):
-                st.session_state.notifications.clear()
+                st.info("No past orders yet.")
+        else:
+            st.info("No past orders yet.")
+    else:
+        st.info("Guests cannot save order history.")
 
-            st.divider()
-            st.subheader("📜 Order History")
-            if not is_guest:
-                history = load_receipts_df()
-                if not history.empty and "user_id" in history.columns:
-                    user_orders = history[history["user_id"] == user["username"]]
-                    if not user_orders.empty:
-                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                    else:
-                        st.info("No past orders yet.")
-                else:
-                    st.info("No past orders yet.")
-            else:
-                st.info("Guests cannot save order history.")
-
-            st.divider()
-            if st.button("🚪 Log Out"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
-
+    st.divider()
+    if st.button("🚪 Log Out"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
 # ---------------------------
 # PAYMENT PAGE
