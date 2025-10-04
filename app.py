@@ -535,7 +535,7 @@ if st.session_state.page == "main" and role != "Staff":
 # Load menu
 menu_df = load_menu()  # or your example menu
 
-# Create two columns
+# Create two columns (AI on left, menu on right if needed)
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -555,13 +555,14 @@ with col1:
     with st.container():
         st.markdown(
             """
-            <div style='background-color:white; padding:15px; border-radius:10px;'>
+            <div style='background-color:white; padding:15px; border-radius:10px; 
+                        box-shadow:0 2px 6px rgba(0,0,0,0.1); margin-bottom:20px;'>
             <h3 style='margin-bottom:10px;'>📖 Menu & Ordering</h3>
             """,
             unsafe_allow_html=True
         )
 
-        # Menu table inside the white box
+        # Menu items inside white box
         if not menu_df.empty:
             for idx, row in menu_df.iterrows():
                 cat_col, item_col, price_col, cart_col = st.columns([2,3,1,1], gap="small")
@@ -581,7 +582,7 @@ with col1:
         else:
             st.info("No menu items available.")
 
-        st.markdown("</div>", unsafe_allow_html=True)  # Close white box
+        st.markdown("</div>", unsafe_allow_html=True)  # close white box
 
         # ---------------------------
         # 🛒 Cart & Payment
@@ -594,7 +595,7 @@ with col1:
             ])
             st.dataframe(cart_df, use_container_width=True)
             total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
-            st.markdown(f"*Total: ₱{total}*")
+            st.markdown(f"Total: ₱{total}")
             if st.button("Proceed to Payment"):
                 st.session_state.page = "payment"
                 st.experimental_rerun()
