@@ -558,46 +558,57 @@ elif st.session_state.page == "main":
                 st.write(run_ai(q))
 
             st.divider()
-            st.subheader("📖 Menu & Ordering")
+# Menu & Ordering
+st.subheader("📖 Menu & Ordering")
 
-            if not menu_df.empty:
-                categories = menu_df["CATEGORY"].unique()
-                for cat in categories:
-                    st.markdown(f"### {cat}")
-                    cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
-                    st.dataframe(cat_items, use_container_width=True)
+if not menu_df.empty:
+    # Build a structured table with Add buttons
+    menu_display = []
 
-                    for idx, row in cat_items.iterrows():
-                        item_name = row["ITEM"]
-                        price = row["PRICE"]
-                        qty = st.number_input(f"Qty for {item_name}", min_value=0, value=0, step=1, key=f"{cat}_{item_name}")
-                        if qty > 0:
-                            st.session_state.cart[item_name] = {"qty": qty, "price": price}
+    for idx, row in menu_df.iterrows():
+        item_key = f"add_{row['CATEGORY']}_{row['ITEM']}"
+
+        # Create button for each row
+        add_button = st.button("➕ Add", key=item_key)
+
+        if add_button:
+            if "cart" not in st.session_state:
+                st.session_state.cart = {}
+            if row["ITEM"] in st.session_state.cart:
+                st.session_state.cart[row["ITEM"]]["qty"] += 1
             else:
-                st.info("No menu items available.")
+                st.session_state.cart[row["ITEM"]] = {"qty": 1, "price": row["PRICE"]}
 
-            if st.session_state.cart:
-                st.subheader("🛒 Cart")
-                cart_df = pd.DataFrame([
-                    {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"] * v["price"]}
-                    for k, v in st.session_state.cart.items()
-                ])
-                st.dataframe(cart_df, use_container_width=True)
-                total = sum(v["qty"] * v["price"] for v in st.session_state.cart.values())
-                st.markdown(f"*Total: ₱{total}*")
+        menu_display.append({
+            "Category": row["CATEGORY"],
+            "Item": row["ITEM"],
+            "Price": f"₱{row['PRICE']}",
+            "Add": "➕"
+        })
 
-                if st.button("Proceed to Payment"):
-                    st.session_state.page = "payment"
-                    st.session_state.pending_order = {
-                        "order_id": f"ORD{random.randint(1000,9999)}",
-                        "user_id": user["username"],
-                        "items": json.dumps({k: v["qty"] for k, v in st.session_state.cart.items()}),
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "status": "Pending"
-                    }
-                    st.rerun()
-            else:
-                st.info("Your cart is empty.")
+    # Show as dataframe-like table (without real buttons inside)
+    st.dataframe(pd.DataFrame(menu_display).drop(columns=["Add"]), use_container_width=True)
+
+else:
+    st.info("No menu items available.")
+
+# Cart & Payment
+if "cart" in st.session_state and st.session_state.cart:
+    st.subheader("🛒 Cart")
+    cart_df = pd.DataFrame([
+        {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
+        for k, v in st.session_state.cart.items()
+    ])
+    st.dataframe(cart_df, use_container_width=True)
+
+    total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
+    st.markdown(f"### 💰 Total: ₱{total}")
+
+    if st.button("Proceed to Payment"):
+        st.session_state.page = "payment"
+        st.experimental_rerun()
+else:
+    st.info("Your cart is empty.")
 
         with col2:
             st.subheader("⭐ Feedbacks")
