@@ -549,26 +549,25 @@ elif st.session_state.page == "main":
             st.session_state.notifications = []
 
         menu_df = load_menu()
-        col1, col2 = st.columns([1, 1])
+# Define columns
+col1, col2 = st.columns(1,1)
 
-        with col1:
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:", key="user_ai_q")
-            if st.button("Ask AI", key="ask_ai_user"):
-                st.write(run_ai(q))
+# AI Assistant Section
+with col1:
+    st.subheader("🤖 AI Assistant")
+    q = st.text_area("Ask AI something:", key="user_ai_q")
+    if st.button("Ask AI", key="ask_ai_user"):
+        st.write(run_ai(q))
+    st.divider()
 
-            st.divider()
-# Menu & Ordering
+# Menu & Ordering Section
 st.subheader("📖 Menu & Ordering")
-
 if not menu_df.empty:
-    # Build a structured table with Add buttons
     menu_display = []
 
     for idx, row in menu_df.iterrows():
         item_key = f"add_{row['CATEGORY']}_{row['ITEM']}"
 
-        # Create button for each row
         add_button = st.button("➕ Add", key=item_key)
 
         if add_button:
@@ -586,22 +585,25 @@ if not menu_df.empty:
             "Add": "➕"
         })
 
-    # Show as dataframe-like table (without real buttons inside)
     st.dataframe(pd.DataFrame(menu_display).drop(columns=["Add"]), use_container_width=True)
-
 else:
     st.info("No menu items available.")
 
-# Cart & Payment
+# Cart & Payment Section
 if "cart" in st.session_state and st.session_state.cart:
     st.subheader("🛒 Cart")
     cart_df = pd.DataFrame([
-        {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
+        {
+            "Item": k,
+            "Qty": v["qty"],
+            "Price": v["price"],
+            "Subtotal": v["qty"] * v["price"]
+        }
         for k, v in st.session_state.cart.items()
     ])
     st.dataframe(cart_df, use_container_width=True)
 
-    total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
+    total = sum(v["qty"] * v["price"] for v in st.session_state.cart.values())
     st.markdown(f"### 💰 Total: ₱{total}")
 
     if st.button("Proceed to Payment"):
@@ -609,8 +611,10 @@ if "cart" in st.session_state and st.session_state.cart:
         st.experimental_rerun()
 else:
     st.info("Your cart is empty.")
-        with col2:
-            st.subheader("⭐ Feedbacks")
+
+# Feedbacks Section in col2
+with col2:
+    st.subheader("⭐ Feedbacks")
             if not is_guest:
                 if not menu_df.empty:
                     with st.form("feedback_form"):
