@@ -468,6 +468,7 @@ elif st.session_state.page == "signup":
 # MAIN PORTAL (Staff / Non-Staff / Guest)
 # ---------------------------
 elif st.session_state.page == "main":
+    # Ensure user exists in session
     if "user" not in st.session_state or not st.session_state.user:
         st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
 
@@ -477,7 +478,9 @@ elif st.session_state.page == "main":
 
     st.title(f"🏫 Welcome {user['username']} to BiteHub")
 
-    # ---------- STAFF PORTAL ----------
+    # ---------------------------
+    # STAFF PORTAL
+    # ---------------------------
     if role == "Staff":
         if "staff_choice" not in st.session_state:
             st.session_state.staff_choice = "Dashboard"
@@ -485,9 +488,8 @@ elif st.session_state.page == "main":
         st.session_state.staff_choice = st.sidebar.radio(
             "Staff Menu",
             ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-                st.session_state.staff_choice
-            )
+            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"]
+            .index(st.session_state.staff_choice)
         )
         choice = st.session_state.staff_choice
 
@@ -540,65 +542,9 @@ elif st.session_state.page == "main":
             else:
                 st.info("No sales yet.")
 
-# ---------------------------
-# MAIN PORTAL (Staff / Non-Staff / Guest)
-# ---------------------------
-elif st.session_state.page == "main":
-    if "user" not in st.session_state or not st.session_state.user:
-        st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
-
-    user = st.session_state.user
-    role = user.get("role", "Guest")
-    is_guest = (role == "Guest")
-
-    st.title(f"🏫 Welcome {user['username']} to BiteHub")
-
-    # ---------- STAFF PORTAL ----------
-    if role == "Staff":
-        if "staff_choice" not in st.session_state:
-            st.session_state.staff_choice = "Dashboard"
-
-        st.session_state.staff_choice = st.sidebar.radio(
-            "Staff Menu",
-            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-                st.session_state.staff_choice
-            )
-        )
-        choice = st.session_state.staff_choice
-
-        if choice == "Dashboard":
-            st.subheader("📊 Staff Dashboard")
-            st.info("Metrics and KPIs coming soon.")
-
-        elif choice == "Pending Orders":
-            st.subheader("📦 Pending Orders")
-            receipts = load_receipts_df()
-            pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
-            if not pending_orders.empty:
-                st.dataframe(pending_orders, use_container_width=True)
-            else:
-                st.info("No pending orders.")
-        
-        elif choice == "Manage Menu":
-            st.subheader("📖 Manage Menu")
-            st.info("Menu management tools go here.")
-
-        elif choice == "AI Assistant":
-            st.subheader("🤖 Staff AI Assistant")
-            q = st.text_area("Ask AI something:", key="staff_ai_q")
-            if st.button("Ask AI", key="ask_ai_staff"):
-                st.write(run_ai(q))
-
-        elif choice == "Feedback Review":
-            st.subheader("⭐ Customer Feedback Review")
-            st.info("Feedback data loading soon.")
-
-        elif choice == "Sales Report":
-            st.subheader("💹 Sales Report")
-            st.info("Sales data visualization coming soon.")
-
-    # ---------- NON-STAFF & GUEST PORTAL ----------
+    # ---------------------------
+    # NON-STAFF & GUEST PORTAL
+    # ---------------------------
     else:
         if "cart" not in st.session_state:
             st.session_state.cart = {}
@@ -647,8 +593,7 @@ elif st.session_state.page == "main":
                     st.divider()
                     st.subheader("🛒 Your Cart")
 
-                    cart_data = []
-                    total_price = 0
+                    cart_data, total_price = [], 0
                     for item, details in st.session_state.cart.items():
                         subtotal = details["qty"] * details["price"]
                         total_price += subtotal
@@ -730,6 +675,7 @@ elif st.session_state.page == "main":
                 del st.session_state[key]
             st.session_state.page = "login"
             st.rerun()
+
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
