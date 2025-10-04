@@ -523,7 +523,7 @@ elif st.session_state.page == "main":
 
     # ---------- NON-STAFF & GUEST PORTAL ----------
     else:
-        col1, col2 = st.columns([3, 1])
+        col1, col2 = st.columns([1, 1])
 
         # -------- LEFT: AI + Menu + Cart + Payment --------
         with col1:
@@ -543,7 +543,7 @@ elif st.session_state.page == "main":
                     st.markdown(f"### {cat}")
                     cat_items = menu_df[menu_df["CATEGORY"] == cat]
                     for idx, row in cat_items.iterrows():
-                        colA, colB = st.columns([3,1])
+                        colA, colB = st.columns([1,1])
                         with colA:
                             st.write(f"{row['ITEM']} - ₱{row['PRICE']}")
                         with colB:
