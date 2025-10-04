@@ -558,40 +558,64 @@ elif st.session_state.page == "main":
 
             st.divider()
             st.subheader("📖 Menu & Ordering")
-            if not menu_df.empty:
-                menu_display = []
-                for idx, row in menu_df.iterrows():
-                    item_key = f"add_{row['CATEGORY']}_{row['ITEM']}"
-                    add_button = st.button("➕ Add", key=item_key)
-                    if add_button:
-                        if row["ITEM"] in st.session_state.cart:
-                            st.session_state.cart[row["ITEM"]]["qty"] += 1
-                        else:
-                            st.session_state.cart[row["ITEM"]] = {"qty": 1, "price": row["PRICE"]}
-                    menu_display.append({
-                        "Category": row["CATEGORY"],
-                        "Item": row["ITEM"],
-                        "Price": f"₱{row['PRICE']}"
-                    })
-                st.dataframe(pd.DataFrame(menu_display), use_container_width=True)
-            else:
-                st.info("No menu items available.")
 
-            if st.session_state.cart:
-                st.subheader("🛒 Cart")
-                cart_df = pd.DataFrame([
-                    {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"] * v["price"]}
-                    for k, v in st.session_state.cart.items()
-                ])
-                st.dataframe(cart_df, use_container_width=True)
-                total = sum(v["qty"] * v["price"] for v in st.session_state.cart.values())
-                st.markdown(f"### 💰 Total: ₱{total}")
-                if st.button("Proceed to Payment"):
-                    st.session_state.page = "payment"
-                    st.rerun()
-            else:
-                st.info("Your cart is empty.")
+if not menu_df.empty:
+    categories = menu_df["CATEGORY"].unique()
 
+    for cat in categories:
+        st.markdown(f"### 🍽️ {cat}")
+        cat_df = menu_df[menu_df["CATEGORY"] == cat]
+
+        for _, row in cat_df.iterrows():
+            col1, col2, col3, col4 = st.columns([2, 3, 1, 1])
+            with col1:
+                st.write(row["ITEM"])
+            with col2:
+                st.write(f"₱{row['PRICE']}")
+            with col3:
+                if st.button("➕ Add", key=f"add_{cat}_{row['ITEM']}"):
+                    if row["ITEM"] in st.session_state.cart:
+                        st.session_state.cart[row["ITEM"]]["qty"] += 1
+                    else:
+                        st.session_state.cart[row["ITEM"]] = {"qty": 1, "price": row["PRICE"]}
+                    st.success(f"Added {row['ITEM']} to cart!")
+
+    # ---------------------------
+    # CART DISPLAY
+    # ---------------------------
+    if st.session_state.cart:
+        st.divider()
+        st.subheader("🛒 Your Cart")
+
+        cart_data = []
+        total_price = 0
+        for item, details in st.session_state.cart.items():
+            subtotal = details["qty"] * details["price"]
+            total_price += subtotal
+            cart_data.append({
+                "Item": item,
+                "Quantity": details["qty"],
+                "Price": f"₱{details['price']}",
+                "Subtotal": f"₱{subtotal}"
+            })
+
+        st.dataframe(pd.DataFrame(cart_data))
+
+        st.markdown(f"### 💵 Total: ₱{total_price}")
+
+        colA, colB = st.columns([1, 1])
+        with colA:
+            if st.button("🧾 Checkout"):
+                st.success("✅ Order placed successfully!")
+                st.session_state.cart.clear()
+        with colB:
+            if st.button("❌ Clear Cart"):
+                st.session_state.cart.clear()
+                st.info("Cart cleared.")
+    else:
+        st.info("Your cart is empty.")
+else:
+    st.info("No menu items available.")
         with col2:
             st.subheader("⭐ Feedbacks")
             if not is_guest:
