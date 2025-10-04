@@ -557,32 +557,37 @@ elif st.session_state.page == "main":
             if st.button("Ask AI", key="ask_ai_user"):
                 st.write(run_ai(q))
 
-            # Menu
-            st.divider()
-            st.subheader("📖 Menu & Ordering")
+# ---------- MENU & ORDERING ----------
+st.markdown("### 📖 Menu & Ordering")
 
-            if not menu_df.empty:
-                categories = menu_df["CATEGORY"].unique()
-                for cat in categories:
-                    st.markdown(f"### 🍽️ {cat}")
-                    cat_df = menu_df[menu_df["CATEGORY"] == cat]
+menu_df = load_menu()
 
-                    for _, row in cat_df.iterrows():
-                        colA, colB, colC = st.columns([3, 2, 1])
-                        with colA:
-                            st.write(row["ITEM"])
-                        with colB:
-                            st.write(f"₱{row['PRICE']}")
-                        with colC:
-                            if st.button("➕ Add", key=f"add_{cat}_{row['ITEM']}"):
-                                if row["ITEM"] in st.session_state.cart:
-                                    st.session_state.cart[row["ITEM"]]["qty"] += 1
-                                else:
-                                    st.session_state.cart[row["ITEM"]] = {
-                                        "qty": 1,
-                                        "price": row["PRICE"]
-                                    }
-                                st.success(f"Added {row['ITEM']} to cart!")
+if not menu_df.empty:
+    categories = menu_df["CATEGORY"].unique()
+    for cat in categories:
+        st.markdown(f"#### 🍽️ {cat}")
+        cat_items = menu_df[menu_df["CATEGORY"] == cat]
+
+        for _, row in cat_items.iterrows():
+            col1, col2, col3 = st.columns([3, 1, 1])
+            with col1:
+                st.markdown(
+                    f"<div style='font-size:16px; font-weight:500;'>{row['ITEM_NAME']}</div>",
+                    unsafe_allow_html=True
+                )
+            with col2:
+                st.markdown(
+                    f"<div style='font-size:15px; color:#FFD700;'>₱{row['PRICE']:.2f}</div>",
+                    unsafe_allow_html=True
+                )
+            with col3:
+                if st.button("➕ Add", key=f"add_{row['ITEM_NAME']}", use_container_width=True):
+                    if "cart" not in st.session_state:
+                        st.session_state.cart = []
+                    st.session_state.cart.append(row.to_dict())
+                    st.success(f"✅ {row['ITEM_NAME']} added to cart!")
+else:
+    st.warning("⚠️ Menu is currently empty.")
 
                 # CART DISPLAY
                 if st.session_state.cart:
