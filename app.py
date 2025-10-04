@@ -540,6 +540,46 @@ elif st.session_state.page == "main":
             else:
                 st.info("No sales yet.")
 
+# ---------------------------
+# MAIN PORTAL (Staff / Non-Staff / Guest)
+# ---------------------------
+elif st.session_state.page == "main":
+    if "user" not in st.session_state or not st.session_state.user:
+        st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
+
+    user = st.session_state.user
+    role = user.get("role", "Guest")
+    is_guest = (role == "Guest")
+
+    st.title(f"🏫 Welcome {user['username']} to BiteHub")
+
+    # ---------- STAFF PORTAL ----------
+    if role == "Staff":
+        if "staff_choice" not in st.session_state:
+            st.session_state.staff_choice = "Dashboard"
+
+        st.session_state.staff_choice = st.sidebar.radio(
+            "Staff Menu",
+            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
+                st.session_state.staff_choice
+            )
+        )
+        choice = st.session_state.staff_choice
+
+        if choice == "Dashboard":
+            st.subheader("📊 Staff Dashboard")
+            st.info("Metrics and KPIs coming soon.")
+
+        elif choice == "Pending Orders":
+            st.subheader("📦 Pending Orders")
+            receipts = load_receipts_df()
+            pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
+            if not pending_orders.empty:
+                st.dataframe(pending_orders, use_container_width=True)
+            else:
+                st.info("No pending orders.")
+
     # ---------- NON-STAFF & GUEST PORTAL ----------
     else:
         if "cart" not in st.session_state:
@@ -550,18 +590,14 @@ elif st.session_state.page == "main":
         menu_df = load_menu()
         col1, col2 = st.columns([1, 1])
 
-        # ---------------------------
-        # LEFT SIDE: AI ASSISTANT
-        # ---------------------------
+        # --- LEFT: AI Assistant ---
         with col1:
             st.subheader("🤖 AI Assistant")
             q = st.text_area("Ask AI something:", key="user_ai_q")
             if st.button("Ask AI", key="ask_ai_user"):
                 st.write(run_ai(q))
 
-        # ---------------------------
-        # RIGHT SIDE: MENU + CART
-        # ---------------------------
+        # --- RIGHT: Menu + Cart ---
         with col2:
             st.subheader("📖 Menu & Ordering")
 
@@ -588,9 +624,7 @@ elif st.session_state.page == "main":
                                     }
                                 st.success(f"Added {row['ITEM']} to cart!")
 
-                # ---------------------------
-                # CART DISPLAY
-                # ---------------------------
+                # --- CART DISPLAY ---
                 if st.session_state.cart:
                     st.divider()
                     st.subheader("🛒 Your Cart")
@@ -624,9 +658,7 @@ elif st.session_state.page == "main":
             else:
                 st.info("No menu items available.")
 
-        # ---------------------------
-        # FEEDBACK SECTION (MOVED INSIDE)
-        # ---------------------------
+        # --- FEEDBACK SECTION ---
         st.divider()
         st.subheader("⭐ Feedbacks")
 
@@ -645,48 +677,41 @@ elif st.session_state.page == "main":
         else:
             st.info("Menu is empty. Feedback cannot be submitted.")
 
+        # --- NOTIFICATIONS (inside main) ---
+        st.divider()
+        st.subheader("📢 Notifications")
+        if st.session_state.notifications:
+            for i, note in enumerate(st.session_state.notifications):
+                st.info(note, key=f"notif_{i}")
+        else:
+            st.info("No notifications.")
+
+        if st.button("Clear notifications", key="clear_notifs"):
+            st.session_state.notifications.clear()
+
+        # --- ORDER HISTORY ---
+        st.divider()
+        st.subheader("📜 Order History")
+        if not is_guest:
+            history = load_receipts_df()
+            if not history.empty and "user_id" in history.columns:
+                user_orders = history[history["user_id"] == user["username"]]
+                if not user_orders.empty:
+                    st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+                else:
+                    st.info("No past orders yet.")
+            else:
+                st.info("No past orders yet.")
+        else:
+            st.info("Guests cannot save order history.")
+
+        # --- LOGOUT BUTTON ---
         st.divider()
         if st.button("🚪 Log Out"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.session_state.page = "login"
             st.rerun()
-
-# ---------------------------
-# NOTIFICATIONS (GLOBAL)
-# ---------------------------
-st.divider()
-st.subheader("📢 Notifications")
-if st.session_state.notifications:
-    for i, note in enumerate(st.session_state.notifications):
-        st.info(note, key=f"notif_{i}")
-else:
-    st.info("No notifications.")
-
-if st.button("Clear notifications", key="clear_notifs"):
-    st.session_state.notifications.clear()
-    
-st.divider()
-st.subheader("📜 Order History")
-if not is_guest:
-    history = load_receipts_df()
-    if not history.empty and "user_id" in history.columns:
-        user_orders = history[history["user_id"] == user["username"]]
-        if not user_orders.empty:
-            st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-        else:
-            st.info("No past orders yet.")
-    else:
-        st.info("No past orders yet.")
-else:
-    st.info("Guests cannot save order history.")
-
-st.divider()
-if st.button("🚪 Log Out"):
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.rerun()
-
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
