@@ -516,7 +516,7 @@ elif st.session_state.page == "main":
                 if st.button("Save Menu Updates"):
                     upsert_menu(edited)
                     st.success("Menu updated successfully!")
-                    st.experimental_rerun()
+                    st.rerun()
             else:
                 st.info("No menu items available.")
 
