@@ -615,7 +615,7 @@ else:
 # Feedbacks Section in col2
 with col2:
     st.subheader("⭐ Feedbacks")
-            if not is_guest:
+       if not is_guest:
                 if not menu_df.empty:
                     with st.form("feedback_form"):
                         item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
