@@ -595,20 +595,24 @@ if st.session_state.page == "main" and role != "Staff":
         else:
             st.info("Your cart is empty.")
 
-    # -------- RIGHT COLUMN: Sentiment, Feedback, Notifications, Order History --------
-    with col2:
-        # Sentiment Analysis
-        st.subheader("🧠 Sentiment Analysis")
-        if not menu_df.empty:
-            feedbacks_df = load_feedbacks_df()
-            for item in menu_df["ITEM"].unique():
-                item_feedbacks = feedbacks_df[feedbacks_df["item"] == item]
-                if not item_feedbacks.empty:
-                    feedback_texts = "\n".join(item_feedbacks["feedback"].tolist())
-                    result = run_ai(f"Analyze sentiment of these reviews:\n{feedback_texts}")
-                    st.markdown(f"**{item}:** {result}")
-                else:
-                    st.markdown(f"**{item}:** No feedback yet.")
+# -------- RIGHT COLUMN: Sentiment, Feedback, Notifications, Order History --------
+with col2:
+    st.subheader("🧠 Sentiment Analysis")
+    
+    if not menu_df.empty:
+        # User selects one item
+        item_choice = st.selectbox("Select an item to view sentiment:", menu_df["ITEM"].tolist(), key="sentiment_item")
+        
+        # Load feedbacks for that item
+        feedbacks_df = load_feedbacks_df()
+        item_feedbacks = feedbacks_df[feedbacks_df["item"] == item_choice]
+        
+        if not item_feedbacks.empty:
+            feedback_texts = "\n".join(item_feedbacks["feedback"].tolist())
+            result = run_ai(f"Analyze sentiment of these reviews:\n{feedback_texts}")
+            st.markdown(f"**{item_choice}:** {result}")
+        else:
+            st.markdown(f"**{item_choice}:** No feedback yet.")
                 st.divider()
 
         # Feedback Form
