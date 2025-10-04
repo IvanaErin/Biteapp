@@ -541,7 +541,7 @@ if st.session_state.page == "main" and role != "Staff":
     # -------- LEFT COLUMN: AI, Menu, Cart/Payment --------
     with col1:
         st.subheader("🤖 AI Assistant")
-       ai_question = st.text_area("Ask AI something:", key="ai_q", height=100)
+        ai_question = st.text_area("Ask AI something:", key="ai_q", height=100)
         if st.button("Ask AI", key="ask_ai"):
             st.write(run_ai(ai_question))
 
