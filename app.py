@@ -552,40 +552,29 @@ if st.session_state.page == "main" and role != "Staff":
 st.subheader("📖 Menu & Ordering")
 
 if not menu_df.empty:
-    categories = menu_df["CATEGORY"].unique()
-    for cat in categories:
-        with st.expander(cat, expanded=True):  # collapsible for compact layout
-            cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
+    for cat in menu_df["CATEGORY"].unique():
+        cat_items = menu_df[menu_df["CATEGORY"] == cat][["ITEM", "PRICE"]].reset_index(drop=True)
+        st.markdown(f"### {cat}")
 
-            # Table headers
-            header_cols = st.columns([3, 2, 2])
-            header_cols[0].markdown("**Item**")
-            header_cols[1].markdown("**Price**")
-            header_cols[2].markdown("**Qty / Add**")
+        # Build a single compact table string
+        table_str = ""
+        for idx, row in cat_items.iterrows():
+            item = row["ITEM"]
+            price = row["PRICE"]
+            table_str += f"{item} — ₱{price}\n"
+        st.text(table_str)
 
-            # Item rows
-            for idx, row in cat_items.iterrows():
-                item_col, price_col, action_col = st.columns([1, 1, 1])
-                item_col.write(row["ITEM"])
-                price_col.write(f"₱{row['PRICE']}")
-
-                # Compact inline quantity input (text_input)
-                qty_key = f"Qty_{cat}_{row['ITEM']}"
-                qty = action_col.text_input("", "0", max_chars=1, key=qty_key)
-
-                # Add button
-                if action_col.button("Add", key=f"Add_{cat}_{row['ITEM']}"):
-                    try:
-                        qty_int = int(qty)
-                    except:
-                        qty_int = 0
-                    if qty_int > 0:
-                        if "cart" not in st.session_state:
-                            st.session_state.cart = {}
-                        if row["ITEM"] in st.session_state.cart:
-                            st.session_state.cart[row["ITEM"]]["qty"] += qty_int
-                        else:
-                            st.session_state.cart[row["ITEM"]] = {"qty": qty_int, "price": row["PRICE"]}
+        # Add buttons below table for each item (inline if possible)
+        for idx, row in cat_items.iterrows():
+            item = row["ITEM"]
+            price = row["PRICE"]
+            if st.button(f"Add {item}", key=f"Add_{cat}_{item}"):
+                if "cart" not in st.session_state:
+                    st.session_state.cart = {}
+                if item in st.session_state.cart:
+                    st.session_state.cart[item]["qty"] += 1
+                else:
+                    st.session_state.cart[item] = {"qty": 1, "price": price}
 
 else:
     st.info("No menu items available.")
