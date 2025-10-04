@@ -535,7 +535,7 @@ if st.session_state.page == "main" and role != "Staff":
 # Load menu
 menu_df = load_menu()  # or your example menu
 
-# Create two columns (AI + Menu/Cart can be in left column)
+# Create two columns
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -546,59 +546,60 @@ with col1:
     ai_question = st.text_area("Ask AI something:", key="ai_q", height=100)
     if st.button("Ask AI", key="ask_ai"):
         st.write(run_ai(ai_question))
+    
     st.divider()
 
-# ---------------------------
-# 📖 Menu & Ordering (White Card, Compact)
-# ---------------------------
-with st.container():
-    # White background container for menu
-    st.markdown(
-        """
-        <div style='background-color:white; padding:15px; border-radius:10px;'>
-        <h3 style='margin-bottom:10px;'>📖 Menu & Ordering</h3>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    if not menu_df.empty:
-        for idx, row in menu_df.iterrows():
-            # Use smaller gaps to save space
-            cat_col, item_col, price_col, cart_col = st.columns([2, 3, 1, 1], gap="small")
-            cat_col.write(row["CATEGORY"])
-            item_col.write(row["ITEM"])
-            price_col.write(f"₱{row['PRICE']}")
-
-            if cart_col.button("Add", key=f"Add_{idx}"):
-                item = row["ITEM"]
-                price = row["PRICE"]
-                if "cart" not in st.session_state:
-                    st.session_state.cart = {}
-                if item in st.session_state.cart:
-                    st.session_state.cart[item]["qty"] += 1
-                else:
-                    st.session_state.cart[item] = {"qty": 1, "price": price}
-    else:
-        st.info("No menu items available.")
-
     # ---------------------------
-    # 🛒 Cart & Payment
+    # 📖 Menu & Ordering (White Card)
     # ---------------------------
-    if "cart" in st.session_state and st.session_state.cart:
-        st.subheader("🛒 Cart")
-        cart_df = pd.DataFrame([
-            {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
-            for k, v in st.session_state.cart.items()
-        ])
-        st.dataframe(cart_df, use_container_width=True)
-        total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
-        st.markdown(f"*Total: ₱{total}*")
-        if st.button("Proceed to Payment"):
-            st.session_state.page = "payment"
-            st.experimental_rerun()
-    else:
-        st.info("Your cart is empty.")
+    with st.container():
+        st.markdown(
+            """
+            <div style='background-color:white; padding:15px; border-radius:10px;'>
+            <h3 style='margin-bottom:10px;'>📖 Menu & Ordering</h3>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # Menu table inside the white box
+        if not menu_df.empty:
+            for idx, row in menu_df.iterrows():
+                cat_col, item_col, price_col, cart_col = st.columns([2,3,1,1], gap="small")
+                cat_col.write(row["CATEGORY"])
+                item_col.write(row["ITEM"])
+                price_col.write(f"₱{row['PRICE']}")
+                
+                if cart_col.button("Add", key=f"Add_{idx}"):
+                    item = row["ITEM"]
+                    price = row["PRICE"]
+                    if "cart" not in st.session_state:
+                        st.session_state.cart = {}
+                    if item in st.session_state.cart:
+                        st.session_state.cart[item]["qty"] += 1
+                    else:
+                        st.session_state.cart[item] = {"qty": 1, "price": price}
+        else:
+            st.info("No menu items available.")
+
+        st.markdown("</div>", unsafe_allow_html=True)  # Close white box
+
+        # ---------------------------
+        # 🛒 Cart & Payment
+        # ---------------------------
+        if "cart" in st.session_state and st.session_state.cart:
+            st.subheader("🛒 Cart")
+            cart_df = pd.DataFrame([
+                {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
+                for k, v in st.session_state.cart.items()
+            ])
+            st.dataframe(cart_df, use_container_width=True)
+            total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
+            st.markdown(f"*Total: ₱{total}*")
+            if st.button("Proceed to Payment"):
+                st.session_state.page = "payment"
+                st.experimental_rerun()
+        else:
+            st.info("Your cart is empty.")
     
 # -------- RIGHT COLUMN: Sentiment, Feedback, Notifications, Order History --------
 with col2:
