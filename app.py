@@ -520,9 +520,8 @@ elif st.session_state.page == "main":
                 st.dataframe(receipts, use_container_width=True)
             else:
                 st.info("No sales yet.")
-
 # ---------- NON-STAFF & GUEST PORTAL ----------
-else:
+if role != "Staff":
     # Ensure session state keys exist
     if "cart" not in st.session_state:
         st.session_state.cart = {}
@@ -565,10 +564,8 @@ else:
         # Show cart
         if st.session_state.cart:
             st.subheader("🛒 Cart")
-            cart_df = pd.DataFrame([
-                {"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]}
-                for k, v in st.session_state.cart.items()
-            ])
+            cart_df = pd.DataFrame([{"Item": k, "Qty": v["qty"], "Price": v["price"], "Subtotal": v["qty"]*v["price"]} 
+                                    for k, v in st.session_state.cart.items()])
             st.dataframe(cart_df, use_container_width=True)
             total = sum(v["qty"]*v["price"] for v in st.session_state.cart.values())
             st.markdown(f"*Total: ₱{total}*")
@@ -614,6 +611,7 @@ else:
         if not is_guest:
             history = load_receipts_df()
             if not history.empty and "user_id" in history.columns:
+                # Match user_id correctly: if you store username, use it; if numeric id, fetch id
                 user_orders = history[history["user_id"] == user["username"]]
                 if not user_orders.empty:
                     st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
