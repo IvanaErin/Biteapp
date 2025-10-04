@@ -579,6 +579,24 @@ elif st.session_state.page == "main":
                 st.dataframe(pending_orders, use_container_width=True)
             else:
                 st.info("No pending orders.")
+        
+        elif choice == "Manage Menu":
+            st.subheader("📖 Manage Menu")
+            st.info("Menu management tools go here.")
+
+        elif choice == "AI Assistant":
+            st.subheader("🤖 Staff AI Assistant")
+            q = st.text_area("Ask AI something:", key="staff_ai_q")
+            if st.button("Ask AI", key="ask_ai_staff"):
+                st.write(run_ai(q))
+
+        elif choice == "Feedback Review":
+            st.subheader("⭐ Customer Feedback Review")
+            st.info("Feedback data loading soon.")
+
+        elif choice == "Sales Report":
+            st.subheader("💹 Sales Report")
+            st.info("Sales data visualization coming soon.")
 
     # ---------- NON-STAFF & GUEST PORTAL ----------
     else:
@@ -677,7 +695,7 @@ elif st.session_state.page == "main":
         else:
             st.info("Menu is empty. Feedback cannot be submitted.")
 
-        # --- NOTIFICATIONS (inside main) ---
+        # --- NOTIFICATIONS ---
         st.divider()
         st.subheader("📢 Notifications")
         if st.session_state.notifications:
