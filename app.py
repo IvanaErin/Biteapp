@@ -786,24 +786,33 @@ elif st.session_state.page == "payment":
         st.write(f"Total: ₱{total_cost:.2f}")
         method = st.radio("Payment Method", ["Cash", "GCash", "Card"], key="pay_method")
 
-        # pickup time input
-        pickup_dt = st.text_input("Pickup Time (YYYY-MM-DD HH:MM)", value=datetime.now().strftime("%Y-%m-%d %H:%M"))
+        # Pickup time input
+        pickup_dt = st.text_input(
+            "Pickup Time (YYYY-MM-DD HH:MM)",
+            value=datetime.now().strftime("%Y-%m-%d %H:%M")
+        )
 
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
-                # generate order id
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "Cash", user.get("username", "Guest"), pickup_dt, "Completed")
+                save_receipt(order_id, pending_cart, total_cost, "Cash",
+                             user.get("username", "Guest"), pickup_dt, "Completed")
                 st.success("✅ Order confirmed! (Cash)")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
 
         elif method == "GCash":
-            st.image("https://via.placeholder.com/150?text=GCash+QR", caption="Scan QR to Pay")
+            qr_path = "Qr.jpg"  # make sure this file exists in your app folder
+            if os.path.exists(qr_path):
+                st.image(qr_path, caption="📱 Scan to Pay via GCash", width=200)
+            else:
+                st.warning("⚠️ QR image not found. Please upload 'Qr.jpg' in the app directory.")
+
             if st.button("Simulate GCash Payment Success"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "GCash", user.get("username", "Guest"), pickup_dt, "Completed")
+                save_receipt(order_id, pending_cart, total_cost, "GCash",
+                             user.get("username", "Guest"), pickup_dt, "Completed")
                 st.success("✅ GCash Payment Successful!")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
@@ -815,7 +824,8 @@ elif st.session_state.page == "payment":
             st.text_input("CVV", key="card_cvv")
             if st.button("Simulate Card Payment Success"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "Card", user.get("username", "Guest"), pickup_dt, "Completed")
+                save_receipt(order_id, pending_cart, total_cost, "Card",
+                             user.get("username", "Guest"), pickup_dt, "Completed")
                 st.success("✅ Card Payment Successful!")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
