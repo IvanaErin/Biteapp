@@ -551,7 +551,6 @@ elif st.session_state.page == "nonstaff":
 
     # --- LEFT: AI, MENU & ORDERING ---
     with left_col:
-        # --- AI Assistant ---
         st.subheader("🤖 AI Assistant")
         q = st.text_area("Ask AI something:", key="user_ai_q")
         if st.button("Ask AI", key="ask_ai_user"):
@@ -559,18 +558,14 @@ elif st.session_state.page == "nonstaff":
                 st.write(run_ai(q))
             else:
                 st.warning("Please enter a question for the AI.")
-
         st.divider()
 
-        # --- MENU & ORDERING ---
         st.markdown("### 📖 Menu & Ordering")
-
         if not menu_df.empty:
             categories = menu_df["CATEGORY"].unique()
             for cat in categories:
                 st.markdown(f"#### 🍽️ {cat}")
                 cat_items = menu_df[menu_df["CATEGORY"] == cat]
-
                 for _, row in cat_items.iterrows():
                     col1, col2, col3 = st.columns([3, 1, 1])
                     with col1:
@@ -592,7 +587,6 @@ elif st.session_state.page == "nonstaff":
             if st.session_state.cart:
                 st.divider()
                 st.subheader("🛒 Your Cart")
-
                 cart_data = []
                 total_price = 0
                 for item in st.session_state.cart:
@@ -601,15 +595,14 @@ elif st.session_state.page == "nonstaff":
                         "Price": f"₱{item['PRICE']:.2f}"
                     })
                     total_price += item["PRICE"]
-
                 st.dataframe(pd.DataFrame(cart_data))
                 st.markdown(f"### 💵 Total: ₱{total_price:.2f}")
 
                 colX, colY = st.columns([1, 1])
                 with colX:
                     if st.button("🧾 Checkout"):
-                        st.success("✅ Order placed successfully!")
-                        st.session_state.cart.clear()
+                        st.session_state.page = "payment"
+                        st.rerun()
                 with colY:
                     if st.button("❌ Clear Cart"):
                         st.session_state.cart.clear()
@@ -619,9 +612,7 @@ elif st.session_state.page == "nonstaff":
         else:
             st.warning("⚠️ Menu is currently empty.")
 
-    # --- RIGHT: SENTIMENT, FEEDBACKS, NOTIFICATIONS, HISTORY ---
     with right_col:
-        # Sentiment & Feedbacks
         st.subheader("⭐ Feedbacks & Sentiment")
         if not is_guest:
             if not menu_df.empty:
@@ -641,7 +632,6 @@ elif st.session_state.page == "nonstaff":
         else:
             st.warning("Guests cannot submit feedback. Please create an account.")
 
-        # Notifications
         st.divider()
         st.subheader("📢 Notifications")
         if st.session_state.notifications:
@@ -652,7 +642,6 @@ elif st.session_state.page == "nonstaff":
         if st.button("Clear notifications", key="clear_notifs"):
             st.session_state.notifications.clear()
 
-        # Order History
         st.divider()
         st.subheader("📜 Order History")
         if not is_guest:
@@ -671,7 +660,6 @@ elif st.session_state.page == "nonstaff":
         else:
             st.warning("Guests cannot view order history.")
 
-        # Logout Button
         st.divider()
         if st.button("🚪 Log Out"):
             for key in list(st.session_state.keys()):
@@ -684,19 +672,18 @@ elif st.session_state.page == "nonstaff":
 # ---------------------------
 elif st.session_state.page == "payment":
     user = st.session_state.user
-    pending_cart = st.session_state.get("cart", {})
-
+    pending_cart = st.session_state.get("cart", [])
     if not pending_cart:
         st.warning("No pending order found. Go back to your cart.")
     else:
-        total_cost = sum(v["qty"] * v["price"] for v in pending_cart.values())
+        total_cost = sum(item["PRICE"] for item in pending_cart)
         st.subheader("💳 Payment Confirmation")
-        st.write(f"Total: ₱{total_cost}")
+        st.write(f"Total: ₱{total_cost:.2f}")
         method = st.radio("Payment Method", ["Cash", "GCash", "Card"], key="pay_method")
 
         if method == "Cash" and st.button("Confirm Cash Payment"):
             st.success("✅ Order confirmed! (Cash)")
-            st.session_state.cart = {}
+            st.session_state.cart = []
             st.session_state.page = "main"
             st.rerun()
 
@@ -704,7 +691,7 @@ elif st.session_state.page == "payment":
             st.image("https://via.placeholder.com/150?text=GCash+QR", caption="Scan QR to Pay")
             if st.button("Simulate GCash Payment Success"):
                 st.success("✅ GCash Payment Successful!")
-                st.session_state.cart = {}
+                st.session_state.cart = []
                 st.session_state.page = "main"
                 st.rerun()
 
@@ -714,6 +701,6 @@ elif st.session_state.page == "payment":
             st.text_input("CVV")
             if st.button("Simulate Card Payment Success"):
                 st.success("✅ Card Payment Successful!")
-                st.session_state.cart = {}
+                st.session_state.cart = []
                 st.session_state.page = "main"
                 st.rerun()
