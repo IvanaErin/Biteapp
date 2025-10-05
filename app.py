@@ -620,7 +620,7 @@ with left_col:
 
             try:
                 response = client.chat.completions.create(
-                    model="mixtral-8x7b",
+                    model="llama-3.1-70b-versatile",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_question},
