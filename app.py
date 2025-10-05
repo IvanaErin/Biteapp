@@ -602,57 +602,41 @@ elif st.session_state.page == "main":
         menu_df = load_menu()
         left_col, right_col = st.columns([1.2, 1])
 
-# ------------------------
-# 🤖 BiteHub Assistant (Compact)
-# ------------------------
-st.subheader("🤖 BiteHub Assistant")
-
-# smaller text input instead of tall text area
-user_question = st.text_input(
-    "Ask me about our menu, meals, or promos:",
-    key="user_ai_q",
-    placeholder="e.g. What’s today’s special?"
-)
-
-ask_col1, ask_col2 = st.columns([0.3, 1])
-with ask_col1:
-    ask_btn = st.button("Ask AI", key="ask_ai_user")
-
-# Run AI only when user clicks
-if ask_btn:
-    if user_question.strip():
-        system_prompt = (
-            "You are BiteHub’s friendly virtual canteen assistant. "
-            "Always respond as if you represent BiteHub, a campus canteen offering affordable and tasty meals. "
-            "You can talk about our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
-            "Never say you're an AI — act like a helpful BiteHub staff member. "
-            "Be conversational, friendly, and concise."
-        )
-
-        # optional: add live menu context
-        menu_context = ""
-        if "menu_df" in globals() and menu_df is not None and not menu_df.empty:
-            try:
-                menu_context = "\n".join(
-                    f"{row['ITEM_NAME']} - ₱{row['PRICE']} ({row['CATEGORY']})"
-                    for _, row in menu_df.iterrows()
-                )
-            except Exception:
-                pass
-
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"{user_question}\n\nMenu Info:\n{menu_context}"}
-                ],
+# --- LEFT: AI, MENU & ORDERING ---
+with left_col:
+    # Compact AI Box beside menu
+    with st.container():
+        st.markdown("### 🤖 BiteHub Assistant")
+        with st.expander("💬 Ask BiteHub AI", expanded=False):
+            user_question = st.text_input(
+                "Ask about our meals, menu, or promos:",
+                key="user_ai_q",
+                placeholder="e.g. What’s today’s special?"
             )
-            st.markdown(response.choices[0].message.content)
-        except Exception as e:
-            st.error(f"⚠️ AI Error: {e}")
-    else:
-        st.warning("Please enter a question first 😊")
+
+            if st.button("Ask AI", key="ask_ai_user", use_container_width=False):
+                if user_question.strip():
+                    system_prompt = (
+                        "You are BiteHub’s friendly virtual canteen assistant. "
+                        "Always respond as if you represent BiteHub, a campus canteen offering affordable and tasty meals. "
+                        "You can talk about our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
+                        "Never say you're an AI — act like a helpful BiteHub staff member. "
+                        "Be conversational, friendly, and concise."
+                    )
+
+                    try:
+                        response = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_question},
+                            ],
+                        )
+                        st.markdown(response.choices[0].message.content)
+                    except Exception as e:
+                        st.error(f"⚠️ AI Error: {e}")
+                else:
+                    st.warning("Please enter a question first 😊")
     # ------------------------
     # 📖 MENU & ORDERING
     # ------------------------
