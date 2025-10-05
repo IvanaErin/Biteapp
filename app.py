@@ -586,42 +586,37 @@ if not menu_df.empty:
                         st.session_state.cart = []
                     st.session_state.cart.append(row.to_dict())
                     st.success(f"✅ {row['ITEM_NAME']} added to cart!")
+
+    # ---------- CART DISPLAY ----------
+    if "cart" in st.session_state and st.session_state.cart:
+        st.divider()
+        st.subheader("🛒 Your Cart")
+
+        cart_data = []
+        total_price = 0
+        for item in st.session_state.cart:
+            cart_data.append({
+                "Item": item["ITEM_NAME"],
+                "Price": f"₱{item['PRICE']:.2f}"
+            })
+            total_price += item["PRICE"]
+
+        st.dataframe(pd.DataFrame(cart_data))
+        st.markdown(f"### 💵 Total: ₱{total_price:.2f}")
+
+        colX, colY = st.columns([1, 1])
+        with colX:
+            if st.button("🧾 Checkout"):
+                st.success("✅ Order placed successfully!")
+                st.session_state.cart.clear()
+        with colY:
+            if st.button("❌ Clear Cart"):
+                st.session_state.cart.clear()
+                st.info("Cart cleared.")
+    else:
+        st.info("Your cart is empty.")
 else:
     st.warning("⚠️ Menu is currently empty.")
-
-                # CART DISPLAY
-                if st.session_state.cart:
-                    st.divider()
-                    st.subheader("🛒 Your Cart")
-
-                    cart_data = []
-                    total_price = 0
-                    for item, details in st.session_state.cart.items():
-                        subtotal = details["qty"] * details["price"]
-                        total_price += subtotal
-                        cart_data.append({
-                            "Item": item,
-                            "Quantity": details["qty"],
-                            "Price": f"₱{details['price']}",
-                            "Subtotal": f"₱{subtotal}"
-                        })
-
-                    st.dataframe(pd.DataFrame(cart_data))
-                    st.markdown(f"### 💵 Total: ₱{total_price}")
-
-                    colX, colY = st.columns([1, 1])
-                    with colX:
-                        if st.button("🧾 Checkout"):
-                            st.success("✅ Order placed successfully!")
-                            st.session_state.cart.clear()
-                    with colY:
-                        if st.button("❌ Clear Cart"):
-                            st.session_state.cart.clear()
-                            st.info("Cart cleared.")
-                else:
-                    st.info("Your cart is empty.")
-            else:
-                st.info("No menu items available.")
 
         # --- RIGHT: SENTIMENT, FEEDBACKS, NOTIFICATIONS, HISTORY ---
         with right_col:
