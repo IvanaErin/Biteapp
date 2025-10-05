@@ -409,8 +409,11 @@ def run_ai(question: str, extra_context: str = "") -> str:
         return "Please ask a question."
     try:
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": question + "\n" + extra_context}]
+            model="gpt-4o-mini",  # ✅ currently supported by Groq
+            messages=[
+                {"role": "system", "content": "You are BiteHub's smart assistant. Answer questions about the canteen, menu, meals, prices, and food items only."},
+                {"role": "user", "content": question + "\n" + extra_context}
+            ]
         )
         return resp.choices[0].message.content
     except Exception as e:
@@ -599,38 +602,56 @@ elif st.session_state.page == "main":
         menu_df = load_menu()
         left_col, right_col = st.columns([1.2, 1])
 
-# --- LEFT: AI, MENU & ORDERING ---
-with left_col:
-    # ------------------------
-    # 🤖 BiteHub Assistant
-    # ------------------------
-    st.subheader("🤖 BiteHub Assistant")
+# ------------------------
+# 🤖 BiteHub Assistant
+# ------------------------
+st.subheader("🤖 BiteHub Assistant")
 
-    user_question = st.text_area("Ask me about our menu, meals, or promos:", key="user_ai_q")
+user_question = st.text_area("Ask me about our menu, meals, or promos:", key="user_ai_q")
 
-    if st.button("Ask AI", key="ask_ai_user"):
-        if user_question.strip():
-            system_prompt = (
-                "You are BiteHub’s friendly virtual canteen assistant. "
-                "Always respond as if you represent BiteHub, a campus canteen offering affordable and tasty meals. "
-                "You can talk about our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
-                "Never say you're an AI — act like a helpful BiteHub staff member. "
-                "Be conversational, friendly, and concise."
-            )
+if st.button("Ask AI", key="ask_ai_user"):
+    if user_question.strip():
+        # --- System prompt ---
+        system_prompt = (
+            "You are BiteHub’s friendly virtual canteen assistant. "
+            "You represent BiteHub, a campus canteen offering affordable and tasty meals. "
+            "You can discuss our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
+            "Never say you're an AI — act like a BiteHub crew member. "
+            "Be friendly, conversational, and concise. "
+            "If the user asks something unrelated (like politics, math, or personal topics), "
+            "politely redirect the conversation back to the canteen, menu, or meals."
+        )
 
-            try:
-                response = client.chat.completions.create(
-                    model="llama-3.1-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_question},
-                    ],
+        # --- Add live menu context if available ---
+        menu_context = ""
+        try:
+            if "menu_df" in globals() and not menu_df.empty:
+                menu_context = "\n".join(
+                    f"{row['ITEM_NAME']} - ₱{row['PRICE']} ({row['CATEGORY']})"
+                    for _, row in menu_df.iterrows()
                 )
-                st.markdown(response.choices[0].message.content)
-            except Exception as e:
-                st.error(f"AI Error: {e}")
-        else:
-            st.warning("Please enter a question first 😊")
+        except Exception:
+            pass
+
+        # --- AI Response ---
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",  # ✅ Active, fast, and supported on Groq
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"{user_question}\n\nMenu Info (for context):\n{menu_context}"
+                        ),
+                    },
+                ],
+            )
+            st.markdown(response.choices[0].message.content)
+        except Exception as e:
+            st.error(f"⚠️ AI Error: {e}")
+    else:
+        st.warning("Please enter a question first 😊")
 
     # ------------------------
     # 📖 MENU & ORDERING
