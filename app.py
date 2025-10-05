@@ -599,14 +599,33 @@ elif st.session_state.page == "main":
         menu_df = load_menu()
         left_col, right_col = st.columns([1.2, 1])
 
-        # --- LEFT: AI, MENU & ORDERING ---
-        with left_col:
-            # AI
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:", key="user_ai_q")
-            if st.button("Ask AI", key="ask_ai_user"):
-                st.write(run_ai(q))
+# --- LEFT: AI, MENU & ORDERING ---
+with left_col:
+    st.subheader("🤖 BiteHub Assistant")
 
+    user_question = st.text_area("Ask me about our menu, meals, or promos:", key="user_ai_q")
+
+    if st.button("Ask AI", key="ask_ai_user"):
+        if user_question.strip():
+            system_prompt = (
+                "You are BiteHub’s friendly virtual canteen assistant. "
+                "Always respond as if you represent BiteHub, a campus canteen offering affordable and tasty meals. "
+                "You can talk about our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
+                "Never say you're an AI — act like a helpful BiteHub staff member. "
+                "Be conversational, friendly, and concise."
+            )
+
+            response = client.chat.completions.create(
+                model="mixtral-8x7b",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_question},
+                ],
+            )
+
+            st.markdown(response.choices[0].message.content)
+        else:
+            st.warning("Please enter a question first 😊")
             # ---------- MENU & ORDERING ----------
             st.markdown("### 📖 Menu & Ordering")
 
