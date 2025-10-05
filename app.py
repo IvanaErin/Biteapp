@@ -540,7 +540,7 @@ elif st.session_state.page == "main":
                 st.info("No sales yet.")
 
 # ---------- NON-STAFF & GUEST PORTAL ----------
-else:
+elif st.session_state.page == "nonstaff":
     if "cart" not in st.session_state:
         st.session_state.cart = []
     if "notifications" not in st.session_state:
