@@ -675,33 +675,41 @@ elif st.session_state.page == "payment":
     pending_cart = st.session_state.get("cart", [])
 
     if not pending_cart:
-        st.warning("No pending order found. Go back to your cart.")
+        st.warning("⚠️ No pending order found. Please go back to your cart.")
     else:
         total_cost = sum(item["PRICE"] for item in pending_cart)
         st.subheader("💳 Payment Confirmation")
-        st.write(f"Total: ₱{total_cost:.2f}")
-        method = st.radio("Payment Method", ["Cash", "GCash", "Card"])
+        st.write(f"### Total: ₱{total_cost:.2f}")
 
-        if method == "Cash" and st.button("Confirm Cash Payment"):
-            st.success("✅ Order confirmed! (Cash)")
-            st.session_state.cart.clear()
-            st.session_state.page = "main"
-            st.rerun()
+        method = st.radio("Payment Method", ["Cash", "GCash", "Card"], key="pay_method")
 
+        # --- CASH PAYMENT ---
+        if method == "Cash":
+            if st.button("💵 Confirm Cash Payment"):
+                st.success("✅ Order confirmed! (Cash)")
+                st.session_state.cart.clear()
+                st.session_state.page = "main"
+                st.rerun()
+
+        # --- GCASH PAYMENT ---
         elif method == "GCash":
             st.image("https://via.placeholder.com/150?text=GCash+QR", caption="Scan QR to Pay")
-            if st.button("Simulate GCash Payment Success"):
+            if st.button("📱 Simulate GCash Payment Success"):
                 st.success("✅ GCash Payment Successful!")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
 
+        # --- CARD PAYMENT ---
         elif method == "Card":
-            st.text_input("Card Number")
-            st.text_input("Expiry MM/YY")
-            st.text_input("CVV")
-            if st.button("Simulate Card Payment Success"):
-                st.success("✅ Card Payment Successful!")
-                st.session_state.cart.clear()
-                st.session_state.page = "main"
-                st.rerun()
+            card_num = st.text_input("💳 Card Number")
+            expiry = st.text_input("Expiry MM/YY")
+            cvv = st.text_input("CVV", type="password")
+            if st.button("💳 Simulate Card Payment Success"):
+                if card_num and expiry and cvv:
+                    st.success("✅ Card Payment Successful!")
+                    st.session_state.cart.clear()
+                    st.session_state.page = "main"
+                    st.rerun()
+                else:
+                    st.warning("Please fill out all card details before confirming.")
