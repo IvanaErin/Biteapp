@@ -409,7 +409,7 @@ def run_ai(question: str, extra_context: str = "") -> str:
         return "Please ask a question."
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",  # ✅ currently supported by Groq
+            model="llama-3.1-8b-instant",  # ✅ currently supported by Groq
             messages=[
                 {"role": "system", "content": "You are BiteHub's smart assistant. Answer questions about the canteen, menu, meals, prices, and food items only."},
                 {"role": "user", "content": question + "\n" + extra_context}
@@ -626,7 +626,7 @@ with left_col:
 
                     try:
                         response = client.chat.completions.create(
-                            model="gpt-4o-mini",
+                            model="llama-3.1-8b-instant",
                             messages=[
                                 {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": user_question},
