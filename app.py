@@ -506,68 +506,91 @@ elif st.session_state.page == "main":
     role = user.get("role", "Guest")
     is_guest = (role == "Guest")
 
-    # ---------- STAFF PORTAL ----------
-    if role == "Staff":
-        if "staff_choice" not in st.session_state:
-            st.session_state.staff_choice = "Dashboard"
+# ---------- STAFF PORTAL ----------
+if role == "Staff":
+    if "staff_choice" not in st.session_state:
+        st.session_state.staff_choice = "Dashboard"
 
-        st.session_state.staff_choice = st.sidebar.radio(
-            "Staff Menu",
-            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-                st.session_state.staff_choice
-            )
+    st.session_state.staff_choice = st.sidebar.radio(
+        "Staff Menu",
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+        index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
+            st.session_state.staff_choice
         )
+    )
 
-        choice = st.session_state.staff_choice
+    choice = st.session_state.staff_choice
 
-        if choice == "Dashboard":
-            st.subheader("📊 Staff Dashboard")
-            st.info("Metrics and KPIs coming soon.")
+    # ------------------- Dashboard -------------------
+    if choice == "Dashboard":
+        st.subheader("📊 Staff Dashboard")
+        st.info("Metrics and KPIs coming soon.")
 
-        elif choice == "Pending Orders":
-            st.subheader("📦 Pending Orders")
-            receipts = load_receipts_df()
-            pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
-            if not pending_orders.empty:
-                st.dataframe(pending_orders, use_container_width=True)
-            else:
-                st.info("No pending orders.")
+    # ------------------- Pending Orders -------------------
+    elif choice == "Pending Orders":
+        st.subheader("📦 Pending Orders")
+        receipts = load_receipts_df()
+        pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
+        if not pending_orders.empty:
+            st.dataframe(pending_orders, use_container_width=True)
+        else:
+            st.info("No pending orders.")
 
-        elif choice == "Manage Menu":
-            st.subheader("📖 Manage Menu")
-            menu_df = load_menu()
-            if not menu_df.empty:
-                edited = st.data_editor(menu_df, num_rows="dynamic")
-                if st.button("Save Menu Updates"):
-                    upsert_menu(edited)
-                    st.success("✅ Menu updated successfully!")
-                    st.rerun()
-            else:
-                st.info("No menu items available.")
+    # ------------------- Manage Menu -------------------
+    elif choice == "Manage Menu":
+        st.subheader("📖 Manage Menu")
+        menu_df = load_menu()
+        if not menu_df.empty:
+            edited = st.data_editor(menu_df, num_rows="dynamic")
+            if st.button("Save Menu Updates"):
+                upsert_menu(edited)
+                st.success("✅ Menu updated successfully!")
+                st.rerun()
+        else:
+            st.info("No menu items available.")
 
-        elif choice == "AI Assistant":
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:", key="staff_ai_q")
-            if st.button("Ask AI", key="ask_ai_staff"):
-                st.write(run_ai(q))
+    # ------------------- AI Assistant -------------------
+    elif choice == "AI Assistant":
+        st.subheader("🤖 AI Assistant")
+        q = st.text_area("Ask AI something:", key="staff_ai_q")
+        if st.button("Ask AI", key="ask_ai_staff"):
+            st.write(run_ai(q))
 
-        elif choice == "Feedback Review":
-            st.subheader("📢 Feedback Review")
-            fb = load_feedbacks_df()
-            if not fb.empty:
-                st.dataframe(fb, use_container_width=True)
-            else:
-                st.info("No feedbacks yet.")
+    # ------------------- Feedback Review -------------------
+    elif choice == "Feedback Review":
+        st.subheader("📢 Feedback Review")
+        fb = load_feedbacks_df()
+        if not fb.empty:
+            st.dataframe(fb, use_container_width=True)
+        else:
+            st.info("No feedbacks yet.")
 
-        elif choice == "Sales Report":
-            st.subheader("💰 Sales Report")
-            receipts = load_receipts_df()
-            if not receipts.empty:
-                st.dataframe(receipts, use_container_width=True)
-            else:
-                st.info("No sales yet.")
+    # ------------------- Sales Report -------------------
+    elif choice == "Sales Report":
+        st.subheader("💰 Sales Report")
+        receipts = load_receipts_df()
+        if not receipts.empty:
+            # Summarize sales by CATEGORY and ITEM_NAME
+            sales_summary = receipts.groupby(["CATEGORY", "ITEM_NAME"])["QUANTITY"].sum().reset_index()
 
+            categories = sales_summary["CATEGORY"].unique()
+            for cat in categories:
+                st.markdown(f"### {cat} Sales Breakdown")
+                cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+                if not cat_data.empty:
+                    fig, ax = plt.subplots()
+                    ax.pie(
+                        cat_data["QUANTITY"],
+                        labels=cat_data["ITEM_NAME"],
+                        autopct="%1.1f%%",
+                        startangle=90,
+                    )
+                    ax.axis("equal")  # Equal aspect ratio ensures pie chart is circular
+                    st.pyplot(fig)
+                else:
+                    st.info(f"No sales for {cat} yet.")
+        else:
+            st.info("No sales yet.")
     # ---------- NON-STAFF / GUEST PORTAL ----------
     else:
         # --- Initialize session variables ---
