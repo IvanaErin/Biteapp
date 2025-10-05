@@ -506,33 +506,50 @@ elif st.session_state.page == "main":
     role = user.get("role", "Guest")
     is_guest = (role == "Guest")
 
-    # ---------- STAFF PORTAL ----------
-    if role == "Staff":
-        if "staff_choice" not in st.session_state:
-            st.session_state.staff_choice = "Dashboard"
+# ---------- STAFF PORTAL ----------
+if role == "Staff":
+    if "staff_choice" not in st.session_state:
+        st.session_state.staff_choice = "Dashboard"
 
-        st.session_state.staff_choice = st.sidebar.radio(
-            "Staff Menu",
-            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-                st.session_state.staff_choice
-            )
+    st.session_state.staff_choice = st.sidebar.radio(
+        "Staff Menu",
+        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+        index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
+            st.session_state.staff_choice
         )
+    )
 
-        choice = st.session_state.staff_choice
+    choice = st.session_state.staff_choice
 
-        if choice == "Dashboard":
-            st.subheader("📊 Staff Dashboard")
-            st.info("Metrics and KPIs coming soon.")
+    if choice == "Dashboard":
+        st.subheader("📊 Staff Dashboard")
+        st.info("Metrics and KPIs coming soon.")
 
-        elif choice == "Pending Orders":
-            st.subheader("📦 Pending Orders")
-            receipts = load_receipts_df()
-            pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
-            if not pending_orders.empty:
-                st.dataframe(pending_orders, use_container_width=True)
-            else:
-                st.info("No pending orders.")
+    elif choice == "Pending Orders":
+        st.subheader("📦 Pending Orders")
+        receipts = load_receipts_df()
+
+        # Only pending orders
+        pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
+
+        if not pending_orders.empty:
+            # Display each pending order with a "Mark as Ready" button
+            for idx, row in pending_orders.iterrows():
+                st.markdown(f"**Order ID:** {row['id']} | **User:** {row['user_id']} | **Payment:** {row['payment_method']}")
+                st.write("Items:", row["items"])
+                
+                btn_key = f"ready_{row['id']}"
+                if st.button("✅ Mark as Ready", key=btn_key):
+                    # Update order status to Ready
+                    update_order_status(row['id'], "Ready")
+                    
+                    # Add notification to the corresponding user
+                    add_notification(row['user_id'], f"Your order #{row['id']} is ready for pickup!")
+                    
+                    st.success(f"Order #{row['id']} marked as Ready!")
+                    st.experimental_rerun()  # Refresh the page to update table
+        else:
+            st.info("No pending orders.")
 
         elif choice == "Manage Menu":
             st.subheader("📖 Manage Menu")
