@@ -379,7 +379,6 @@ def upsert_menu(df: pd.DataFrame):
     try:
         cur = conn.cursor()
         for _, row in df.iterrows():
-            # handle gracefully if columns missing
             category = row.get("CATEGORY", row.get("Category", None))
             item = row.get("ITEM", row.get("Item", None))
             price = row.get("PRICE", row.get("Price", None))
@@ -409,7 +408,7 @@ def run_ai(question: str, extra_context: str = "") -> str:
         return "Please ask a question."
     try:
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",  # ✅ currently supported by Groq
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "You are BiteHub's smart assistant. Answer questions about the canteen, menu, meals, prices, and food items only."},
                 {"role": "user", "content": question + "\n" + extra_context}
@@ -427,7 +426,6 @@ if "page" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 if "cart" not in st.session_state:
-    # cart as dict: { item_name: {"qty": int, "price": float} }
     st.session_state.cart = {}
 if "notifications" not in st.session_state:
     st.session_state.notifications = []
@@ -453,12 +451,6 @@ def password_valid_rules(pw: str):
 
 # ---------------------------
 # LOGIN + SIGNUP + MAIN PORTAL + PAYMENT
-# ---------------------------
-if "page" not in st.session_state:
-    st.session_state.page = "login"
-
-# ---------------------------
-# LOGIN PAGE
 # ---------------------------
 if st.session_state.page == "login":
     st.markdown(
@@ -497,7 +489,6 @@ if st.session_state.page == "login":
 
 # ---------- MAIN PORTAL (Staff / Non-Staff / Guest) ----------
 elif st.session_state.page == "main":
-    # Ensure user/role are properly loaded
     if "user" not in st.session_state or not st.session_state.user:
         st.session_state.page = "login"
         st.rerun()
@@ -573,20 +564,18 @@ if role == "Staff":
         if receipts.empty:
             st.info("No sales yet.")
         else:
+            # Aggregate sales per item
             all_items = []
-
             for idx, row in receipts.iterrows():
                 items_json = row.get("items")
                 if not items_json:
-                    continue  # skip if items column missing or empty
+                    continue
                 try:
                     items_list = json.loads(items_json)
                 except Exception:
-                    continue  # skip invalid JSON
-
+                    continue
                 if not isinstance(items_list, list):
-                    continue  # skip if not a list
-
+                    continue
                 for it in items_list:
                     if not isinstance(it, dict):
                         continue
@@ -614,14 +603,15 @@ if role == "Staff":
 
                     fig, ax = plt.subplots()
                     ax.pie(
-                        cat_data["QUANTITY"],
-                        labels=cat_data["ITEM_NAME"],
+                        cat_data.groupby("ITEM_NAME")["QUANTITY"].sum(),
+                        labels=cat_data["ITEM_NAME"].unique(),
                         autopct="%1.1f%%",
                         startangle=90,
                         wedgeprops={"edgecolor": "w"}
                     )
                     ax.axis("equal")
                     st.pyplot(fig)
+
     # ---------- NON-STAFF / GUEST PORTAL ----------
     else:
         # --- Initialize session variables ---
