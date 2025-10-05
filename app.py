@@ -566,47 +566,62 @@ if role == "Staff":
             st.info("No feedbacks yet.")
 
     # ------------------- Sales Report -------------------
-# ------------------- Sales Report -------------------
-elif choice == "Sales Report":
-    st.subheader("💰 Sales Report")
-    receipts = load_receipts_df()
-    if not receipts.empty:
-        # Extract items from JSON
-        all_items = []
-        for _, row in receipts.iterrows():
-            try:
-                items_list = json.loads(row["items"])  # items is stored as JSON
+    elif choice == "Sales Report":
+        st.subheader("💰 Sales Report")
+        receipts = load_receipts_df()
+
+        if receipts.empty:
+            st.info("No sales yet.")
+        else:
+            all_items = []
+
+            for idx, row in receipts.iterrows():
+                items_json = row.get("items")
+                if not items_json:
+                    continue  # skip if items column missing or empty
+                try:
+                    items_list = json.loads(items_json)
+                except Exception:
+                    continue  # skip invalid JSON
+
+                if not isinstance(items_list, list):
+                    continue  # skip if not a list
+
                 for it in items_list:
-                    # each item: {"name": "Burger", "qty": 2, "price": 80}
-                    name = it.get("name") or it.get("ITEM_NAME") or "Unknown"
-                    qty = int(it.get("qty") or it.get("QUANTITY") or 1)
+                    if not isinstance(it, dict):
+                        continue
+                    name = it.get("name") or it.get("ITEM_NAME") or "Unknown Item"
+                    try:
+                        qty = int(it.get("qty") or it.get("QUANTITY") or 1)
+                    except Exception:
+                        qty = 1
                     category = it.get("category") or "Uncategorized"
                     all_items.append({"CATEGORY": category, "ITEM_NAME": name, "QUANTITY": qty})
-            except Exception:
-                continue
 
-        if all_items:
-            sales_summary = pd.DataFrame(all_items)
-            categories = sales_summary["CATEGORY"].unique()
-            for cat in categories:
-                st.markdown(f"### {cat} Sales Breakdown")
-                cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
-                if not cat_data.empty:
+            if not all_items:
+                st.info("No sales items found in receipts.")
+            else:
+                sales_summary = pd.DataFrame(all_items)
+                categories = sales_summary["CATEGORY"].dropna().unique()
+
+                for cat in categories:
+                    st.markdown(f"### {cat} Sales Breakdown")
+                    cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+
+                    if cat_data.empty:
+                        st.info(f"No sales for {cat} yet.")
+                        continue
+
                     fig, ax = plt.subplots()
                     ax.pie(
                         cat_data["QUANTITY"],
                         labels=cat_data["ITEM_NAME"],
                         autopct="%1.1f%%",
                         startangle=90,
+                        wedgeprops={"edgecolor": "w"}
                     )
                     ax.axis("equal")
                     st.pyplot(fig)
-                else:
-                    st.info(f"No sales for {cat} yet.")
-        else:
-            st.info("No sales items found in receipts.")
-    else:
-        st.info("No sales yet.")
     # ---------- NON-STAFF / GUEST PORTAL ----------
     else:
         # --- Initialize session variables ---
