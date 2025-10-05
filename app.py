@@ -539,84 +539,85 @@ elif st.session_state.page == "main":
             else:
                 st.info("No sales yet.")
 
-    # ---------- NON-STAFF & GUEST PORTAL ----------
-    else:
-        if "cart" not in st.session_state:
-            st.session_state.cart = {}
-        if "notifications" not in st.session_state:
-            st.session_state.notifications = []
-
-        menu_df = load_menu()
-        left_col, right_col = st.columns([1.2, 1])
-
-        # --- LEFT: AI, MENU & ORDERING ---
-        with left_col:
-            # AI
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:", key="user_ai_q")
-            if st.button("Ask AI", key="ask_ai_user"):
-                st.write(run_ai(q))
-
-# ---------- MENU & ORDERING ----------
-st.markdown("### 📖 Menu & Ordering")
-
-menu_df = load_menu()
-
-if not menu_df.empty:
-    categories = menu_df["CATEGORY"].unique()
-    for cat in categories:
-        st.markdown(f"#### 🍽️ {cat}")
-        cat_items = menu_df[menu_df["CATEGORY"] == cat]
-
-        for _, row in cat_items.iterrows():
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.markdown(
-                    f"<div style='font-size:16px; font-weight:500;'>{row['ITEM_NAME']}</div>",
-                    unsafe_allow_html=True
-                )
-            with col2:
-                st.markdown(
-                    f"<div style='font-size:15px; color:#FFD700;'>₱{row['PRICE']:.2f}</div>",
-                    unsafe_allow_html=True
-                )
-            with col3:
-                if st.button("➕ Add", key=f"add_{row['ITEM_NAME']}", use_container_width=True):
-                    if "cart" not in st.session_state:
-                        st.session_state.cart = []
-                    st.session_state.cart.append(row.to_dict())
-                    st.success(f"✅ {row['ITEM_NAME']} added to cart!")
-
-    # ---------- CART DISPLAY ----------
-    if "cart" in st.session_state and st.session_state.cart:
-        st.divider()
-        st.subheader("🛒 Your Cart")
-
-        cart_data = []
-        total_price = 0
-        for item in st.session_state.cart:
-            cart_data.append({
-                "Item": item["ITEM_NAME"],
-                "Price": f"₱{item['PRICE']:.2f}"
-            })
-            total_price += item["PRICE"]
-
-        st.dataframe(pd.DataFrame(cart_data))
-        st.markdown(f"### 💵 Total: ₱{total_price:.2f}")
-
-        colX, colY = st.columns([1, 1])
-        with colX:
-            if st.button("🧾 Checkout"):
-                st.success("✅ Order placed successfully!")
-                st.session_state.cart.clear()
-        with colY:
-            if st.button("❌ Clear Cart"):
-                st.session_state.cart.clear()
-                st.info("Cart cleared.")
-    else:
-        st.info("Your cart is empty.")
+# ---------- NON-STAFF & GUEST PORTAL ----------
 else:
-    st.warning("⚠️ Menu is currently empty.")
+    if "cart" not in st.session_state:
+        st.session_state.cart = []
+    if "notifications" not in st.session_state:
+        st.session_state.notifications = []
+
+    menu_df = load_menu()
+    left_col, right_col = st.columns([1.2, 1])
+
+    # --- LEFT: AI, MENU & ORDERING ---
+    with left_col:
+        # --- AI Assistant ---
+        st.subheader("🤖 AI Assistant")
+        q = st.text_area("Ask AI something:", key="user_ai_q")
+        if st.button("Ask AI", key="ask_ai_user"):
+            if q.strip():
+                st.write(run_ai(q))
+            else:
+                st.warning("Please enter a question for the AI.")
+
+        st.divider()
+
+        # --- MENU & ORDERING ---
+        st.markdown("### 📖 Menu & Ordering")
+
+        if not menu_df.empty:
+            categories = menu_df["CATEGORY"].unique()
+            for cat in categories:
+                st.markdown(f"#### 🍽️ {cat}")
+                cat_items = menu_df[menu_df["CATEGORY"] == cat]
+
+                for _, row in cat_items.iterrows():
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        st.markdown(
+                            f"<div style='font-size:16px; font-weight:500;'>{row['ITEM']}</div>",
+                            unsafe_allow_html=True
+                        )
+                    with col2:
+                        st.markdown(
+                            f"<div style='font-size:15px; color:#FFD700;'>₱{row['PRICE']:.2f}</div>",
+                            unsafe_allow_html=True
+                        )
+                    with col3:
+                        if st.button("➕ Add", key=f"add_{row['ITEM']}", use_container_width=True):
+                            st.session_state.cart.append(row.to_dict())
+                            st.success(f"✅ {row['ITEM']} added to cart!")
+
+            # --- CART DISPLAY ---
+            if st.session_state.cart:
+                st.divider()
+                st.subheader("🛒 Your Cart")
+
+                cart_data = []
+                total_price = 0
+                for item in st.session_state.cart:
+                    cart_data.append({
+                        "Item": item["ITEM"],
+                        "Price": f"₱{item['PRICE']:.2f}"
+                    })
+                    total_price += item["PRICE"]
+
+                st.dataframe(pd.DataFrame(cart_data))
+                st.markdown(f"### 💵 Total: ₱{total_price:.2f}")
+
+                colX, colY = st.columns([1, 1])
+                with colX:
+                    if st.button("🧾 Checkout"):
+                        st.success("✅ Order placed successfully!")
+                        st.session_state.cart.clear()
+                with colY:
+                    if st.button("❌ Clear Cart"):
+                        st.session_state.cart.clear()
+                        st.info("Cart cleared.")
+            else:
+                st.info("Your cart is empty.")
+        else:
+            st.warning("⚠️ Menu is currently empty.")
 
 # --- RIGHT: SENTIMENT, FEEDBACKS, NOTIFICATIONS, HISTORY ---
 with right_col:
