@@ -601,6 +601,9 @@ elif st.session_state.page == "main":
 
 # --- LEFT: AI, MENU & ORDERING ---
 with left_col:
+    # ------------------------
+    # 🤖 BiteHub Assistant
+    # ------------------------
     st.subheader("🤖 BiteHub Assistant")
 
     user_question = st.text_area("Ask me about our menu, meals, or promos:", key="user_ai_q")
@@ -615,179 +618,156 @@ with left_col:
                 "Be conversational, friendly, and concise."
             )
 
-            response = client.chat.completions.create(
-                model="mixtral-8x7b",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_question},
-                ],
-            )
-
-            st.markdown(response.choices[0].message.content)
+            try:
+                response = client.chat.completions.create(
+                    model="mixtral-8x7b",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_question},
+                    ],
+                )
+                st.markdown(response.choices[0].message.content)
+            except Exception as e:
+                st.error(f"AI Error: {e}")
         else:
             st.warning("Please enter a question first 😊")
-            # ---------- MENU & ORDERING ----------
-            st.markdown("### 📖 Menu & Ordering")
 
-            # detect columns for safety
-            if menu_df is None or menu_df.empty:
-                st.warning("⚠️ Menu is currently empty.")
-                detected_category_col = detected_item_col = detected_price_col = None
-            else:
-                detected_category_col, detected_item_col, detected_price_col = detect_menu_columns(menu_df)
-                # If detection failed, show columns to help debugging
-                if not detected_item_col or not detected_price_col:
-                    st.write("Menu columns:", menu_df.columns.tolist())
-                    st.error("Menu format not recognized. Missing item or price column.")
-                    detected_category_col = detected_item_col = detected_price_col = None
+    # ------------------------
+    # 📖 MENU & ORDERING
+    # ------------------------
+    st.markdown("### 📖 Menu & Ordering")
 
-            # Render menu only if detection succeeded
-            if detected_item_col and detected_price_col:
-                # Optional: if no category col detected, create a fake single category
-                if not detected_category_col:
-                    menu_df["_SINGLE_CAT"] = "Menu"
-                    detected_category_col = "_SINGLE_CAT"
+    if menu_df is None or menu_df.empty:
+        st.warning("⚠️ Menu is currently empty.")
+        detected_category_col = detected_item_col = detected_price_col = None
+    else:
+        detected_category_col, detected_item_col, detected_price_col = detect_menu_columns(menu_df)
+        if not detected_item_col or not detected_price_col:
+            st.write("Menu columns:", menu_df.columns.tolist())
+            st.error("Menu format not recognized. Missing item or price column.")
+            detected_category_col = detected_item_col = detected_price_col = None
 
-                categories = menu_df[detected_category_col].fillna("Uncategorized").unique()
-                for cat in categories:
-                    st.markdown(f"#### 🍽️ {cat}")
-                    cat_items = menu_df[menu_df[detected_category_col] == cat]
-                    for _, row in cat_items.iterrows():
-                        # Safely obtain values using .get with fallback
-                        item_name = row.get(detected_item_col, str(row[detected_item_col]) if detected_item_col in row.index else "Unknown Item")
-                        price_val = row.get(detected_price_col, 0.0)
-                        # coerce price to float safely
-                        try:
-                            price_val = float(price_val)
-                        except Exception:
-                            price_val = 0.0
+    if detected_item_col and detected_price_col:
+        if not detected_category_col:
+            menu_df["_SINGLE_CAT"] = "Menu"
+            detected_category_col = "_SINGLE_CAT"
 
-                        col1, col2, col3 = st.columns([3, 1, 1])
-                        with col1:
-                            st.markdown(
-                                f"<div style='font-size:16px; font-weight:500;'>{item_name}</div>",
-                                unsafe_allow_html=True
-                            )
-                        with col2:
-                            st.markdown(
-                                f"<div style='font-size:15px; color:#FFD700;'>₱{price_val:.2f}</div>",
-                                unsafe_allow_html=True
-                            )
-                        with col3:
-                            btn_key = f"add_{cat}_{item_name}"
-                            if st.button("➕ Add", key=btn_key, use_container_width=True):
-                                # Add to cart (dict style)
-                                if item_name not in st.session_state.cart:
-                                    st.session_state.cart[item_name] = {"qty": 1, "price": price_val}
-                                else:
-                                    st.session_state.cart[item_name]["qty"] += 1
-                                st.success(f"✅ {item_name} added to cart!")
+        categories = menu_df[detected_category_col].fillna("Uncategorized").unique()
+        for cat in categories:
+            st.markdown(f"#### 🍽️ {cat}")
+            cat_items = menu_df[menu_df[detected_category_col] == cat]
+            for _, row in cat_items.iterrows():
+                item_name = row.get(detected_item_col, "Unknown Item")
+                price_val = row.get(detected_price_col, 0.0)
+                try:
+                    price_val = float(price_val)
+                except Exception:
+                    price_val = 0.0
 
-            # CART DISPLAY
-            if st.session_state.cart:
-                st.divider()
-                st.subheader("🛒 Your Cart")
-
-                cart_data = []
-                total_price = 0.0
-                for item, details in st.session_state.cart.items():
-                    qty = details.get("qty", 1)
-                    price = details.get("price", 0.0)
-                    try:
-                        subtotal = qty * float(price)
-                    except Exception:
-                        subtotal = qty * 0.0
-                    total_price += subtotal
-                    cart_data.append({
-                        "Item": item,
-                        "Quantity": qty,
-                        "Price": f"₱{float(price):.2f}",
-                        "Subtotal": f"₱{subtotal:.2f}"
-                    })
-
-                st.dataframe(pd.DataFrame(cart_data), use_container_width=True)
-                st.markdown(f"### 💵 Total: ₱{total_price:.2f}")
-
-                colX, colY = st.columns([1, 1])
-                with colX:
-                    if st.button("🧾 Checkout"):
-                        # send to payment page (do not clear cart here)
-                        st.session_state.page = "payment"
-                        st.rerun()
-                with colY:
-                    if st.button("❌ Clear Cart"):
-                        st.session_state.cart.clear()
-                        st.info("Cart cleared.")
-            else:
-                st.info("Your cart is empty.")
-
-        # --- RIGHT: SENTIMENT, FEEDBACKS, NOTIFICATIONS, HISTORY ---
-        with right_col:
-            # Sentiment & Feedbacks
-            st.subheader("⭐ Feedbacks & Sentiment")
-            if not is_guest:
-                if not menu_df.empty:
-                    # Use detected_item_col if available; else fallback
-                    available_items = []
-                    if menu_df is not None and not menu_df.empty:
-                        det_cat, det_item, det_price = detect_menu_columns(menu_df)
-                        if det_item:
-                            available_items = menu_df[det_item].fillna("Unknown").tolist()
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.markdown(f"<div style='font-size:16px; font-weight:500;'>{item_name}</div>", unsafe_allow_html=True)
+                with col2:
+                    st.markdown(f"<div style='font-size:15px; color:#FFD700;'>₱{price_val:.2f}</div>", unsafe_allow_html=True)
+                with col3:
+                    btn_key = f"add_{cat}_{item_name}"
+                    if st.button("➕ Add", key=btn_key, use_container_width=True):
+                        if item_name not in st.session_state.cart:
+                            st.session_state.cart[item_name] = {"qty": 1, "price": price_val}
                         else:
-                            available_items = menu_df.iloc[:, 0].fillna("Unknown").tolist()
-                    else:
-                        available_items = []
+                            st.session_state.cart[item_name]["qty"] += 1
+                        st.success(f"✅ {item_name} added to cart!")
 
-                    with st.form("feedback_form"):
-                        item_choice = st.selectbox("Which item?", available_items, key="feedback_item")
-                        feedback = st.text_area("Your feedback:", key="feedback_text")
-                        rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
-                        submitted = st.form_submit_button("Submit Feedback")
-                        if submitted:
-                            if feedback:
-                                save_feedback(item_choice, feedback, rating, user["username"])
-                                st.success("✅ Feedback submitted!")
-                            else:
-                                st.warning("Feedback cannot be empty.")
-                else:
-                    st.info("Menu is empty. Feedback cannot be submitted.")
-            else:
-                st.warning("Guests cannot submit feedback. Please create an account.")
-
-            # Notifications
-            st.divider()
-            st.subheader("📢 Notifications")
-            if st.session_state.notifications:
-                for i, note in enumerate(st.session_state.notifications):
-                    st.info(note, key=f"notif_{i}")
-            else:
-                st.info("No notifications.")
-            if st.button("Clear notifications", key="clear_notifs"):
-                st.session_state.notifications.clear()
-
-            # Order History
-            st.divider()
-            st.subheader("📜 Order History")
-            if not is_guest:
-                history = load_receipts_df()
-                if not history.empty and "user_id" in history.columns:
-                    user_orders = history[history["user_id"] == user["username"]]
-                    if not user_orders.empty:
-                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                    else:
-                        st.info("No past orders yet.")
-                else:
-                    st.info("No past orders yet.")
-            else:
-                st.warning("Guests cannot view order history.")
-
-        # LOGOUT BUTTON
+    # ------------------------
+    # 🛒 CART
+    # ------------------------
+    if st.session_state.cart:
         st.divider()
-        if st.button("🚪 Log Out"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.session_state.page = "login"
-            st.rerun()
+        st.subheader("🛒 Your Cart")
+
+        cart_data = []
+        total_price = 0.0
+        for item, details in st.session_state.cart.items():
+            qty = details.get("qty", 1)
+            price = details.get("price", 0.0)
+            subtotal = qty * float(price)
+            total_price += subtotal
+            cart_data.append({
+                "Item": item,
+                "Quantity": qty,
+                "Price": f"₱{float(price):.2f}",
+                "Subtotal": f"₱{subtotal:.2f}"
+            })
+
+        st.dataframe(pd.DataFrame(cart_data), use_container_width=True)
+        st.markdown(f"### 💵 Total: ₱{total_price:.2f}")
+
+        colX, colY = st.columns([1, 1])
+        with colX:
+            if st.button("🧾 Checkout"):
+                st.session_state.page = "payment"
+                st.rerun()
+        with colY:
+            if st.button("❌ Clear Cart"):
+                st.session_state.cart.clear()
+                st.info("Cart cleared.")
+    else:
+        st.info("Your cart is empty.")
+
+# --- RIGHT: FEEDBACKS, NOTIFICATIONS, HISTORY ---
+with right_col:
+    st.subheader("⭐ Feedbacks & Sentiment")
+    if not is_guest:
+        if not menu_df.empty:
+            det_cat, det_item, det_price = detect_menu_columns(menu_df)
+            available_items = menu_df[det_item].fillna("Unknown").tolist() if det_item else menu_df.iloc[:, 0].fillna("Unknown").tolist()
+            with st.form("feedback_form"):
+                item_choice = st.selectbox("Which item?", available_items, key="feedback_item")
+                feedback = st.text_area("Your feedback:", key="feedback_text")
+                rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                submitted = st.form_submit_button("Submit Feedback")
+                if submitted:
+                    if feedback:
+                        save_feedback(item_choice, feedback, rating, user["username"])
+                        st.success("✅ Feedback submitted!")
+                    else:
+                        st.warning("Feedback cannot be empty.")
+        else:
+            st.info("Menu is empty. Feedback cannot be submitted.")
+    else:
+        st.warning("Guests cannot submit feedback. Please create an account.")
+
+    st.divider()
+    st.subheader("📢 Notifications")
+    if st.session_state.notifications:
+        for i, note in enumerate(st.session_state.notifications):
+            st.info(note, key=f"notif_{i}")
+    else:
+        st.info("No notifications.")
+    if st.button("Clear notifications", key="clear_notifs"):
+        st.session_state.notifications.clear()
+
+    st.divider()
+    st.subheader("📜 Order History")
+    if not is_guest:
+        history = load_receipts_df()
+        if not history.empty and "user_id" in history.columns:
+            user_orders = history[history["user_id"] == user["username"]]
+            if not user_orders.empty:
+                st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+            else:
+                st.info("No past orders yet.")
+        else:
+            st.info("No past orders yet.")
+    else:
+        st.warning("Guests cannot view order history.")
+
+st.divider()
+if st.button("🚪 Log Out"):
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.session_state.page = "login"
+    st.rerun()
 
 # ---------- PAYMENT PAGE ----------
 elif st.session_state.page == "payment":
@@ -804,16 +784,14 @@ elif st.session_state.page == "payment":
         st.subheader("💳 Payment Confirmation")
         st.write(f"### 💵 Total Amount: ₱{total_cost:.2f}")
 
-        # Let user pick payment method
         method = st.radio("Select Payment Method", ["Cash", "GCash (Scan QR)", "Card"], key="pay_method")
 
-        # Pickup time
         pickup_dt = st.text_input(
             "Pickup Time (YYYY-MM-DD HH:MM)",
             value=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
 
-        # CASH PAYMENT
+        # CASH
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
@@ -824,7 +802,7 @@ elif st.session_state.page == "payment":
                 st.session_state.page = "main"
                 st.rerun()
 
-        # GCASH PAYMENT (STATIC QR)
+        # GCASH STATIC QR
         elif method == "GCash (Scan QR)":
             st.info("📱 Please scan the QR code below using your GCash app to pay.")
             st.image("Qr.jpg", caption="Scan this QR to pay via GCash", width=250)
@@ -839,7 +817,7 @@ elif st.session_state.page == "payment":
                 st.session_state.page = "main"
                 st.rerun()
 
-        # CARD PAYMENT (MANUAL SIMULATION)
+        # CARD
         elif method == "Card":
             st.text_input("Card Number", key="card_num")
             st.text_input("Expiry (MM/YY)", key="card_exp")
@@ -852,8 +830,7 @@ elif st.session_state.page == "payment":
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
-                
-        # back option
+
         st.divider()
         if st.button("⬅️ Back to Cart"):
             st.session_state.page = "main"
