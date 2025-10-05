@@ -616,21 +616,31 @@ with left_col:
 
             if st.button("Ask AI", key="ask_ai_user", use_container_width=False):
                 if user_question.strip():
-                    # ✅ Pull real menu data so AI only talks about actual items
+                    # ✅ Build menu summary dynamically and safely
                     if "menu_df" in locals() and not menu_df.empty:
-                        menu_text = "\n".join(
-                            f"{row['ITEM_NAME']} - ₱{row['PRICE']} ({row['CATEGORY']})"
-                            for _, row in menu_df.iterrows()
-                        )
+                        cols = menu_df.columns.str.upper().tolist()
+                        name_col = next((c for c in cols if "ITEM" in c or "NAME" in c or "PRODUCT" in c), None)
+                        price_col = next((c for c in cols if "PRICE" in c), None)
+                        cat_col = next((c for c in cols if "CAT" in c or "TYPE" in c), None)
+
+                        if name_col:
+                            menu_lines = []
+                            for _, row in menu_df.iterrows():
+                                name = str(row.get(name_col, "")).strip()
+                                price = f"₱{row.get(price_col, '')}" if price_col else ""
+                                cat = f"({row.get(cat_col, '')})" if cat_col else ""
+                                menu_lines.append(f"{name} {price} {cat}".strip())
+                            menu_text = "\n".join(menu_lines)
+                        else:
+                            menu_text = "No valid item names found in menu."
                     else:
                         menu_text = "No menu data available."
 
                     system_prompt = (
                         "You are BiteHub’s friendly virtual canteen assistant. "
-                        "Answer only based on the real BiteHub menu provided below. "
-                        "Do not make up dishes or promos. "
-                        "If an item is not listed, politely say it's not available. "
-                        "Be conversational, friendly, and concise.\n\n"
+                        "Only talk about items listed below. "
+                        "If a customer asks for something not in the list, politely say it's not available. "
+                        "Be warm, conversational, and concise.\n\n"
                         f"--- MENU ---\n{menu_text}\n----------------\n"
                     )
 
