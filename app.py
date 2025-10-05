@@ -603,48 +603,49 @@ elif st.session_state.page == "main":
         left_col, right_col = st.columns([1.2, 1])
 
 # ------------------------
-# 🤖 BiteHub Assistant
+# 🤖 BiteHub Assistant (Compact)
 # ------------------------
 st.subheader("🤖 BiteHub Assistant")
 
-user_question = st.text_area("Ask me about our menu, meals, or promos:", key="user_ai_q")
+# smaller text input instead of tall text area
+user_question = st.text_input(
+    "Ask me about our menu, meals, or promos:",
+    key="user_ai_q",
+    placeholder="e.g. What’s today’s special?"
+)
 
-if st.button("Ask AI", key="ask_ai_user"):
+ask_col1, ask_col2 = st.columns([0.3, 1])
+with ask_col1:
+    ask_btn = st.button("Ask AI", key="ask_ai_user")
+
+# Run AI only when user clicks
+if ask_btn:
     if user_question.strip():
-        # --- System prompt ---
         system_prompt = (
             "You are BiteHub’s friendly virtual canteen assistant. "
-            "You represent BiteHub, a campus canteen offering affordable and tasty meals. "
-            "You can discuss our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
-            "Never say you're an AI — act like a BiteHub crew member. "
-            "Be friendly, conversational, and concise. "
-            "If the user asks something unrelated (like politics, math, or personal topics), "
-            "politely redirect the conversation back to the canteen, menu, or meals."
+            "Always respond as if you represent BiteHub, a campus canteen offering affordable and tasty meals. "
+            "You can talk about our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
+            "Never say you're an AI — act like a helpful BiteHub staff member. "
+            "Be conversational, friendly, and concise."
         )
 
-        # --- Add live menu context if available ---
+        # optional: add live menu context
         menu_context = ""
-        try:
-            if "menu_df" in globals() and not menu_df.empty:
+        if "menu_df" in globals() and menu_df is not None and not menu_df.empty:
+            try:
                 menu_context = "\n".join(
                     f"{row['ITEM_NAME']} - ₱{row['PRICE']} ({row['CATEGORY']})"
                     for _, row in menu_df.iterrows()
                 )
-        except Exception:
-            pass
+            except Exception:
+                pass
 
-        # --- AI Response ---
         try:
             response = client.chat.completions.create(
-                model="gpt-4o-mini",  # ✅ Active, fast, and supported on Groq
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"{user_question}\n\nMenu Info (for context):\n{menu_context}"
-                        ),
-                    },
+                    {"role": "user", "content": f"{user_question}\n\nMenu Info:\n{menu_context}"}
                 ],
             )
             st.markdown(response.choices[0].message.content)
@@ -652,7 +653,6 @@ if st.button("Ask AI", key="ask_ai_user"):
             st.error(f"⚠️ AI Error: {e}")
     else:
         st.warning("Please enter a question first 😊")
-
     # ------------------------
     # 📖 MENU & ORDERING
     # ------------------------
