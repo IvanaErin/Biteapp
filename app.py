@@ -619,65 +619,66 @@ else:
         else:
             st.warning("⚠️ Menu is currently empty.")
 
-# --- RIGHT: SENTIMENT, FEEDBACKS, NOTIFICATIONS, HISTORY ---
-with right_col:
-    # Sentiment & Feedbacks
-    st.subheader("⭐ Feedbacks & Sentiment")
-    if not is_guest:
-        if not menu_df.empty:
-            with st.form("feedback_form"):
-                item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
-                feedback = st.text_area("Your feedback:", key="feedback_text")
-                rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
-                submitted = st.form_submit_button("Submit Feedback")
-                if submitted:
-                    if feedback:
-                        save_feedback(item_choice, feedback, rating, user["username"])
-                        st.success("✅ Feedback submitted!")
-                    else:
-                        st.warning("Feedback cannot be empty.")
+    # --- RIGHT: SENTIMENT, FEEDBACKS, NOTIFICATIONS, HISTORY ---
+    with right_col:
+        # Sentiment & Feedbacks
+        st.subheader("⭐ Feedbacks & Sentiment")
+        if not is_guest:
+            if not menu_df.empty:
+                with st.form("feedback_form"):
+                    item_choice = st.selectbox("Which item?", menu_df["ITEM"].tolist(), key="feedback_item")
+                    feedback = st.text_area("Your feedback:", key="feedback_text")
+                    rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                    submitted = st.form_submit_button("Submit Feedback")
+                    if submitted:
+                        if feedback:
+                            save_feedback(item_choice, feedback, rating, user["username"])
+                            st.success("✅ Feedback submitted!")
+                        else:
+                            st.warning("Feedback cannot be empty.")
+            else:
+                st.info("Menu is empty. Feedback cannot be submitted.")
         else:
-            st.info("Menu is empty. Feedback cannot be submitted.")
-    else:
-        st.warning("Guests cannot submit feedback. Please create an account.")
+            st.warning("Guests cannot submit feedback. Please create an account.")
 
-    # Notifications
-    st.divider()
-    st.subheader("📢 Notifications")
-    if st.session_state.notifications:
-        for i, note in enumerate(st.session_state.notifications):
-            st.info(note, key=f"notif_{i}")
-    else:
-        st.info("No notifications.")
-    if st.button("Clear notifications", key="clear_notifs"):
-        st.session_state.notifications.clear()
+        # Notifications
+        st.divider()
+        st.subheader("📢 Notifications")
+        if st.session_state.notifications:
+            for i, note in enumerate(st.session_state.notifications):
+                st.info(note, key=f"notif_{i}")
+        else:
+            st.info("No notifications.")
+        if st.button("Clear notifications", key="clear_notifs"):
+            st.session_state.notifications.clear()
 
-    # Order History
-    st.divider()
-    st.subheader("📜 Order History")
-    if not is_guest:
-        history = load_receipts_df()
-        if not history.empty and "user_id" in history.columns:
-            user_orders = history[history["user_id"] == user["username"]]
-            if not user_orders.empty:
-                st.dataframe(
-                    user_orders.sort_values(by="timestamp", ascending=False),
-                    use_container_width=True
-                )
+        # Order History
+        st.divider()
+        st.subheader("📜 Order History")
+        if not is_guest:
+            history = load_receipts_df()
+            if not history.empty and "user_id" in history.columns:
+                user_orders = history[history["user_id"] == user["username"]]
+                if not user_orders.empty:
+                    st.dataframe(
+                        user_orders.sort_values(by="timestamp", ascending=False),
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No past orders yet.")
             else:
                 st.info("No past orders yet.")
         else:
-            st.info("No past orders yet.")
-    else:
-        st.warning("Guests cannot view order history.")
+            st.warning("Guests cannot view order history.")
 
-# Logout Button
-st.divider()
-if st.button("🚪 Log Out"):
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.session_state.page = "login"
-    st.rerun()
+        # Logout Button
+        st.divider()
+        if st.button("🚪 Log Out"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.session_state.page = "login"
+            st.rerun()
+
 # ---------------------------
 # PAYMENT PAGE
 # ---------------------------
