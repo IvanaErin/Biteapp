@@ -379,6 +379,7 @@ def upsert_menu(df: pd.DataFrame):
     try:
         cur = conn.cursor()
         for _, row in df.iterrows():
+            # handle gracefully if columns missing
             category = row.get("CATEGORY", row.get("Category", None))
             item = row.get("ITEM", row.get("Item", None))
             price = row.get("PRICE", row.get("Price", None))
@@ -408,7 +409,7 @@ def run_ai(question: str, extra_context: str = "") -> str:
         return "Please ask a question."
     try:
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.1-8b-instant",  # ✅ currently supported by Groq
             messages=[
                 {"role": "system", "content": "You are BiteHub's smart assistant. Answer questions about the canteen, menu, meals, prices, and food items only."},
                 {"role": "user", "content": question + "\n" + extra_context}
@@ -426,6 +427,7 @@ if "page" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 if "cart" not in st.session_state:
+    # cart as dict: { item_name: {"qty": int, "price": float} }
     st.session_state.cart = {}
 if "notifications" not in st.session_state:
     st.session_state.notifications = []
@@ -451,6 +453,12 @@ def password_valid_rules(pw: str):
 
 # ---------------------------
 # LOGIN + SIGNUP + MAIN PORTAL + PAYMENT
+# ---------------------------
+if "page" not in st.session_state:
+    st.session_state.page = "login"
+
+# ---------------------------
+# LOGIN PAGE
 # ---------------------------
 if st.session_state.page == "login":
     st.markdown(
@@ -489,6 +497,7 @@ if st.session_state.page == "login":
 
 # ---------- MAIN PORTAL (Staff / Non-Staff / Guest) ----------
 elif st.session_state.page == "main":
+    # Ensure user/role are properly loaded
     if "user" not in st.session_state or not st.session_state.user:
         st.session_state.page = "login"
         st.rerun()
@@ -497,120 +506,67 @@ elif st.session_state.page == "main":
     role = user.get("role", "Guest")
     is_guest = (role == "Guest")
 
-# ---------- STAFF PORTAL ----------
-if role == "Staff":
-    if "staff_choice" not in st.session_state:
-        st.session_state.staff_choice = "Dashboard"
+    # ---------- STAFF PORTAL ----------
+    if role == "Staff":
+        if "staff_choice" not in st.session_state:
+            st.session_state.staff_choice = "Dashboard"
 
-    st.session_state.staff_choice = st.sidebar.radio(
-        "Staff Menu",
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-        index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-            st.session_state.staff_choice
+        st.session_state.staff_choice = st.sidebar.radio(
+            "Staff Menu",
+            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
+                st.session_state.staff_choice
+            )
         )
-    )
 
-    choice = st.session_state.staff_choice
+        choice = st.session_state.staff_choice
 
-    # ------------------- Dashboard -------------------
-    if choice == "Dashboard":
-        st.subheader("📊 Staff Dashboard")
-        st.info("Metrics and KPIs coming soon.")
+        if choice == "Dashboard":
+            st.subheader("📊 Staff Dashboard")
+            st.info("Metrics and KPIs coming soon.")
 
-    # ------------------- Pending Orders -------------------
-    elif choice == "Pending Orders":
-        st.subheader("📦 Pending Orders")
-        receipts = load_receipts_df()
-        pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
-        if not pending_orders.empty:
-            st.dataframe(pending_orders, use_container_width=True)
-        else:
-            st.info("No pending orders.")
-
-    # ------------------- Manage Menu -------------------
-    elif choice == "Manage Menu":
-        st.subheader("📖 Manage Menu")
-        menu_df = load_menu()
-        if not menu_df.empty:
-            edited = st.data_editor(menu_df, num_rows="dynamic")
-            if st.button("Save Menu Updates"):
-                upsert_menu(edited)
-                st.success("✅ Menu updated successfully!")
-                st.rerun()
-        else:
-            st.info("No menu items available.")
-
-    # ------------------- AI Assistant -------------------
-    elif choice == "AI Assistant":
-        st.subheader("🤖 AI Assistant")
-        q = st.text_area("Ask AI something:", key="staff_ai_q")
-        if st.button("Ask AI", key="ask_ai_staff"):
-            st.write(run_ai(q))
-
-    # ------------------- Feedback Review -------------------
-    elif choice == "Feedback Review":
-        st.subheader("📢 Feedback Review")
-        fb = load_feedbacks_df()
-        if not fb.empty:
-            st.dataframe(fb, use_container_width=True)
-        else:
-            st.info("No feedbacks yet.")
-
-    # ------------------- Sales Report -------------------
-    elif choice == "Sales Report":
-        st.subheader("💰 Sales Report")
-        receipts = load_receipts_df()
-
-        if receipts.empty:
-            st.info("No sales yet.")
-        else:
-            # Aggregate sales per item
-            all_items = []
-            for idx, row in receipts.iterrows():
-                items_json = row.get("items")
-                if not items_json:
-                    continue
-                try:
-                    items_list = json.loads(items_json)
-                except Exception:
-                    continue
-                if not isinstance(items_list, list):
-                    continue
-                for it in items_list:
-                    if not isinstance(it, dict):
-                        continue
-                    name = it.get("name") or it.get("ITEM_NAME") or "Unknown Item"
-                    try:
-                        qty = int(it.get("qty") or it.get("QUANTITY") or 1)
-                    except Exception:
-                        qty = 1
-                    category = it.get("category") or "Uncategorized"
-                    all_items.append({"CATEGORY": category, "ITEM_NAME": name, "QUANTITY": qty})
-
-            if not all_items:
-                st.info("No sales items found in receipts.")
+        elif choice == "Pending Orders":
+            st.subheader("📦 Pending Orders")
+            receipts = load_receipts_df()
+            pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
+            if not pending_orders.empty:
+                st.dataframe(pending_orders, use_container_width=True)
             else:
-                sales_summary = pd.DataFrame(all_items)
-                categories = sales_summary["CATEGORY"].dropna().unique()
+                st.info("No pending orders.")
 
-                for cat in categories:
-                    st.markdown(f"### {cat} Sales Breakdown")
-                    cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+        elif choice == "Manage Menu":
+            st.subheader("📖 Manage Menu")
+            menu_df = load_menu()
+            if not menu_df.empty:
+                edited = st.data_editor(menu_df, num_rows="dynamic")
+                if st.button("Save Menu Updates"):
+                    upsert_menu(edited)
+                    st.success("✅ Menu updated successfully!")
+                    st.rerun()
+            else:
+                st.info("No menu items available.")
 
-                    if cat_data.empty:
-                        st.info(f"No sales for {cat} yet.")
-                        continue
+        elif choice == "AI Assistant":
+            st.subheader("🤖 AI Assistant")
+            q = st.text_area("Ask AI something:", key="staff_ai_q")
+            if st.button("Ask AI", key="ask_ai_staff"):
+                st.write(run_ai(q))
 
-                    fig, ax = plt.subplots()
-                    ax.pie(
-                        cat_data.groupby("ITEM_NAME")["QUANTITY"].sum(),
-                        labels=cat_data["ITEM_NAME"].unique(),
-                        autopct="%1.1f%%",
-                        startangle=90,
-                        wedgeprops={"edgecolor": "w"}
-                    )
-                    ax.axis("equal")
-                    st.pyplot(fig)
+        elif choice == "Feedback Review":
+            st.subheader("📢 Feedback Review")
+            fb = load_feedbacks_df()
+            if not fb.empty:
+                st.dataframe(fb, use_container_width=True)
+            else:
+                st.info("No feedbacks yet.")
+
+        elif choice == "Sales Report":
+            st.subheader("💰 Sales Report")
+            receipts = load_receipts_df()
+            if not receipts.empty:
+                st.dataframe(receipts, use_container_width=True)
+            else:
+                st.info("No sales yet.")
 
     # ---------- NON-STAFF / GUEST PORTAL ----------
     else:
