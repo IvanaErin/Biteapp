@@ -455,24 +455,65 @@ def password_valid_rules(pw: str):
 # PAGES: LOGIN, SIGNUP, MAIN, PAYMENT
 # ---------------------------
 
-# ---------- LOGIN PAGE ----------
+# ---------------------------
+# LOGIN, GUEST, AND CREATE ACCOUNT PAGES
+# ---------------------------
 if st.session_state.page == "login":
     st.title("☕ BiteHub")
-    st.write("Welcome! Please log in below.")
+    st.markdown("Welcome! Please log in below.")
 
     username = st.text_input("Username", placeholder="Enter username")
-    password = st.text_input("Password", type="password", placeholder="Enter password")
+    password = st.text_input("Password", placeholder="Enter password", type="password")
 
-    if st.button("🔓 Log In"):
-        user = authenticate_user(username, password)
-        if user:
-            st.session_state.user = user
-            st.session_state.page = "main"
-            st.success("✅ Login successful!")
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.button("🔐 Log In"):
+            user = authenticate_user(username, password)
+            if user:
+                st.session_state.user = user
+                st.session_state.page = "main"
+                st.success(f"Welcome back, {username}!")
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+    with col2:
+        if st.button("🧾 Create Account"):
+            st.session_state.page = "create_account"
             st.rerun()
-        else:
-            st.error("❌ Invalid username or password.")
+    with col3:
+        if st.button("🚪 Continue as Guest"):
+            st.session_state.user = {"username": "Guest", "role": "Guest"}
+            st.session_state.page = "main"
+            st.rerun()
 
+# ---------------------------
+# CREATE ACCOUNT PAGE
+# ---------------------------
+elif st.session_state.page == "create_account":
+    st.title("📝 Create a BiteHub Account")
+    st.markdown("Join BiteHub and enjoy easy meal ordering!")
+
+    new_username = st.text_input("Choose a username", placeholder="Enter your username")
+    new_password = st.text_input("Choose a password", type="password", placeholder="Enter your password")
+    role = st.selectbox("Select your role", ["Non-Staff", "Staff"])
+
+    colA, colB = st.columns([1, 1])
+    with colA:
+        if st.button("✅ Create Account"):
+            if not new_username or not new_password:
+                st.warning("Please fill in all fields.")
+            else:
+                if username_exists(new_username):
+                    st.error("Username already exists. Please choose another one.")
+                else:
+                    save_user(new_username, new_password, role)
+                    st.success("Account created successfully! You can now log in.")
+                    st.session_state.page = "login"
+                    st.rerun()
+    with colB:
+        if st.button("⬅️ Back to Login"):
+            st.session_state.page = "login"
+            st.rerun()
 
 # ---------- NON-STAFF & GUEST PORTAL ----------
 elif st.session_state.page == "main":
