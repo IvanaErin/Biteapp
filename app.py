@@ -616,12 +616,22 @@ with left_col:
 
             if st.button("Ask AI", key="ask_ai_user", use_container_width=False):
                 if user_question.strip():
+                    # ✅ Pull real menu data so AI only talks about actual items
+                    if "menu_df" in locals() and not menu_df.empty:
+                        menu_text = "\n".join(
+                            f"{row['ITEM_NAME']} - ₱{row['PRICE']} ({row['CATEGORY']})"
+                            for _, row in menu_df.iterrows()
+                        )
+                    else:
+                        menu_text = "No menu data available."
+
                     system_prompt = (
                         "You are BiteHub’s friendly virtual canteen assistant. "
-                        "Always respond as if you represent BiteHub, a campus canteen offering affordable and tasty meals. "
-                        "You can talk about our menu, rice meals, silogs, beverages, snacks, daily specials, and budget combos. "
-                        "Never say you're an AI — act like a helpful BiteHub staff member. "
-                        "Be conversational, friendly, and concise."
+                        "Answer only based on the real BiteHub menu provided below. "
+                        "Do not make up dishes or promos. "
+                        "If an item is not listed, politely say it's not available. "
+                        "Be conversational, friendly, and concise.\n\n"
+                        f"--- MENU ---\n{menu_text}\n----------------\n"
                     )
 
                     try:
