@@ -138,6 +138,8 @@ def _ensure_local_db():
         st.session_state._local_feedbacks = []
     if "_local_receipts" not in st.session_state:
         st.session_state._local_receipts = []
+    if "notifications" not in st.session_state:
+        st.session_state.notifications = []
 
 # ---------------------------
 # ACCOUNTS
@@ -197,7 +199,11 @@ def validate_account(username: str, password: str):
 # ---------------------------
 # RECEIPTS
 # ---------------------------
-def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status):
+def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
+    """
+    Save a receipt. `items` expected to be a serializable structure (e.g. dict or list).
+    Default status is 'Pending' so staff can mark Ready later.
+    """
     items_json = json.dumps(items)
     conn = get_connection()
     if not conn:
@@ -260,6 +266,81 @@ ORDER BY timestamp DESC
         cur.close()
         conn.close()
 
+def update_order_status(order_id: str, new_status: str):
+    """
+    Update order status in DB if available, otherwise update local fallback.
+    """
+    conn = get_connection()
+    if not conn:
+        _ensure_local_db()
+        updated = False
+        for r in st.session_state.get("_local_receipts", []):
+            if r.get("order_id") == order_id:
+                r["status"] = new_status
+                updated = True
+        return updated
+
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE receipts SET status = %s WHERE order_id = %s", (new_status, order_id))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+# ---------------------------
+# NOTIFICATIONS (session-based; optional DB insert)
+# ---------------------------
+def add_notification(user_id: str, message: str):
+    """
+    Add a notification to session state. If DB connected and a notifications table is available,
+    this function attempts to insert to DB but silently ignores DB errors.
+    """
+    _ensure_local_db()
+    # Add to session notifications (global for now)
+    # You may want per-user notifications dict; for simplicity, append a message with user id prefix
+    note = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {message}"
+    # If user is current user, show immediately; otherwise store in a list with user id
+    st.session_state.notifications.append({"user_id": user_id, "message": note})
+
+    # Optional DB insert (best-effort, ignore errors)
+    conn = get_connection()
+    if not conn:
+        return
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO notifications (user_id, message, timestamp) VALUES (%s, %s, %s)",
+                (user_id, message, datetime.now())
+            )
+            conn.commit()
+        except Exception:
+            # ignore if notifications table doesn't exist or insert fails
+            pass
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
+def get_notifications_for_user(user_id: str):
+    """
+    Return list of messages for the given user from session state (and DB optionally).
+    """
+    _ensure_local_db()
+    msgs = []
+    for n in st.session_state.notifications:
+        # n is dict {"user_id":..., "message":...}
+        if n.get("user_id") == user_id:
+            msgs.append(n.get("message"))
+    # Note: DB-backed retrieval can be added later.
+    return msgs
+
 # ---------------------------
 # FEEDBACK
 # ---------------------------
@@ -309,7 +390,7 @@ def detect_menu_columns(df: pd.DataFrame):
 
     for c in df.columns:
         cu = c.upper()
-        if category_col is None and ("CATEGORY" in cu or "CAT" == cu):
+        if category_col is None and ("CATEGORY" in cu or cu == "CAT"):
             category_col = c
         if item_col is None and ("ITEM" in cu or "NAME" in cu):
             item_col = c
@@ -454,8 +535,7 @@ def password_valid_rules(pw: str):
 # ---------------------------
 # LOGIN + SIGNUP + MAIN PORTAL + PAYMENT
 # ---------------------------
-if "page" not in st.session_state:
-    st.session_state.page = "login"
+# Default page already set above
 
 # ---------------------------
 # LOGIN PAGE
@@ -506,51 +586,58 @@ elif st.session_state.page == "main":
     role = user.get("role", "Guest")
     is_guest = (role == "Guest")
 
-# ---------- STAFF PORTAL ----------
-if role == "Staff":
-    if "staff_choice" not in st.session_state:
-        st.session_state.staff_choice = "Dashboard"
+    # ---------------------------
+    # STAFF PORTAL
+    # ---------------------------
+    if role == "Staff":
+        if "staff_choice" not in st.session_state:
+            st.session_state.staff_choice = "Dashboard"
 
-    st.session_state.staff_choice = st.sidebar.radio(
-        "Staff Menu",
-        ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
-        index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
-            st.session_state.staff_choice
+        st.session_state.staff_choice = st.sidebar.radio(
+            "Staff Menu",
+            ["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"],
+            index=["Dashboard", "Pending Orders", "Manage Menu", "AI Assistant", "Feedback Review", "Sales Report"].index(
+                st.session_state.staff_choice
+            )
         )
-    )
 
-    choice = st.session_state.staff_choice
+        choice = st.session_state.staff_choice
 
-    if choice == "Dashboard":
-        st.subheader("📊 Staff Dashboard")
-        st.info("Metrics and KPIs coming soon.")
+        # ------------------- Dashboard -------------------
+        if choice == "Dashboard":
+            st.subheader("📊 Staff Dashboard")
+            st.info("Metrics and KPIs coming soon.")
 
-    elif choice == "Pending Orders":
-        st.subheader("📦 Pending Orders")
-        receipts = load_receipts_df()
+        # ------------------- Pending Orders -------------------
+        elif choice == "Pending Orders":
+            st.subheader("📦 Pending Orders")
+            receipts = load_receipts_df()
 
-        # Only pending orders
-        pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
+            # Only pending orders
+            pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
 
-        if not pending_orders.empty:
-            # Display each pending order with a "Mark as Ready" button
-            for idx, row in pending_orders.iterrows():
-                st.markdown(f"**Order ID:** {row['id']} | **User:** {row['user_id']} | **Payment:** {row['payment_method']}")
-                st.write("Items:", row["items"])
-                
-                btn_key = f"ready_{row['id']}"
-                if st.button("✅ Mark as Ready", key=btn_key):
-                    # Update order status to Ready
-                    update_order_status(row['id'], "Ready")
-                    
-                    # Add notification to the corresponding user
-                    add_notification(row['user_id'], f"Your order #{row['id']} is ready for pickup!")
-                    
-                    st.success(f"Order #{row['id']} marked as Ready!")
-                    st.experimental_rerun()  # Refresh the page to update table
-        else:
-            st.info("No pending orders.")
+            if not pending_orders.empty:
+                # Display each pending order with a "Mark as Ready" button
+                for idx, row in pending_orders.iterrows():
+                    # use order_id column name used across load/save
+                    order_id = row.get("order_id") or row.get("orderId") or row.get("id")
+                    st.markdown(f"**Order ID:** {order_id} | **User:** {row.get('user_id')} | **Payment:** {row.get('payment_method')}")
+                    st.write("Items:", row.get("items"))
 
+                    btn_key = f"ready_{order_id}"
+                    if st.button("✅ Mark as Ready", key=btn_key):
+                        # Update order status to Ready
+                        update_order_status(order_id, "Ready")
+
+                        # Add notification to the corresponding user
+                        add_notification(row.get("user_id"), f"Your order #{order_id} is ready for pickup!")
+
+                        st.success(f"Order #{order_id} marked as Ready!")
+                        st.experimental_rerun()  # Refresh the page to update table
+            else:
+                st.info("No pending orders.")
+
+        # ------------------- Manage Menu -------------------
         elif choice == "Manage Menu":
             st.subheader("📖 Manage Menu")
             menu_df = load_menu()
@@ -563,12 +650,14 @@ if role == "Staff":
             else:
                 st.info("No menu items available.")
 
+        # ------------------- AI Assistant -------------------
         elif choice == "AI Assistant":
             st.subheader("🤖 AI Assistant")
             q = st.text_area("Ask AI something:", key="staff_ai_q")
             if st.button("Ask AI", key="ask_ai_staff"):
                 st.write(run_ai(q))
 
+        # ------------------- Feedback Review -------------------
         elif choice == "Feedback Review":
             st.subheader("📢 Feedback Review")
             fb = load_feedbacks_df()
@@ -577,15 +666,61 @@ if role == "Staff":
             else:
                 st.info("No feedbacks yet.")
 
+        # ------------------- Sales Report -------------------
         elif choice == "Sales Report":
             st.subheader("💰 Sales Report")
             receipts = load_receipts_df()
-            if not receipts.empty:
-                st.dataframe(receipts, use_container_width=True)
-            else:
+            if receipts.empty:
                 st.info("No sales yet.")
+            else:
+                # Extract items from JSON and aggregate
+                all_items = []
+                for _, row in receipts.iterrows():
+                    items_json = row.get("items")
+                    if not items_json:
+                        continue
+                    try:
+                        items_list = json.loads(items_json)
+                    except Exception:
+                        continue
+                    if not isinstance(items_list, list):
+                        continue
+                    for it in items_list:
+                        if not isinstance(it, dict):
+                            continue
+                        name = it.get("name") or it.get("ITEM_NAME") or it.get("item") or "Unknown Item"
+                        try:
+                            qty = int(it.get("qty") or it.get("QUANTITY") or 1)
+                        except Exception:
+                            qty = 1
+                        category = it.get("category") or "Uncategorized"
+                        all_items.append({"CATEGORY": category, "ITEM_NAME": name, "QUANTITY": qty})
 
-    # ---------- NON-STAFF / GUEST PORTAL ----------
+                if not all_items:
+                    st.info("No sales items found in receipts.")
+                else:
+                    sales_summary = pd.DataFrame(all_items)
+                    sales_summary = sales_summary.groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
+                    categories = sales_summary["CATEGORY"].dropna().unique()
+
+                    # Show pie chart per category
+                    for cat in categories:
+                        st.markdown(f"### {cat} Sales Breakdown")
+                        cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+                        if cat_data.empty:
+                            st.info(f"No sales for {cat} yet.")
+                            continue
+                        # prepare values and labels
+                        values = cat_data["QUANTITY"].tolist()
+                        labels = cat_data["ITEM_NAME"].tolist()
+                        fig, ax = plt.subplots()
+                        ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90, wedgeprops={"edgecolor": "w"})
+                        ax.axis("equal")
+                        st.pyplot(fig)
+
+    # ---------------------------
+    # NON-STAFF / GUEST PORTAL
+    # ---------------------------
     else:
         # --- Initialize session variables ---
         if "cart" not in st.session_state:
@@ -619,6 +754,7 @@ if role == "Staff":
 
                                 if name_col:
                                     menu_lines = []
+                                    # use original column names for values
                                     for _, row in menu_df.iterrows():
                                         name = str(row.get(name_col, "")).strip()
                                         price = f"₱{row.get(price_col, '')}" if price_col else ""
@@ -714,13 +850,17 @@ if role == "Staff":
 
             st.divider()
             st.subheader("📢 Notifications")
-            if st.session_state.notifications:
-                for i, note in enumerate(st.session_state.notifications):
+            # show only notifications for this logged-in user
+            notes = get_notifications_for_user(user.get("username"))
+            if notes:
+                for i, note in enumerate(notes):
                     st.info(note, key=f"notif_{i}")
             else:
                 st.info("No notifications.")
             if st.button("Clear notifications", key="clear_notifs"):
-                st.session_state.notifications.clear()
+                # clear only current user's notifications in session state
+                st.session_state["notifications"] = [n for n in st.session_state.get("notifications", []) if n.get("user_id") != user.get("username")]
+                st.success("✅ Notifications cleared")
 
             st.divider()
             st.subheader("📜 Order History")
@@ -765,12 +905,13 @@ elif st.session_state.page == "payment":
             value=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
 
+        # always save as Pending so staff marks Ready manually
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
                 save_receipt(order_id, pending_cart, total_cost, "Cash",
-                             user.get("username", "Guest"), pickup_dt, "Completed")
-                st.success("✅ Cash payment confirmed! Order recorded.")
+                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
@@ -783,8 +924,8 @@ elif st.session_state.page == "payment":
             if st.button("✅ I've Paid via GCash"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
                 save_receipt(order_id, pending_cart, total_cost, "GCash",
-                             user.get("username", "Guest"), pickup_dt, "Completed")
-                st.success("✅ GCash payment confirmed! Thank you.")
+                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
@@ -796,8 +937,8 @@ elif st.session_state.page == "payment":
             if st.button("Simulate Card Payment Success"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
                 save_receipt(order_id, pending_cart, total_cost, "Card",
-                             user.get("username", "Guest"), pickup_dt, "Completed")
-                st.success("✅ Card payment successful!")
+                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
