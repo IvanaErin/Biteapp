@@ -788,43 +788,77 @@ elif st.session_state.page == "main":
                         else:
                             st.warning("Please enter a question first 😊")
 
-            # 📖 MENU & ORDERING
-            st.markdown("### 📖 Menu & Ordering")
-            if menu_df is None or menu_df.empty:
-                st.warning("⚠️ Menu is currently empty.")
-            else:
-                detected_category_col, detected_item_col, detected_price_col = detect_menu_columns(menu_df)
-                if detected_item_col and detected_price_col:
-                    if not detected_category_col:
-                        menu_df["_SINGLE_CAT"] = "Menu"
-                        detected_category_col = "_SINGLE_CAT"
+# 📖 MENU & ORDERING
+st.markdown("### 📖 Menu & Ordering")
+if menu_df is None or menu_df.empty:
+    st.warning("⚠️ Menu is currently empty.")
+else:
+    detected_category_col, detected_item_col, detected_price_col = detect_menu_columns(menu_df)
+    if detected_item_col and detected_price_col:
+        if not detected_category_col:
+            menu_df["_SINGLE_CAT"] = "Menu"
+            detected_category_col = "_SINGLE_CAT"
 
-                    categories = menu_df[detected_category_col].fillna("Uncategorized").unique()
-                    for cat in categories:
-                        st.markdown(f"#### 🍽️ {cat}")
-                        cat_items = menu_df[menu_df[detected_category_col] == cat]
-                        for _, row in cat_items.iterrows():
-                            item_name = row.get(detected_item_col, "Unknown Item")
-                            price_val = row.get(detected_price_col, 0.0)
-                            try:
-                                price_val = float(price_val)
-                            except Exception:
-                                price_val = 0.0
+        categories = menu_df[detected_category_col].fillna("Uncategorized").unique()
+        for cat in categories:
+            st.markdown(f"#### 🍽️ {cat}")
+            cat_items = menu_df[menu_df[detected_category_col] == cat]
+            for _, row in cat_items.iterrows():
+                item_name = row.get(detected_item_col, "Unknown Item")
+                price_val = row.get(detected_price_col, 0.0)
+                try:
+                    price_val = float(price_val)
+                except Exception:
+                    price_val = 0.0
 
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"<div style='font-size:16px; font-weight:500;'>{item_name}</div>", unsafe_allow_html=True)
-                            with col2:
-                                st.markdown(f"<div style='font-size:15px; color:#FFD700;'>₱{price_val:.2f}</div>", unsafe_allow_html=True)
-                            with col3:
-                                btn_key = f"add_{cat}_{item_name}"
-                                if st.button("➕ Add", key=btn_key, use_container_width=True):
-                                    if item_name not in st.session_state.cart:
-                                        st.session_state.cart[item_name] = {"qty": 1, "price": price_val}
-                                    else:
-                                        st.session_state.cart[item_name]["qty"] += 1
-                                    st.success(f"✅ {item_name} added to cart!")
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.markdown(
+                        f"<div style='font-size:16px; font-weight:500;'>{item_name}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with col2:
+                    st.markdown(
+                        f"<div style='font-size:15px; color:#FFD700;'>₱{price_val:.2f}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with col3:
+                    btn_key = f"add_{cat}_{item_name}"
+                    if st.button("➕ Add", key=btn_key, use_container_width=True):
+                        if item_name not in st.session_state.cart:
+                            st.session_state.cart[item_name] = {"qty": 1, "price": price_val}
+                        else:
+                            st.session_state.cart[item_name]["qty"] += 1
+                        st.success(f"✅ {item_name} added to cart!")
 
+    # 🛒 CART & PAYMENT SECTION
+    st.markdown("---")
+    st.markdown("### 🛒 Your Cart")
+    if st.session_state.cart:
+        cart_items = []
+        total_amount = 0
+        for item, details in st.session_state.cart.items():
+            qty = details["qty"]
+            price = details["price"]
+            subtotal = qty * price
+            total_amount += subtotal
+            cart_items.append([item, qty, f"₱{price:.2f}", f"₱{subtotal:.2f}"])
+
+        cart_df = pd.DataFrame(cart_items, columns=["Item", "Qty", "Price", "Subtotal"])
+        st.dataframe(cart_df, use_container_width=True, hide_index=True)
+        st.markdown(f"### 💵 Total: ₱{total_amount:.2f}")
+
+        payment_method = st.selectbox("Select Payment Method", ["Cash", "GCash", "Card"])
+        pickup_dt = st.text_input("Pickup Date & Time (YYYY-MM-DD HH:MM)")
+
+        if st.button("✅ Proceed to Payment"):
+            order_id = secrets.token_hex(4)
+            items = [{"name": item, "qty": d["qty"], "price": d["price"]} for item, d in st.session_state.cart.items()]
+            save_receipt(order_id, items, total_amount, payment_method, st.session_state.user["username"], pickup_dt, "Pending")
+            st.session_state.cart.clear()
+            st.success("🎉 Order placed successfully! Please wait for staff to mark it Ready.")
+    else:
+        st.info("Your cart is empty.")
         # --- RIGHT: FEEDBACKS & NOTIFICATIONS ---
         with right_col:
             st.subheader("⭐ Feedbacks & Sentiment")
