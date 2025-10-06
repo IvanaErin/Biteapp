@@ -749,151 +749,144 @@ else:
     menu_df = load_menu()
     left_col, right_col = st.columns([1.2, 1])
 
-        # --- LEFT: AI, MENU & ORDERING ---
-        with left_col:
-            # 🤖 BiteHub Assistant (Compact)
-            with st.container():
-                st.markdown("### 🤖 BiteHub Assistant")
-                with st.expander("💬 Ask BiteHub AI", expanded=False):
-                    user_question = st.text_input(
-                        "Ask about our meals, menu, or promos:",
-                        key="user_ai_q",
-                        placeholder="e.g. What’s today’s special?"
+    # --- LEFT: AI Assistant + Menu & Ordering ---
+    with left_col:
+        # 🤖 BiteHub Assistant
+        st.markdown("### 🤖 BiteHub Assistant")
+        with st.expander("💬 Ask BiteHub AI", expanded=False):
+            user_question = st.text_input(
+                "Ask about our meals, menu, or promos:",
+                key="user_ai_q",
+                placeholder="e.g. What’s today’s special?"
+            )
+            if st.button("Ask AI", key="ask_ai_user", use_container_width=False):
+                if user_question.strip():
+                    # Build menu context
+                    if menu_df is not None and not menu_df.empty:
+                        cols = menu_df.columns.str.upper().tolist()
+                        name_col = next((c for c in cols if "ITEM" in c or "NAME" in c or "PRODUCT" in c), None)
+                        price_col = next((c for c in cols if "PRICE" in c), None)
+                        cat_col = next((c for c in cols if "CAT" in c or "TYPE" in c), None)
+
+                        menu_lines = []
+                        if name_col:
+                            for _, row in menu_df.iterrows():
+                                name = str(row.get(name_col, "")).strip()
+                                price = f"₱{row.get(price_col, '')}" if price_col else ""
+                                cat = f"({row.get(cat_col, '')})" if cat_col else ""
+                                menu_lines.append(f"{name} {price} {cat}".strip())
+                        menu_text = "\n".join(menu_lines) if menu_lines else "No menu data available."
+                    else:
+                        menu_text = "No menu data available."
+
+                    system_prompt = (
+                        "You are BiteHub’s friendly virtual canteen assistant. "
+                        "Only talk about items listed below. "
+                        "If a customer asks for something not in the list, politely say it's not available. "
+                        "Be warm, conversational, and concise.\n\n"
+                        f"--- MENU ---\n{menu_text}\n----------------\n"
                     )
 
-                    if st.button("Ask AI", key="ask_ai_user", use_container_width=False):
-                        if user_question.strip():
-                            # Build dynamic menu context
-                            if menu_df is not None and not menu_df.empty:
-                                cols = menu_df.columns.str.upper().tolist()
-                                name_col = next((c for c in cols if "ITEM" in c or "NAME" in c or "PRODUCT" in c), None)
-                                price_col = next((c for c in cols if "PRICE" in c), None)
-                                cat_col = next((c for c in cols if "CAT" in c or "TYPE" in c), None)
-
-                                if name_col:
-                                    menu_lines = []
-                                    # use original column names for values
-                                    for _, row in menu_df.iterrows():
-                                        name = str(row.get(name_col, "")).strip()
-                                        price = f"₱{row.get(price_col, '')}" if price_col else ""
-                                        cat = f"({row.get(cat_col, '')})" if cat_col else ""
-                                        menu_lines.append(f"{name} {price} {cat}".strip())
-                                    menu_text = "\n".join(menu_lines)
-                                else:
-                                    menu_text = "No valid item names found in menu."
-                            else:
-                                menu_text = "No menu data available."
-
-                            system_prompt = (
-                                "You are BiteHub’s friendly virtual canteen assistant. "
-                                "Only talk about items listed below. "
-                                "If a customer asks for something not in the list, politely say it's not available. "
-                                "Be warm, conversational, and concise.\n\n"
-                                f"--- MENU ---\n{menu_text}\n----------------\n"
-                            )
-
-                            try:
-                                response = client.chat.completions.create(
-                                    model="llama-3.1-8b-instant",
-                                    messages=[
-                                        {"role": "system", "content": system_prompt},
-                                        {"role": "user", "content": user_question},
-                                    ],
-                                )
-                                st.markdown(response.choices[0].message.content)
-                            except Exception as e:
-                                st.error(f"⚠️ AI Error: {e}")
-                        else:
-                            st.warning("Please enter a question first 😊")
-
-            # 📖 MENU & ORDERING
-            st.markdown("### 📖 Menu & Ordering")
-            if menu_df is None or menu_df.empty:
-                st.warning("⚠️ Menu is currently empty.")
-            else:
-                detected_category_col, detected_item_col, detected_price_col = detect_menu_columns(menu_df)
-                if detected_item_col and detected_price_col:
-                    if not detected_category_col:
-                        menu_df["_SINGLE_CAT"] = "Menu"
-                        detected_category_col = "_SINGLE_CAT"
-
-                    categories = menu_df[detected_category_col].fillna("Uncategorized").unique()
-                    for cat in categories:
-                        st.markdown(f"#### 🍽️ {cat}")
-                        cat_items = menu_df[menu_df[detected_category_col] == cat]
-                        for _, row in cat_items.iterrows():
-                            item_name = row.get(detected_item_col, "Unknown Item")
-                            price_val = row.get(detected_price_col, 0.0)
-                            try:
-                                price_val = float(price_val)
-                            except Exception:
-                                price_val = 0.0
-
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"<div style='font-size:16px; font-weight:500;'>{item_name}</div>", unsafe_allow_html=True)
-                            with col2:
-                                st.markdown(f"<div style='font-size:15px; color:#FFD700;'>₱{price_val:.2f}</div>", unsafe_allow_html=True)
-                            with col3:
-                                btn_key = f"add_{cat}_{item_name}"
-                                if st.button("➕ Add", key=btn_key, use_container_width=True):
-                                    if item_name not in st.session_state.cart:
-                                        st.session_state.cart[item_name] = {"qty": 1, "price": price_val}
-                                    else:
-                                        st.session_state.cart[item_name]["qty"] += 1
-                                    st.success(f"✅ {item_name} added to cart!")
-
-        # --- RIGHT: FEEDBACKS & NOTIFICATIONS ---
-        with right_col:
-            st.subheader("⭐ Feedbacks & Sentiment")
-            if not is_guest:
-                if not menu_df.empty:
-                    det_cat, det_item, det_price = detect_menu_columns(menu_df)
-                    available_items = menu_df[det_item].fillna("Unknown").tolist() if det_item else menu_df.iloc[:, 0].fillna("Unknown").tolist()
-                    with st.form("feedback_form"):
-                        item_choice = st.selectbox("Which item?", available_items, key="feedback_item")
-                        feedback = st.text_area("Your feedback:", key="feedback_text")
-                        rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
-                        submitted = st.form_submit_button("Submit Feedback")
-                        if submitted:
-                            if feedback:
-                                save_feedback(item_choice, feedback, rating, user["username"])
-                                st.success("✅ Feedback submitted!")
-                            else:
-                                st.warning("Feedback cannot be empty.")
+                    try:
+                        response = client.chat.completions.create(
+                            model="llama-3.1-8b-instant",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_question},
+                            ],
+                        )
+                        st.markdown(response.choices[0].message.content)
+                    except Exception as e:
+                        st.error(f"⚠️ AI Error: {e}")
                 else:
-                    st.info("Menu is empty. Feedback cannot be submitted.")
-            else:
-                st.warning("Guests cannot submit feedback. Please create an account.")
+                    st.warning("Please enter a question first 😊")
 
-            st.divider()
-            st.subheader("📢 Notifications")
-            # show only notifications for this logged-in user
-            notes = get_notifications_for_user(user.get("username"))
-            if notes:
-                for i, note in enumerate(notes):
-                    st.info(note, key=f"notif_{i}")
-            else:
-                st.info("No notifications.")
-            if st.button("Clear notifications", key="clear_notifs"):
-                # clear only current user's notifications in session state
-                st.session_state["notifications"] = [n for n in st.session_state.get("notifications", []) if n.get("user_id") != user.get("username")]
-                st.success("✅ Notifications cleared")
+        # 📖 MENU & ORDERING
+        st.markdown("### 📖 Menu & Ordering")
+        if menu_df is None or menu_df.empty:
+            st.warning("⚠️ Menu is currently empty.")
+        else:
+            detected_category_col, detected_item_col, detected_price_col = detect_menu_columns(menu_df)
+            if detected_item_col and detected_price_col:
+                if not detected_category_col:
+                    menu_df["_SINGLE_CAT"] = "Menu"
+                    detected_category_col = "_SINGLE_CAT"
 
-            st.divider()
-            st.subheader("📜 Order History")
-            if not is_guest:
-                history = load_receipts_df()
-                if not history.empty and "user_id" in history.columns:
-                    user_orders = history[history["user_id"] == user["username"]]
-                    if not user_orders.empty:
-                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
-                    else:
-                        st.info("No past orders yet.")
+                categories = menu_df[detected_category_col].fillna("Uncategorized").unique()
+                for cat in categories:
+                    st.markdown(f"#### 🍽️ {cat}")
+                    cat_items = menu_df[menu_df[detected_category_col] == cat]
+                    for _, row in cat_items.iterrows():
+                        item_name = row.get(detected_item_col, "Unknown Item")
+                        try:
+                            price_val = float(row.get(detected_price_col, 0.0))
+                        except Exception:
+                            price_val = 0.0
+
+                        col1, col2, col3 = st.columns([3, 1, 1])
+                        with col1:
+                            st.markdown(f"<div style='font-size:16px; font-weight:500;'>{item_name}</div>", unsafe_allow_html=True)
+                        with col2:
+                            st.markdown(f"<div style='font-size:15px; color:#FFD700;'>₱{price_val:.2f}</div>", unsafe_allow_html=True)
+                        with col3:
+                            btn_key = f"add_{cat}_{item_name}"
+                            if st.button("➕ Add", key=btn_key, use_container_width=True):
+                                if item_name not in st.session_state.cart:
+                                    st.session_state.cart[item_name] = {"qty": 1, "price": price_val}
+                                else:
+                                    st.session_state.cart[item_name]["qty"] += 1
+                                st.success(f"✅ {item_name} added to cart!")
+
+    # --- RIGHT: Feedbacks, Notifications & History ---
+    with right_col:
+        st.subheader("⭐ Feedbacks & Sentiment")
+        if not is_guest:
+            if not menu_df.empty:
+                det_cat, det_item, det_price = detect_menu_columns(menu_df)
+                available_items = menu_df[det_item].fillna("Unknown").tolist() if det_item else menu_df.iloc[:, 0].fillna("Unknown").tolist()
+                with st.form("feedback_form"):
+                    item_choice = st.selectbox("Which item?", available_items, key="feedback_item")
+                    feedback = st.text_area("Your feedback:", key="feedback_text")
+                    rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                    submitted = st.form_submit_button("Submit Feedback")
+                    if submitted:
+                        if feedback:
+                            save_feedback(item_choice, feedback, rating, user["username"])
+                            st.success("✅ Feedback submitted!")
+                        else:
+                            st.warning("Feedback cannot be empty.")
+            else:
+                st.info("Menu is empty. Feedback cannot be submitted.")
+        else:
+            st.warning("Guests cannot submit feedback. Please create an account.")
+
+        st.divider()
+        st.subheader("📢 Notifications")
+        notes = get_notifications_for_user(user.get("username"))
+        if notes:
+            for i, note in enumerate(notes):
+                st.info(note, key=f"notif_{i}")
+        else:
+            st.info("No notifications.")
+
+        if st.button("Clear notifications", key="clear_notifs"):
+            st.session_state["notifications"] = [n for n in st.session_state.get("notifications", []) if n.get("user_id") != user.get("username")]
+            st.success("✅ Notifications cleared")
+
+        st.divider()
+        st.subheader("📜 Order History")
+        if not is_guest:
+            history = load_receipts_df()
+            if not history.empty and "user_id" in history.columns:
+                user_orders = history[history["user_id"] == user["username"]]
+                if not user_orders.empty:
+                    st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
                 else:
                     st.info("No past orders yet.")
             else:
-                st.warning("Guests cannot view order history.")
+                st.info("No past orders yet.")
+        else:
+            st.warning("Guests cannot view order history.")
 
         st.divider()
         if st.button("🚪 Log Out"):
@@ -902,7 +895,7 @@ else:
             st.session_state.page = "login"
             st.rerun()
 
-# ---------- PAYMENT PAGE ----------
+# ------------------- PAYMENT PAGE -------------------
 elif st.session_state.page == "payment":
     user = st.session_state.user or {"username": "Guest", "role": "Guest"}
     pending_cart = st.session_state.get("cart", {})
@@ -923,17 +916,16 @@ elif st.session_state.page == "payment":
             value=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
 
-        # always save as Pending so staff marks Ready manually
-        if method == "Cash":
-            if st.button("Confirm Cash Payment"):
-                order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "Cash",
-                             user.get("username", "Guest"), pickup_dt, status="Pending")
-                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
-                st.session_state.cart.clear()
-                st.session_state.page = "main"
-                st.rerun()
+        # CASH
+        if method == "Cash" and st.button("Confirm Cash Payment"):
+            order_id = f"ORD-{random.randint(100000,999999)}"
+            save_receipt(order_id, pending_cart, total_cost, "Cash", user.get("username", "Guest"), pickup_dt, status="Pending")
+            st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
+            st.session_state.cart.clear()
+            st.session_state.page = "main"
+            st.rerun()
 
+        # GCASH
         elif method == "GCash (Scan QR)":
             st.info("📱 Please scan the QR code below using your GCash app to pay.")
             st.image("Qr.jpg", caption="Scan this QR to pay via GCash", width=250)
@@ -941,21 +933,20 @@ elif st.session_state.page == "payment":
 
             if st.button("✅ I've Paid via GCash"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "GCash",
-                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                save_receipt(order_id, pending_cart, total_cost, "GCash", user.get("username", "Guest"), pickup_dt, status="Pending")
                 st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
 
+        # CARD
         elif method == "Card":
             st.text_input("Card Number", key="card_num")
             st.text_input("Expiry (MM/YY)", key="card_exp")
             st.text_input("CVV", key="card_cvv")
             if st.button("Simulate Card Payment Success"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "Card",
-                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                save_receipt(order_id, pending_cart, total_cost, "Card", user.get("username", "Guest"), pickup_dt, status="Pending")
                 st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
