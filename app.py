@@ -425,8 +425,8 @@ def load_menu():
     if not conn:
         default_menu = {
             "CATEGORY": ["Breakfast","Breakfast","Lunch","Lunch","Drinks","Drinks","Snacks","Snacks"],
-            "ITEM": ["Pancakes","Omelette","Burger","Pizza","Coffee","Juice","Chips","Donut"],
-            "PRICE": [50,40,80,120,30,40,20,25]
+            "ITEM": ["","","","","","","",""],
+            "PRICE": [0]
         }
         return pd.DataFrame(default_menu)
 
@@ -666,57 +666,78 @@ elif st.session_state.page == "main":
             else:
                 st.info("No feedbacks yet.")
 
-        # ------------------- Sales Report -------------------
-        elif choice == "Sales Report":
-            st.subheader("💰 Sales Report")
-            receipts = load_receipts_df()
-            if receipts.empty:
-                st.info("No sales yet.")
-            else:
-                # Extract items from JSON and aggregate
-                all_items = []
-                for _, row in receipts.iterrows():
-                    items_json = row.get("items")
-                    if not items_json:
-                        continue
-                    try:
-                        items_list = json.loads(items_json)
-                    except Exception:
-                        continue
-                    if not isinstance(items_list, list):
-                        continue
-                    for it in items_list:
-                        if not isinstance(it, dict):
-                            continue
-                        name = it.get("name") or it.get("ITEM_NAME") or it.get("item") or "Unknown Item"
-                        try:
-                            qty = int(it.get("qty") or it.get("QUANTITY") or 1)
-                        except Exception:
-                            qty = 1
-                        category = it.get("category") or "Uncategorized"
-                        all_items.append({"CATEGORY": category, "ITEM_NAME": name, "QUANTITY": qty})
+# ------------------- Sales Report -------------------
+elif choice == "Sales Report":
+    st.subheader("💰 Sales Report")
 
-                if not all_items:
-                    st.info("No sales items found in receipts.")
-                else:
-                    sales_summary = pd.DataFrame(all_items)
-                    sales_summary = sales_summary.groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
-                    categories = sales_summary["CATEGORY"].dropna().unique()
+    # Load receipts from DB
+    receipts = load_receipts_df()
 
-                    # Show pie chart per category
-                    for cat in categories:
-                        st.markdown(f"### {cat} Sales Breakdown")
-                        cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
-                        if cat_data.empty:
-                            st.info(f"No sales for {cat} yet.")
-                            continue
-                        # prepare values and labels
-                        values = cat_data["QUANTITY"].tolist()
-                        labels = cat_data["ITEM_NAME"].tolist()
-                        fig, ax = plt.subplots()
-                        ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90, wedgeprops={"edgecolor": "w"})
-                        ax.axis("equal")
-                        st.pyplot(fig)
+    # Merge local receipts if any
+    local = st.session_state.get("_local_receipts", [])
+    if local:
+        local_df = pd.DataFrame(local)
+        receipts = pd.concat([receipts, local_df], ignore_index=True)
+
+    if receipts.empty:
+        st.info("No sales yet.")
+    else:
+        # Extract items from JSON and aggregate
+        all_items = []
+        for _, row in receipts.iterrows():
+            items_json = row.get("items")
+            if not items_json:
+                continue
+            try:
+                items_list = json.loads(items_json)
+            except Exception:
+                continue
+            if not isinstance(items_list, list):
+                continue
+
+            for it in items_list:
+                if not isinstance(it, dict):
+                    continue
+                name = it.get("name") or it.get("ITEM_NAME") or it.get("item") or "Unknown Item"
+                try:
+                    qty = int(it.get("qty") or it.get("QUANTITY") or 1)
+                except Exception:
+                    qty = 1
+                category = it.get("category") or "Uncategorized"
+                all_items.append({
+                    "CATEGORY": category,
+                    "ITEM_NAME": name,
+                    "QUANTITY": qty
+                })
+
+        if not all_items:
+            st.info("No sales items found in receipts.")
+        else:
+            # Aggregate sales per category/item
+            sales_summary = pd.DataFrame(all_items)
+            sales_summary = sales_summary.groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
+            categories = sales_summary["CATEGORY"].dropna().unique()
+
+            # Show pie chart per category
+            for cat in categories:
+                st.markdown(f"### {cat} Sales Breakdown")
+                cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+                if cat_data.empty:
+                    st.info(f"No sales for {cat} yet.")
+                    continue
+
+                values = cat_data["QUANTITY"].tolist()
+                labels = cat_data["ITEM_NAME"].tolist()
+                fig, ax = plt.subplots()
+                ax.pie(
+                    values,
+                    labels=labels,
+                    autopct="%1.1f%%",
+                    startangle=90,
+                    wedgeprops={"edgecolor": "w"}
+                )
+                ax.axis("equal")
+                st.pyplot(fig)
 
     # ---------------------------
     # NON-STAFF / GUEST PORTAL
