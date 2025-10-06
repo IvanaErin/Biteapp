@@ -743,7 +743,6 @@ elif choice == "Sales Report":
     # ---------------------------
     # NON-STAFF / GUEST PORTAL
     # ---------------------------
-    else:
         # --- Initialize session variables ---
         if "cart" not in st.session_state:
             st.session_state.cart = {}
