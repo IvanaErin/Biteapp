@@ -637,40 +637,40 @@ elif st.session_state.page == "main":
             else:
                 st.info("No pending orders.")
 
-        # ------------------- Manage Menu -------------------
-        elif choice == "Manage Menu":
-            st.subheader("📖 Manage Menu")
-            menu_df = load_menu()
-            if not menu_df.empty:
-                edited = st.data_editor(menu_df, num_rows="dynamic")
-                if st.button("Save Menu Updates"):
-                    upsert_menu(edited)
-                    st.success("✅ Menu updated successfully!")
-                    st.rerun()
-            else:
-                st.info("No menu items available.")
+# ------------------- Manage Menu -------------------
+elif choice == "Manage Menu":
+    st.subheader("📖 Manage Menu")
+    menu_df = load_menu()
+    if not menu_df.empty:
+        edited = st.data_editor(menu_df, num_rows="dynamic")
+        if st.button("Save Menu Updates"):
+            upsert_menu(edited)
+            st.success("✅ Menu updated successfully!")
+            st.rerun()
+    else:
+        st.info("No menu items available.")
 
-        # ------------------- AI Assistant -------------------
-        elif choice == "AI Assistant":
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:", key="staff_ai_q")
-            if st.button("Ask AI", key="ask_ai_staff"):
-                st.write(run_ai(q))
+# ------------------- AI Assistant -------------------
+elif choice == "AI Assistant":
+    st.subheader("🤖 AI Assistant")
+    q = st.text_area("Ask AI something:", key="staff_ai_q")
+    if st.button("Ask AI", key="ask_ai_staff"):
+        st.write(run_ai(q))
 
-        # ------------------- Feedback Review -------------------
-        elif choice == "Feedback Review":
-            st.subheader("📢 Feedback Review")
-            fb = load_feedbacks_df()
-            if not fb.empty:
-                st.dataframe(fb, use_container_width=True)
-            else:
-                st.info("No feedbacks yet.")
+# ------------------- Feedback Review -------------------
+elif choice == "Feedback Review":
+    st.subheader("📢 Feedback Review")
+    fb = load_feedbacks_df()
+    if not fb.empty:
+        st.dataframe(fb, use_container_width=True)
+    else:
+        st.info("No feedbacks yet.")
 
-# ------------------- Sales Report -------------------
+# ------------------- Sales Report (Staff Only) -------------------
 elif choice == "Sales Report":
     st.subheader("💰 Sales Report")
 
-    # Load receipts from DB
+    # Load receipts
     receipts = load_receipts_df()
 
     # Merge local receipts if any
@@ -682,7 +682,7 @@ elif choice == "Sales Report":
     if receipts.empty:
         st.info("No sales yet.")
     else:
-        # Extract items from JSON and aggregate
+        # Extract items and aggregate
         all_items = []
         for _, row in receipts.iterrows():
             items_json = row.get("items")
@@ -713,7 +713,6 @@ elif choice == "Sales Report":
         if not all_items:
             st.info("No sales items found in receipts.")
         else:
-            # Aggregate sales per category/item
             sales_summary = pd.DataFrame(all_items)
             sales_summary = sales_summary.groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
             categories = sales_summary["CATEGORY"].dropna().unique()
@@ -739,18 +738,16 @@ elif choice == "Sales Report":
                 ax.axis("equal")
                 st.pyplot(fig)
 
-    # ---------------------------
-    # NON-STAFF / GUEST PORTAL
-    # ---------------------------
-    else:
-        # --- Initialize session variables ---
-        if "cart" not in st.session_state:
-            st.session_state.cart = {}
-        if "notifications" not in st.session_state:
-            st.session_state.notifications = []
+# ------------------- NON-STAFF / GUEST PORTAL -------------------
+else:
+    # --- Initialize session variables ---
+    if "cart" not in st.session_state:
+        st.session_state.cart = {}
+    if "notifications" not in st.session_state:
+        st.session_state.notifications = []
 
-        menu_df = load_menu()
-        left_col, right_col = st.columns([1.2, 1])
+    menu_df = load_menu()
+    left_col, right_col = st.columns([1.2, 1])
 
         # --- LEFT: AI, MENU & ORDERING ---
         with left_col:
