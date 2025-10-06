@@ -633,7 +633,7 @@ elif st.session_state.page == "main":
                         add_notification(row.get("user_id"), f"Your order #{order_id} is ready for pickup!")
 
                         st.success(f"Order #{order_id} marked as Ready!")
-                        st.experimental_rerun()  # Refresh the page to update table
+                        st.rerun()  # Refresh the page to update table
             else:
                 st.info("No pending orders.")
 
