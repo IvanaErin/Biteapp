@@ -718,7 +718,7 @@ elif choice == "Sales Report":
             sales_summary = sales_summary.groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
             categories = sales_summary["CATEGORY"].dropna().unique()
 
-            # Show pie chart per category
+            # Show pie chart per category (smaller size)
             for cat in categories:
                 st.markdown(f"### {cat} Sales Breakdown")
                 cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
@@ -728,7 +728,9 @@ elif choice == "Sales Report":
 
                 values = cat_data["QUANTITY"].tolist()
                 labels = cat_data["ITEM_NAME"].tolist()
-                fig, ax = plt.subplots()
+                
+                # Smaller, compact pie chart
+                fig, ax = plt.subplots(figsize=(3, 3))  # <-- size adjusted here
                 ax.pie(
                     values,
                     labels=labels,
@@ -738,7 +740,6 @@ elif choice == "Sales Report":
                 )
                 ax.axis("equal")
                 st.pyplot(fig)
-
     # ---------------------------
     # NON-STAFF / GUEST PORTAL
     # ---------------------------
