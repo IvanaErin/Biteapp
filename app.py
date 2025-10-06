@@ -728,9 +728,8 @@ elif choice == "Sales Report":
 
                 values = cat_data["QUANTITY"].tolist()
                 labels = cat_data["ITEM_NAME"].tolist()
-                
-                # Smaller, compact pie chart
-                fig, ax = plt.subplots(figsize=(3, 3))  # <-- size adjusted here
+
+                fig, ax = plt.subplots(figsize=(3, 3))  # smaller chart
                 ax.pie(
                     values,
                     labels=labels,
@@ -740,15 +739,19 @@ elif choice == "Sales Report":
                 )
                 ax.axis("equal")
                 st.pyplot(fig)
-    # ---------------------------
-    # NON-STAFF / GUEST PORTAL
-    # ---------------------------
-        # --- Initialize session variables ---
-        if "cart" not in st.session_state:
-            st.session_state.cart = {}
-        if "notifications" not in st.session_state:
-            st.session_state.notifications = []
 
+# ---------------------------
+# NON-STAFF / GUEST PORTAL
+# ---------------------------
+# This must be OUTSIDE the Sales Report block
+if st.session_state.page == "main" and role != "Staff":
+    # --- Initialize session variables ---
+    if "cart" not in st.session_state:
+        st.session_state.cart = {}
+    if "notifications" not in st.session_state:
+        st.session_state.notifications = []
+    
+    # --- Your non-staff portal UI/code goes here ---
         menu_df = load_menu()
         left_col, right_col = st.columns([1.2, 1])
 
