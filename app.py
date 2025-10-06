@@ -1,5 +1,3 @@
-# app.py - BiteHub (fixed structure; logic unchanged but added order-id/date, receipt download,
-# staff autorefresh, user receipt generation, notifications on Ready)
 import os
 import base64
 import streamlit as st
@@ -203,8 +201,8 @@ def validate_account(username: str, password: str):
 # ---------------------------
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
-    Save a receipt. `items` expected to be serializable (list/dict). `status` is the order lifecycle
-    (Pending/Ready/etc.). Payment confirmation is not automatically set here: staff must verify.
+    Save a receipt. `items` expected to be a serializable structure (e.g. dict or list).
+    Default status is 'Pending' so staff can mark Ready later.
     """
     items_json = json.dumps(items)
     conn = get_connection()
@@ -218,8 +216,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
             "total": float(total),
             "payment_method": payment_method,
             "user_id": user_id,
-            # attempt parse, else use now
-            "pickup_time": datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M") if pickup_dt else datetime.now(),
+            "pickup_time": datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M"),
             "status": status,
             "timestamp": datetime.now()
         })
@@ -239,7 +236,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
                 float(total),
                 payment_method,
                 user_id,
-                datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M") if pickup_dt else datetime.now(),
+                datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M"),
                 status
             )
         )
@@ -303,10 +300,13 @@ def add_notification(user_id: str, message: str):
     this function attempts to insert to DB but silently ignores DB errors.
     """
     _ensure_local_db()
+    # Add to session notifications (global for now)
+    # You may want per-user notifications dict; for simplicity, append a message with user id prefix
     note = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {message}"
+    # If user is current user, show immediately; otherwise store in a list with user id
     st.session_state.notifications.append({"user_id": user_id, "message": note})
 
-    # Optional DB insert (best-effort)
+    # Optional DB insert (best-effort, ignore errors)
     conn = get_connection()
     if not conn:
         return
@@ -319,7 +319,7 @@ def add_notification(user_id: str, message: str):
             )
             conn.commit()
         except Exception:
-            # ignore if notifications table missing
+            # ignore if notifications table doesn't exist or insert fails
             pass
     finally:
         try:
@@ -611,15 +611,9 @@ elif st.session_state.page == "main":
         # ------------------- Pending Orders -------------------
         elif choice == "Pending Orders":
             st.subheader("📦 Pending Orders")
-
-            # Autorefresh snippet (simple JS reload every 5s). If environment blocks JS it'll be ignored.
-            try:
-                st.components.v1.html("<script>setTimeout(()=>location.reload(),5000)</script>", height=0)
-            except Exception:
-                # fallback: show small note if JS injection blocked
-                st.caption("Auto-refresh disabled in this environment. Reload page to see new orders.")
-
             receipts = load_receipts_df()
+
+            # Only pending orders
             pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
 
             if not pending_orders.empty:
@@ -855,36 +849,14 @@ else:
         st.markdown(f"### 💵 Total: ₱{total_amount:.2f}")
 
         payment_method = st.selectbox("Select Payment Method", ["Cash", "GCash", "Card"])
-        pickup_dt = st.text_input("Pickup Date & Time (YYYY-MM-DD HH:MM)", value=datetime.now().strftime("%Y-%m-%d %H:%M"))
+        pickup_dt = st.text_input("Pickup Date & Time (YYYY-MM-DD HH:MM)")
 
         if st.button("✅ Proceed to Payment"):
-            # normalize pickup_dt
-            pdtt = pickup_dt if pickup_dt else datetime.now().strftime("%Y-%m-%d %H:%M")
-            # generate order id as date + random hex
-            order_id = datetime.now().strftime("%Y%m%d") + "-" + secrets.token_hex(3)
+            order_id = secrets.token_hex(4)
             items = [{"name": item, "qty": d["qty"], "price": d["price"]} for item, d in st.session_state.cart.items()]
-
-            # save receipt / order as Pending (payment confirmation handled by staff)
-            save_receipt(order_id, items, total_amount, payment_method, st.session_state.user.get("username", "Guest"), pdtt, "Pending")
-
-            # Provide receipt download for user to show staff at counter
-            receipt_obj = {
-                "order_id": order_id,
-                "items": items,
-                "total": float(total_amount),
-                "payment_method": payment_method,
-                "user_id": st.session_state.user.get("username", "Guest"),
-                "pickup_time": pdtt,
-                "status": "Pending",
-                "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            receipt_text = json.dumps(receipt_obj, indent=2, default=str)
-            st.success(f"🎉 Order placed successfully! Order ID: {order_id}")
-            st.download_button("📥 Download receipt (show at counter)", receipt_text, file_name=f"receipt_{order_id}.json", mime="application/json")
-
-            # clear cart after order placed
+            save_receipt(order_id, items, total_amount, payment_method, st.session_state.user["username"], pickup_dt, "Pending")
             st.session_state.cart.clear()
-
+            st.success("🎉 Order placed successfully! Please wait for staff to mark it Ready.")
     else:
         st.info("Your cart is empty.")
         # --- RIGHT: FEEDBACKS & NOTIFICATIONS ---
@@ -970,22 +942,10 @@ elif st.session_state.page == "payment":
         # always save as Pending so staff marks Ready manually
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
-                order_id = datetime.now().strftime("%Y%m%d") + "-" + secrets.token_hex(3)
+                order_id = f"ORD-{random.randint(100000,999999)}"
                 save_receipt(order_id, pending_cart, total_cost, "Cash",
                              user.get("username", "Guest"), pickup_dt, status="Pending")
-                # Provide receipt for download
-                receipt_obj = {
-                    "order_id": order_id,
-                    "items": pending_cart,
-                    "total": float(total_cost),
-                    "payment_method": "Cash",
-                    "user_id": user.get("username", "Guest"),
-                    "pickup_time": pickup_dt,
-                    "status": "Pending",
-                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
                 st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
-                st.download_button("📥 Download receipt", json.dumps(receipt_obj, default=str, indent=2), file_name=f"receipt_{order_id}.json", mime="application/json")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
@@ -996,21 +956,10 @@ elif st.session_state.page == "payment":
             st.markdown(f"**Amount to pay:** ₱{total_cost:.2f}")
 
             if st.button("✅ I've Paid via GCash"):
-                order_id = datetime.now().strftime("%Y%m%d") + "-" + secrets.token_hex(3)
+                order_id = f"ORD-{random.randint(100000,999999)}"
                 save_receipt(order_id, pending_cart, total_cost, "GCash",
                              user.get("username", "Guest"), pickup_dt, status="Pending")
-                receipt_obj = {
-                    "order_id": order_id,
-                    "items": pending_cart,
-                    "total": float(total_cost),
-                    "payment_method": "GCash",
-                    "user_id": user.get("username", "Guest"),
-                    "pickup_time": pickup_dt,
-                    "status": "Pending",
-                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared (verify payment manually).")
-                st.download_button("📥 Download receipt", json.dumps(receipt_obj, default=str, indent=2), file_name=f"receipt_{order_id}.json", mime="application/json")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
@@ -1020,21 +969,10 @@ elif st.session_state.page == "payment":
             st.text_input("Expiry (MM/YY)", key="card_exp")
             st.text_input("CVV", key="card_cvv")
             if st.button("Simulate Card Payment Success"):
-                order_id = datetime.now().strftime("%Y%m%d") + "-" + secrets.token_hex(3)
+                order_id = f"ORD-{random.randint(100000,999999)}"
                 save_receipt(order_id, pending_cart, total_cost, "Card",
                              user.get("username", "Guest"), pickup_dt, status="Pending")
-                receipt_obj = {
-                    "order_id": order_id,
-                    "items": pending_cart,
-                    "total": float(total_cost),
-                    "payment_method": "Card",
-                    "user_id": user.get("username", "Guest"),
-                    "pickup_time": pickup_dt,
-                    "status": "Pending",
-                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared (verify payment manually).")
-                st.download_button("📥 Download receipt", json.dumps(receipt_obj, default=str, indent=2), file_name=f"receipt_{order_id}.json", mime="application/json")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
