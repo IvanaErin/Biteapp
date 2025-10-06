@@ -728,7 +728,7 @@ elif choice == "Sales Report":
 
                 values = cat_data["QUANTITY"].tolist()
                 labels = cat_data["ITEM_NAME"].tolist()
-                fig, ax = plt.subplots((figsize=(3, 3))
+                fig, ax = plt.subplots(figsize=(3, 3))
                 ax.pie(
                     values,
                     labels=labels,
