@@ -1,4 +1,3 @@
-
 import os
 import base64
 import streamlit as st
@@ -13,6 +12,14 @@ import secrets
 import re
 from PIL import Image
 import json
+
+# Try to import st_autorefresh helper if available
+try:
+    from streamlit_autorefresh import st_autorefresh
+    _HAS_ST_AUTORELOAD = True
+except Exception:
+    # fallback: Streamlit may provide st.autorefresh in some versions
+    _HAS_ST_AUTORELOAD = hasattr(st, "autorefresh")
 
 # ---------------------------
 # AI CLIENT
@@ -197,15 +204,148 @@ def validate_account(username: str, password: str):
         return acc
     return None
 
+def user_exists(username: str) -> bool:
+    conn = get_connection()
+    if not conn:
+        _ensure_local_db()
+        return username in st.session_state._local_accounts
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(1) FROM users WHERE username=%s", (username,))
+        r = cur.fetchone()
+        return bool(r and r[0] > 0)
+    finally:
+        cur.close()
+        conn.close()
+
 # ---------------------------
-# RECEIPTS
+# RECEIPTS (normalize items before saving)
 # ---------------------------
+def _build_menu_category_map():
+    # Build map {item_name.lower(): category} from menu for category lookup
+    try:
+        menu_df = load_menu()
+        if menu_df is None or menu_df.empty:
+            return {}
+        det_cat, det_item, det_price = detect_menu_columns(menu_df)
+        if not det_item:
+            return {}
+        category_col = det_cat
+        item_col = det_item
+        cat_map = {}
+        for _, r in menu_df.iterrows():
+            name = str(r.get(item_col, "")).strip()
+            cat = r.get(category_col) if category_col else None
+            if name:
+                cat_map[name.lower()] = cat if pd.notna(cat) else None
+        return cat_map
+    except Exception:
+        return {}
+
+def _normalize_items_for_receipt(items):
+    """
+    Accepts many formats and returns a list of dicts:
+    [{"name": ..., "qty": int, "price": float, "category": ...}, ...]
+    """
+    normalized = []
+    cat_map = _build_menu_category_map()
+
+    # If items is a dict stringified, try to parse
+    if isinstance(items, str):
+        try:
+            parsed = json.loads(items)
+        except Exception:
+            # fallback: try eval (only if local, not ideal), but avoid for security in production
+            try:
+                parsed = eval(items)
+            except Exception:
+                parsed = items
+    else:
+        parsed = items
+
+    # If parsed is dict like {"Donut": 1} or {"Donut": {"qty":1,...}}
+    if isinstance(parsed, dict):
+        for k, v in parsed.items():
+            name = str(k)
+            if isinstance(v, dict):
+                qty = int(v.get("qty", 1))
+                price = float(v.get("price", 0.0)) if v.get("price") is not None else 0.0
+            else:
+                # v could be integer qty
+                try:
+                    qty = int(v)
+                except Exception:
+                    qty = 1
+                price = 0.0
+            category = cat_map.get(name.lower()) or "Uncategorized"
+            normalized.append({"name": name, "qty": qty, "price": price, "category": category})
+
+    # If parsed is list of dicts: [{"name":..., "qty":..., "price":...}, ...]
+    elif isinstance(parsed, list):
+        for it in parsed:
+            if not isinstance(it, dict):
+                continue
+            # various key possibilities
+            name = it.get("name") or it.get("ITEM_NAME") or it.get("item") or "Unknown"
+            try:
+                qty = int(it.get("qty") or it.get("QUANTITY") or it.get("quantity") or 1)
+            except Exception:
+                qty = 1
+            try:
+                price = float(it.get("price") or it.get("PRICE") or 0.0)
+            except Exception:
+                price = 0.0
+            category = it.get("category") or cat_map.get(str(name).lower()) or "Uncategorized"
+            normalized.append({"name": name, "qty": qty, "price": price, "category": category})
+
+    # If parsed is a single item's structure (like {"name":..., ...})
+    elif isinstance(parsed, (int, float, str)):
+        # not a structured item; ignore or treat as unknown
+        pass
+    else:
+        # unknown structure - attempt best-effort convert if it's a mapping-like
+        try:
+            for k, v in dict(parsed).items():
+                name = str(k)
+                if isinstance(v, dict):
+                    qty = int(v.get("qty", 1))
+                    price = float(v.get("price", 0.0)) if v.get("price") is not None else 0.0
+                else:
+                    try:
+                        qty = int(v)
+                    except Exception:
+                        qty = 1
+                    price = 0.0
+                category = cat_map.get(name.lower()) or "Uncategorized"
+                normalized.append({"name": name, "qty": qty, "price": price, "category": category})
+        except Exception:
+            pass
+
+    return normalized
+
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
-    Save a receipt. `items` expected to be a serializable structure (e.g. dict or list).
-    Default status is 'Pending' so staff can mark Ready later.
+    Save a receipt. Ensures `items` are normalized to a consistent JSON list format.
     """
-    items_json = json.dumps(items)
+    # Normalize items (handle cart dicts or mixed formats)
+    normalized_items = _normalize_items_for_receipt(items)
+
+    # If items were passed as session cart dict {name: {qty, price}}, normalize too
+    if not normalized_items and isinstance(items, dict):
+        for name, info in items.items():
+            try:
+                qty = int(info.get("qty", 1))
+            except Exception:
+                qty = 1
+            try:
+                price = float(info.get("price", 0.0))
+            except Exception:
+                price = 0.0
+            cat = _build_menu_category_map().get(name.lower()) or "Uncategorized"
+            normalized_items.append({"name": name, "qty": qty, "price": price, "category": cat})
+
+    items_json = json.dumps(normalized_items)
+
     conn = get_connection()
     if not conn:
         _ensure_local_db()
@@ -293,21 +433,20 @@ def update_order_status(order_id: str, new_status: str):
         conn.close()
 
 # ---------------------------
-# NOTIFICATIONS (session-based; optional DB insert)
+# NOTIFICATIONS (DB-backed + session fallback)
 # ---------------------------
 def add_notification(user_id: str, message: str):
     """
-    Add a notification to session state. If DB connected and a notifications table is available,
-    this function attempts to insert to DB but silently ignores DB errors.
+    Persist notification to DB (if available) and append to session fallback.
     """
     _ensure_local_db()
-    # Add to session notifications (global for now)
-    # You may want per-user notifications dict; for simplicity, append a message with user id prefix
-    note = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {message}"
-    # If user is current user, show immediately; otherwise store in a list with user id
-    st.session_state.notifications.append({"user_id": user_id, "message": note})
+    note_msg = f"{message}"
+    timestamp = datetime.now()
 
-    # Optional DB insert (best-effort, ignore errors)
+    # Append to session fallback list of dicts for instant local visibility
+    st.session_state.notifications.append({"user_id": user_id, "message": note_msg, "timestamp": timestamp})
+
+    # Try to persist to DB notifications table (best-effort)
     conn = get_connection()
     if not conn:
         return
@@ -315,8 +454,8 @@ def add_notification(user_id: str, message: str):
         cur = conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO notifications (user_id, message, timestamp) VALUES (%s, %s, %s)",
-                (user_id, message, datetime.now())
+                "INSERT INTO notifications (user_id, message, timestamp, is_read) VALUES (%s, %s, %s, %s)",
+                (user_id, note_msg, timestamp, False)
             )
             conn.commit()
         except Exception:
@@ -331,16 +470,97 @@ def add_notification(user_id: str, message: str):
 
 def get_notifications_for_user(user_id: str):
     """
-    Return list of messages for the given user from session state (and DB optionally).
+    Return list of messages (strings) for the given user combining DB and session fallback.
+    DB results are ordered newest first.
     """
     _ensure_local_db()
-    msgs = []
-    for n in st.session_state.notifications:
-        # n is dict {"user_id":..., "message":...}
+    results = []
+
+    # First, try DB-backed notifications (unread)
+    conn = get_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            try:
+                # Try to select unread notifications first; if no is_read column, fallback to messages
+                cur.execute("""
+SELECT message, timestamp FROM notifications
+WHERE user_id = %s AND (is_read = FALSE OR is_read IS NULL)
+ORDER BY timestamp DESC
+""", (user_id,))
+                rows = cur.fetchall()
+                for r in rows:
+                    msg = r[0]
+                    ts = r[1] if len(r) > 1 else None
+                    results.append(f"[{ts}] {msg}" if ts else msg)
+            except Exception:
+                # If notifications table schema differs, attempt generic select
+                try:
+                    cur.execute("SELECT message, timestamp FROM notifications WHERE user_id = %s ORDER BY timestamp DESC", (user_id,))
+                    rows = cur.fetchall()
+                    for r in rows:
+                        msg = r[0]
+                        ts = r[1] if len(r) > 1 else None
+                        results.append(f"[{ts}] {msg}" if ts else msg)
+                except Exception:
+                    pass
+        finally:
+            try:
+                cur.close()
+                conn.close()
+            except Exception:
+                pass
+
+    # Merge session notifications (they may be instant and not yet in DB)
+    for n in st.session_state.get("notifications", []):
         if n.get("user_id") == user_id:
-            msgs.append(n.get("message"))
-    # Note: DB-backed retrieval can be added later.
-    return msgs
+            ts = n.get("timestamp")
+            if isinstance(ts, datetime):
+                ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                ts_str = str(ts)
+            results.insert(0, f"[{ts_str}] {n.get('message')}")
+
+    # Deduplicate while preserving order
+    seen = set()
+    deduped = []
+    for r in results:
+        if r not in seen:
+            deduped.append(r)
+            seen.add(r)
+
+    return deduped
+
+def clear_notifications_for_user(user_id: str):
+    """
+    Mark notifications read in DB (if possible) and clear session fallback.
+    """
+    # Clear session fallback
+    st.session_state.notifications = [n for n in st.session_state.get("notifications", []) if n.get("user_id") != user_id]
+
+    # Mark DB notifications as read if possible
+    conn = get_connection()
+    if not conn:
+        return
+    try:
+        cur = conn.cursor()
+        try:
+            # best-effort: set is_read true if column exists
+            cur.execute("UPDATE notifications SET is_read = TRUE WHERE user_id = %s", (user_id,))
+            conn.commit()
+        except Exception:
+            # try deleting older notifications (if update fails)
+            try:
+                cur.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+                conn.commit()
+            except Exception:
+                pass
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
 
 # ---------------------------
 # FEEDBACK
@@ -420,7 +640,6 @@ def detect_menu_columns(df: pd.DataFrame):
     return category_col, item_col, price_col
 
 def load_menu():
-    # return DataFrame with at least CATEGORY, ITEM, PRICE (column names preserved)
     conn = get_snowflake_conn()
     # if no connection, return a fallback DataFrame
     if not conn:
@@ -557,6 +776,13 @@ if st.session_state.page == "login":
         if st.button("🔑 Log In", use_container_width=True):
             acc = get_account(username)
             if acc and verify_password(acc["password"], password):
+                # Normalize role to avoid case mismatches like 'staff' vs 'Staff'
+                role_value = acc.get("role", "Guest")
+                try:
+                    normalized_role = str(role_value).strip().capitalize()
+                except Exception:
+                    normalized_role = "Guest"
+                acc["role"] = normalized_role
                 st.session_state.user = acc
                 st.session_state.page = "main"
                 st.success(f"✅ Welcome {acc['username']}!")
@@ -580,20 +806,27 @@ if st.session_state.page == "login":
 # ---------------------------
 elif st.session_state.page == "signup":
     st.markdown("<h1 style='text-align: center; color: #FF6F61;'>📝 BiteHub — Sign Up</h1>", unsafe_allow_html=True)
-    new_username = st.text_input("Choose Username")
-    new_password = st.text_input("Choose Password", type="password")
-    confirm_password = st.text_input("Confirm Password", type="password")
 
-    if st.button("Create Account"):
-        if new_password != confirm_password:
-            st.error("❌ Passwords do not match.")
-        elif user_exists(new_username):
-            st.warning("⚠️ Username already exists.")
+    new_username = st.text_input("Create Username", key="new_user")
+    new_password = st.text_input("Create Password", type="password", key="new_pass")
+    confirm_password = st.text_input("Confirm Password", type="password", key="conf_pass")
+
+    if st.button("✅ Register Account"):
+        if not new_username or not new_password:
+            st.warning("⚠️ Please fill in all fields.")
+        elif new_password != confirm_password:
+            st.warning("⚠️ Passwords do not match.")
+        elif get_account(new_username):
+            st.error("⚠️ Username already exists.")
         else:
-            save_account(new_username, new_password)
-            st.success("✅ Account created successfully! You can now log in.")
+            save_account(new_username, new_password, role="User")
+            st.success("🎉 Account created successfully! Please log in.")
             st.session_state.page = "login"
             st.rerun()
+
+    if st.button("⬅️ Back to Login"):
+        st.session_state.page = "login"
+        st.rerun()
 
 # ---------------------------
 # MAIN PORTAL (Staff / Non-Staff / Guest)
@@ -605,11 +838,17 @@ elif st.session_state.page == "main":
 
     user = st.session_state.user
     role = user.get("role", "Guest")
+    # Ensure normalized role (extra safety)
+    try:
+        role = str(role).strip().capitalize()
+    except Exception:
+        role = "Guest"
+    user["role"] = role
     is_guest = (role == "Guest")
 
-    # ======================================================
+    # ---------------------------
     # STAFF PORTAL
-    # ======================================================
+    # ---------------------------
     if role == "Staff":
         if "staff_choice" not in st.session_state:
             st.session_state.staff_choice = "Dashboard"
@@ -633,19 +872,29 @@ elif st.session_state.page == "main":
         elif choice == "Pending Orders":
             st.subheader("📦 Pending Orders")
             receipts = load_receipts_df()
+
+            # Only pending orders
             pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
 
             if not pending_orders.empty:
+                # Display each pending order with a "Mark as Ready" button
                 for idx, row in pending_orders.iterrows():
+                    # use order_id column name used across load/save
                     order_id = row.get("order_id") or row.get("orderId") or row.get("id")
                     st.markdown(f"**Order ID:** {order_id} | **User:** {row.get('user_id')} | **Payment:** {row.get('payment_method')}")
                     st.write("Items:", row.get("items"))
+
                     btn_key = f"ready_{order_id}"
                     if st.button("✅ Mark as Ready", key=btn_key):
+                        # Update order status to Ready
                         update_order_status(order_id, "Ready")
-                        add_notification(row.get("user_id"), f"Your order #{order_id} is ready for pickup! 🍽️")
+
+                        # Add notification to the corresponding user (DB + session fallback)
+                        target_user = row.get("user_id") or row.get("username")
+                        add_notification(target_user, f"Your order #{order_id} is ready for pickup!")
+
                         st.success(f"Order #{order_id} marked as Ready!")
-                        st.rerun()
+                        st.rerun()  # Refresh the page to update table
             else:
                 st.info("No pending orders.")
 
@@ -681,7 +930,11 @@ elif st.session_state.page == "main":
         # ------------------- Sales Report -------------------
         elif choice == "Sales Report":
             st.subheader("💰 Sales Report")
+
+            # Load receipts from DB
             receipts = load_receipts_df()
+
+            # Merge local receipts if any
             local = st.session_state.get("_local_receipts", [])
             if local:
                 local_df = pd.DataFrame(local)
@@ -690,54 +943,68 @@ elif st.session_state.page == "main":
             if receipts.empty:
                 st.info("No sales yet.")
             else:
+                # Extract items from JSON and aggregate
                 all_items = []
                 for _, row in receipts.iterrows():
-                    items_data = row.get("items")
-                    if not items_data:
+                    items_json = row.get("items")
+                    if not items_json:
                         continue
+
+                    # Normalize with the same helper used when saving receipts
                     try:
-                        parsed = json.loads(items_data)
+                        parsed_items = _normalize_items_for_receipt(items_json)
                     except Exception:
-                        continue
+                        parsed_items = []
 
-                    # Handle multiple formats
-                    if isinstance(parsed, list):
-                        for it in parsed:
-                            if isinstance(it, dict):
-                                name = it.get("name") or it.get("ITEM_NAME") or "Unknown Item"
-                                qty = int(it.get("qty") or it.get("QUANTITY") or 1)
-                                cat = it.get("category") or "Uncategorized"
-                                all_items.append({"CATEGORY": cat, "ITEM_NAME": name, "QUANTITY": qty})
-
-                    elif isinstance(parsed, dict):
-                        for k, v in parsed.items():
-                            if isinstance(v, dict):
-                                qty = v.get("qty", 1)
-                            else:
-                                qty = v
-                            all_items.append({"CATEGORY": "Uncategorized", "ITEM_NAME": k, "QUANTITY": int(qty)})
+                    for it in parsed_items:
+                        if not isinstance(it, dict):
+                            continue
+                        name = it.get("name") or it.get("ITEM_NAME") or it.get("item") or "Unknown Item"
+                        try:
+                            qty = int(it.get("qty") or it.get("QUANTITY") or 1)
+                        except Exception:
+                            qty = 1
+                        category = it.get("category") or "Uncategorized"
+                        all_items.append({
+                            "CATEGORY": category,
+                            "ITEM_NAME": name,
+                            "QUANTITY": qty
+                        })
 
                 if not all_items:
                     st.info("No sales items found in receipts.")
                 else:
+                    # Aggregate sales per category/item
                     sales_summary = pd.DataFrame(all_items)
                     sales_summary = sales_summary.groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
                     categories = sales_summary["CATEGORY"].dropna().unique()
 
+                    # Show pie chart per category
                     for cat in categories:
                         st.markdown(f"### {cat} Sales Breakdown")
                         cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+                        if cat_data.empty:
+                            st.info(f"No sales for {cat} yet.")
+                            continue
+
                         values = cat_data["QUANTITY"].tolist()
                         labels = cat_data["ITEM_NAME"].tolist()
                         fig, ax = plt.subplots(figsize=(3, 3))
-                        ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90, wedgeprops={"edgecolor": "w"})
+                        ax.pie(
+                            values,
+                            labels=labels,
+                            autopct="%1.1f%%",
+                            startangle=90,
+                            wedgeprops={"edgecolor": "w"}
+                        )
                         ax.axis("equal")
                         st.pyplot(fig)
 
-    # ======================================================
+    # ---------------------------
     # NON-STAFF / GUEST PORTAL
-    # ======================================================
+    # ---------------------------
     else:
+        # --- Initialize session variables ---
         if "cart" not in st.session_state:
             st.session_state.cart = {}
         if "notifications" not in st.session_state:
@@ -746,126 +1013,215 @@ elif st.session_state.page == "main":
         menu_df = load_menu()
         left_col, right_col = st.columns([1.2, 1])
 
-        # --------------- LEFT: AI + MENU ----------------
+        # --- LEFT: AI, MENU & ORDERING ---
         with left_col:
+            # 🤖 BiteHub Assistant (Compact)
+            with st.container():
+                st.markdown("### 🤖 BiteHub Assistant")
+                with st.expander("💬 Ask BiteHub AI", expanded=False):
+                    user_question = st.text_input(
+                        "Ask about our meals, menu, or promos:",
+                        key="user_ai_q",
+                        placeholder="e.g. What’s today’s special?"
+                    )
+
+                    if st.button("Ask AI", key="ask_ai_user", use_container_width=False):
+                        if user_question.strip():
+                            # Build dynamic menu context
+                            if menu_df is not None and not menu_df.empty:
+                                cols = menu_df.columns.str.upper().tolist()
+                                name_col = next((c for c in cols if "ITEM" in c or "NAME" in c or "PRODUCT" in c), None)
+                                price_col = next((c for c in cols if "PRICE" in c), None)
+                                cat_col = next((c for c in cols if "CAT" in c or "TYPE" in c), None)
+
+                                if name_col:
+                                    menu_lines = []
+                                    # use original column names for values
+                                    for _, row in menu_df.iterrows():
+                                        name = str(row.get(name_col, "")).strip()
+                                        price = f"₱{row.get(price_col, '')}" if price_col else ""
+                                        cat = f"({row.get(cat_col, '')})" if cat_col else ""
+                                        menu_lines.append(f"{name} {price} {cat}".strip())
+                                    menu_text = "\n".join(menu_lines)
+                                else:
+                                    menu_text = "No valid item names found in menu."
+                            else:
+                                menu_text = "No menu data available."
+
+                            system_prompt = (
+                                "You are BiteHub’s friendly virtual canteen assistant. "
+                                "Only talk about items listed below. "
+                                "If a customer asks for something not in the list, politely say it's not available. "
+                                "Be warm, conversational, and concise.\n\n"
+                                f"--- MENU ---\n{menu_text}\n----------------\n"
+                            )
+
+                            try:
+                                response = client.chat.completions.create(
+                                    model="llama-3.1-8b-instant",
+                                    messages=[
+                                        {"role": "system", "content": system_prompt},
+                                        {"role": "user", "content": user_question},
+                                    ],
+                                )
+                                st.markdown(response.choices[0].message.content)
+                            except Exception as e:
+                                st.error(f"⚠️ AI Error: {e}")
+                        else:
+                            st.warning("Please enter a question first 😊")
+
+            # 📖 MENU & ORDERING
             st.markdown("### 📖 Menu & Ordering")
             if menu_df is None or menu_df.empty:
                 st.warning("⚠️ Menu is currently empty.")
             else:
-                det_cat, det_item, det_price = detect_menu_columns(menu_df)
-                if det_item and det_price:
-                    if not det_cat:
-                        menu_df["_CAT"] = "Menu"
-                        det_cat = "_CAT"
-                    for cat in menu_df[det_cat].unique():
+                detected_category_col, detected_item_col, detected_price_col = detect_menu_columns(menu_df)
+                if detected_item_col and detected_price_col:
+                    if not detected_category_col:
+                        menu_df["_SINGLE_CAT"] = "Menu"
+                        detected_category_col = "_SINGLE_CAT"
+
+                    categories = menu_df[detected_category_col].fillna("Uncategorized").unique()
+                    for cat in categories:
                         st.markdown(f"#### 🍽️ {cat}")
-                        for _, row in menu_df[menu_df[det_cat] == cat].iterrows():
-                            item_name = row.get(det_item, "Unknown")
-                            price_val = float(row.get(det_price, 0))
+                        cat_items = menu_df[menu_df[detected_category_col] == cat]
+                        for _, row in cat_items.iterrows():
+                            item_name = row.get(detected_item_col, "Unknown Item")
+                            price_val = row.get(detected_price_col, 0.0)
+                            try:
+                                price_val = float(price_val)
+                            except Exception:
+                                price_val = 0.0
+
                             col1, col2, col3 = st.columns([3, 1, 1])
                             with col1:
-                                st.write(item_name)
+                                st.markdown(f"<div style='font-size:16px; font-weight:500;'>{item_name}</div>", unsafe_allow_html=True)
                             with col2:
-                                st.write(f"₱{price_val:.2f}")
+                                st.markdown(f"<div style='font-size:15px; color:#FFD700;'>₱{price_val:.2f}</div>", unsafe_allow_html=True)
                             with col3:
-                                if st.button("➕ Add", key=f"add_{item_name}"):
+                                btn_key = f"add_{cat}_{item_name}"
+                                if st.button("➕ Add", key=btn_key, use_container_width=True):
                                     if item_name not in st.session_state.cart:
                                         st.session_state.cart[item_name] = {"qty": 1, "price": price_val}
                                     else:
                                         st.session_state.cart[item_name]["qty"] += 1
-                                    st.success(f"{item_name} added to cart!")
+                                    st.success(f"✅ {item_name} added to cart!")
 
-            # ---------------- CART PANEL ----------------
-            st.divider()
-            st.markdown("### 🛒 Your Cart")
-            if not st.session_state.cart:
-                st.info("Your cart is empty.")
-            else:
-                total = 0
-                for item, data in st.session_state.cart.items():
-                    qty = data["qty"]
-                    price = data["price"]
-                    subtotal = qty * price
-                    total += subtotal
-                    st.write(f"{item} × {qty} — ₱{subtotal:.2f}")
-                st.markdown(f"**Total: ₱{total:.2f}**")
-                if st.button("Proceed to Payment 💳"):
-                    st.session_state.page = "payment"
-                    st.rerun()
-
-        # ---------------- RIGHT: FEEDBACK & NOTIFICATIONS ----------------
+        # --- RIGHT: FEEDBACKS & NOTIFICATIONS ---
         with right_col:
-            st.subheader("📢 Notifications")
-            # Auto-refresh notifications every 2 seconds
-            st_autorefresh = st.experimental_rerun  # Placeholder, not breaking old versions
-            st_autorefresh = st.autorefresh(interval=2000, limit=None, key="notif_refresh")
+            st.subheader("⭐ Feedbacks & Sentiment")
+            if not is_guest:
+                if not menu_df.empty:
+                    det_cat, det_item, det_price = detect_menu_columns(menu_df)
+                    available_items = menu_df[det_item].fillna("Unknown").tolist() if det_item else menu_df.iloc[:, 0].fillna("Unknown").tolist()
+                    with st.form("feedback_form"):
+                        item_choice = st.selectbox("Which item?", available_items, key="feedback_item")
+                        feedback = st.text_area("Your feedback:", key="feedback_text")
+                        rating = st.slider("Rate (1-5)", 1, 5, 3, key="feedback_rating")
+                        submitted = st.form_submit_button("Submit Feedback")
+                        if submitted:
+                            if feedback:
+                                save_feedback(item_choice, feedback, rating, user["username"])
+                                st.success("✅ Feedback submitted!")
+                            else:
+                                st.warning("Feedback cannot be empty.")
+                else:
+                    st.info("Menu is empty. Feedback cannot be submitted.")
+            else:
+                st.warning("Guests cannot submit feedback. Please create an account.")
 
+            st.divider()
+            st.subheader("📢 Notifications")
+            # Auto-refresh notifications every 2 seconds if available
+            try:
+                if _HAS_ST_AUTORELOAD:
+                    if 'st_autorefresh' in globals():
+                        # if streamlit_autorefresh was imported earlier
+                        st_autorefresh(interval=2000, key="notif_refresh")
+                    else:
+                        # attempt to use streamlit's built-in autorefresh if available
+                        try:
+                            st.autorefresh(interval=2000, key="notif_refresh")
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # show only notifications for this logged-in user
             notes = get_notifications_for_user(user.get("username"))
             if notes:
                 for i, note in enumerate(notes):
-                    st.info(note)
+                    st.info(note, key=f"notif_{i}")
             else:
-                st.info("No notifications yet.")
-
-            if st.button("Clear Notifications"):
+                st.info("No notifications.")
+            if st.button("Clear notifications", key="clear_notifs"):
                 clear_notifications_for_user(user.get("username"))
-                st.rerun()
+                st.success("✅ Notifications cleared")
 
             st.divider()
             st.subheader("📜 Order History")
-            receipts = load_receipts_df()
-            if not receipts.empty and "user_id" in receipts.columns:
-                user_orders = receipts[receipts["user_id"] == user["username"]]
-                if not user_orders.empty:
-                    st.dataframe(user_orders, use_container_width=True)
+            if not is_guest:
+                history = load_receipts_df()
+                if not history.empty and "user_id" in history.columns:
+                    user_orders = history[history["user_id"] == user["username"]]
+                    if not user_orders.empty:
+                        st.dataframe(user_orders.sort_values(by="timestamp", ascending=False), use_container_width=True)
+                    else:
+                        st.info("No past orders yet.")
                 else:
                     st.info("No past orders yet.")
             else:
-                st.info("No past orders yet.")
+                st.warning("Guests cannot view order history.")
 
         st.divider()
         if st.button("🚪 Log Out"):
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.session_state.page = "login"
             st.rerun()
 
-# ---------------------------
-# PAYMENT PAGE
-# ---------------------------
+# ---------- PAYMENT PAGE ----------
 elif st.session_state.page == "payment":
     user = st.session_state.user or {"username": "Guest", "role": "Guest"}
-    cart = st.session_state.get("cart", {})
+    pending_cart = st.session_state.get("cart", {})
 
-    if not cart:
-        st.warning("Cart is empty. Please add items first.")
-        if st.button("⬅️ Back"):
+    if not pending_cart:
+        st.warning("No pending order found. Go back to your cart.")
+        if st.button("⬅️ Back to Main"):
             st.session_state.page = "main"
             st.rerun()
     else:
-        total = sum(v["qty"] * v["price"] for v in cart.values())
+        total_cost = sum(v.get("qty", 1) * v.get("price", 0.0) for v in pending_cart.values())
         st.subheader("💳 Payment Confirmation")
-        st.write(f"### Total: ₱{total:.2f}")
+        st.write(f"### 💵 Total Amount: ₱{total_cost:.2f}")
 
-        method = st.radio("Select Payment Method", ["Cash", "GCash (Scan QR)", "Card"])
-        pickup_dt = st.text_input("Pickup Time", value=datetime.now().strftime("%Y-%m-%d %H:%M"))
+        method = st.radio("Select Payment Method", ["Cash", "GCash (Scan QR)", "Card"], key="pay_method")
+        pickup_dt = st.text_input(
+            "Pickup Time (YYYY-MM-DD HH:MM)",
+            value=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        )
 
+        # always save as Pending so staff marks Ready manually
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, cart, total, "Cash", user["username"], pickup_dt, status="Pending")
-                st.success("✅ Order placed (Pending).")
+                save_receipt(order_id, pending_cart, total_cost, "Cash",
+                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
 
         elif method == "GCash (Scan QR)":
-            st.image("Qr.jpg", width=200)
-            st.info(f"Amount to pay: ₱{total:.2f}")
+            st.info("📱 Please scan the QR code below using your GCash app to pay.")
+            st.image("Qr.jpg", caption="Scan this QR to pay via GCash", width=250)
+            st.markdown(f"**Amount to pay:** ₱{total_cost:.2f}")
+
             if st.button("✅ I've Paid via GCash"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, cart, total, "GCash", user["username"], pickup_dt, status="Pending")
-                st.success("✅ Order placed (Pending).")
+                save_receipt(order_id, pending_cart, total_cost, "GCash",
+                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
@@ -876,8 +1232,9 @@ elif st.session_state.page == "payment":
             st.text_input("CVV", key="card_cvv")
             if st.button("Simulate Card Payment Success"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, cart, total, "Card", user["username"], pickup_dt, status="Pending")
-                st.success("✅ Order placed (Pending).")
+                save_receipt(order_id, pending_cart, total_cost, "Card",
+                             user.get("username", "Guest"), pickup_dt, status="Pending")
+                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
                 st.session_state.cart.clear()
                 st.session_state.page = "main"
                 st.rerun()
