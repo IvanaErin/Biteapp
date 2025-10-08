@@ -236,7 +236,7 @@ def load_menu():
 
     try:
         cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM")
-        df = cur.fetch_pandas_all()  # Snowflake connector returns a DataFrame
+        df = cur.fetch_pandas_all()
         # Ensure PRICE is numeric
         if "PRICE" in df.columns:
             df["PRICE"] = pd.to_numeric(df["PRICE"], errors="coerce").fillna(0)
@@ -251,17 +251,22 @@ def load_menu():
 # Upsert Menu Function
 # ---------------------------
 def upsert_menu(edited):
+    """
+    Inserts new menu items or updates existing ones in Snowflake MENU table.
+    """
     if edited.empty:
         st.warning("Nothing to save. Menu is empty.")
         return
 
+    # Clean data
     edited = edited.fillna("")
     edited["PRICE"] = pd.to_numeric(edited["PRICE"], errors="coerce").fillna(0)
-    edited = edited.dropna(subset=["CATEGORY", "ITEM"])  # must have category & item
+    edited = edited.dropna(subset=["CATEGORY", "ITEM"])  # Must have CATEGORY & ITEM
 
     cur = get_db_cursor()
     if cur is None:
         logging.error("Database cursor not available.")
+        st.error("Database connection failed.")
         return
 
     try:
@@ -282,6 +287,7 @@ def upsert_menu(edited):
 
         cur.connection.commit()
         st.success("✅ Menu updated successfully!")
+        logging.info("Menu upsert completed successfully.")
     except Exception as e:
         st.error(f"❌ Error saving menu: {e}")
         logging.error(f"Error upserting menu items: {e}")
@@ -306,6 +312,13 @@ def manage_menu():
                 st.warning("Menu is empty. Cannot save.")
     else:
         st.info("No menu items available.")
+
+# ---------------------------
+# Example usage
+# ---------------------------
+if __name__ == "__main__":
+    st.title("BiteHub Staff Portal")
+    manage_menu()
 def _normalize_items_for_receipt(items):
     """
     Accepts many formats and returns a list of dicts:
