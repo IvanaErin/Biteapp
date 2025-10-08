@@ -221,65 +221,94 @@ def user_exists(username: str) -> bool:
 # ---------------------------
 # RECEIPTS (normalize items before saving)
 # ---------------------------
+# ---------------------------
+# Load Menu Function
+# ---------------------------
 def load_menu():
     """
-    Loads the menu data from your source (e.g., Snowflake) into a DataFrame.
-    This function must be implemented to fetch your menu data.
+    Loads the menu data from Snowflake into a pandas DataFrame.
+    Returns an empty DataFrame if the menu is empty or cursor fails.
     """
-    # Example placeholder. Replace with your actual data loading logic.
     cur = get_db_cursor()
     if cur is None:
-        return pd.DataFrame()
-    cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU")
-    df = cur.fetch_pandas_all()
-    cur.close()
-    return df
+        logging.warning("Database cursor not available. Returning empty menu.")
+        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
 
-def detect_menu_columns(df):
-    """
-    Detects the column names for category, item, and price.
-    This function should be implemented based on your data structure.
-    """
-    # Example placeholder. Replace with logic that finds the right columns.
-    category_col = 'CATEGORY' if 'CATEGORY' in df.columns else None
-    item_col = 'ITEM' if 'ITEM' in df.columns else None
-    price_col = 'PRICE' if 'PRICE' in df.columns else None
-    return category_col, item_col, price_col
+    try:
+        cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM")
+        df = cur.fetch_pandas_all()  # Snowflake connector returns a DataFrame
+        # Ensure PRICE is numeric
+        if "PRICE" in df.columns:
+            df["PRICE"] = pd.to_numeric(df["PRICE"], errors="coerce").fillna(0)
+        return df
+    except Exception as e:
+        logging.error(f"Error loading menu: {e}")
+        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
+    finally:
+        cur.close()
 
-# --- Updated Functions ---
-
+# ---------------------------
+# Upsert Menu Function
+# ---------------------------
 def upsert_menu(edited):
     """
     Inserts a new menu item or updates an existing one in the MENU table
     in Snowflake using a MERGE statement.
     """
-    category, item, price = edited
+    if edited.empty:
+        st.warning("Nothing to save. Menu is empty.")
+        return
+
+    # Fill missing values and ensure PRICE is numeric
+    edited = edited.fillna("")
+    if "PRICE" in edited.columns:
+        edited["PRICE"] = pd.to_numeric(edited["PRICE"], errors="coerce").fillna(0)
+
     cur = get_db_cursor()
     if cur is None:
         logging.error("Database cursor not available. Failed to upsert menu.")
         return
 
     try:
-        cur.execute("""
-            MERGE INTO MENU AS target
-            USING (SELECT ? AS CATEGORY, ? AS ITEM, ? AS PRICE) AS source
-            ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
-            WHEN MATCHED THEN
-                UPDATE SET target.PRICE = source.PRICE
-            WHEN NOT MATCHED THEN
-                INSERT (CATEGORY, ITEM, PRICE) VALUES (source.CATEGORY, source.ITEM, source.PRICE)
-        """, (category, item, price))
+        for _, row in edited.iterrows():
+            cur.execute("""
+                MERGE INTO MENU AS target
+                USING (SELECT %s AS CATEGORY, %s AS ITEM, %s AS PRICE) AS source
+                ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
+                WHEN MATCHED THEN
+                    UPDATE SET target.PRICE = source.PRICE
+                WHEN NOT MATCHED THEN
+                    INSERT (CATEGORY, ITEM, PRICE)
+                    VALUES (source.CATEGORY, source.ITEM, source.PRICE)
+            """, (row["CATEGORY"], row["ITEM"], row["PRICE"]))
 
-        # Depending on your setup, you may need to commit.
-        # For Snowflake, it's often autocommitted, but explicit is safer.
         cur.connection.commit()
-        logging.info(f"Successfully upserted menu item: {item}")
+        st.success("✅ Menu updated successfully!")
+        logging.info("Successfully upserted menu items.")
     except Exception as e:
-        logging.error(f"Error upserting menu item: {e}")
+        st.error(f"❌ Error saving menu: {e}")
+        logging.error(f"Error upserting menu items: {e}")
     finally:
-        if cur:
-            cur.close()
+        cur.close()
 
+# ---------------------------
+# Streamlit Manage Menu Block
+# ---------------------------
+def manage_menu():
+    st.subheader("📖 Manage Menu")
+    menu_df = load_menu()
+
+    if not menu_df.empty:
+        edited = st.data_editor(menu_df, num_rows="dynamic")
+
+        if st.button("Save Menu Updates"):
+            if not edited.empty:
+                upsert_menu(edited)
+                st.experimental_rerun()
+            else:
+                st.warning("Menu is empty. Cannot save.")
+    else:
+        st.info("No menu items available.")
 def _normalize_items_for_receipt(items):
     """
     Accepts many formats and returns a list of dicts:
