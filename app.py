@@ -221,26 +221,64 @@ def user_exists(username: str) -> bool:
 # ---------------------------
 # RECEIPTS (normalize items before saving)
 # ---------------------------
-def _build_menu_category_map():
-    # Build map {item_name.lower(): category} from menu for category lookup
+def load_menu():
+    """
+    Loads the menu data from your source (e.g., Snowflake) into a DataFrame.
+    This function must be implemented to fetch your menu data.
+    """
+    # Example placeholder. Replace with your actual data loading logic.
+    cur = get_db_cursor()
+    if cur is None:
+        return pd.DataFrame()
+    cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU")
+    df = cur.fetch_pandas_all()
+    cur.close()
+    return df
+
+def detect_menu_columns(df):
+    """
+    Detects the column names for category, item, and price.
+    This function should be implemented based on your data structure.
+    """
+    # Example placeholder. Replace with logic that finds the right columns.
+    category_col = 'CATEGORY' if 'CATEGORY' in df.columns else None
+    item_col = 'ITEM' if 'ITEM' in df.columns else None
+    price_col = 'PRICE' if 'PRICE' in df.columns else None
+    return category_col, item_col, price_col
+
+# --- Updated Functions ---
+
+def upsert_menu(edited):
+    """
+    Inserts a new menu item or updates an existing one in the MENU table
+    in Snowflake using a MERGE statement.
+    """
+    category, item, price = edited
+    cur = get_db_cursor()
+    if cur is None:
+        logging.error("Database cursor not available. Failed to upsert menu.")
+        return
+
     try:
-        menu_df = load_menu()
-        if menu_df is None or menu_df.empty:
-            return {}
-        det_cat, det_item, det_price = detect_menu_columns(menu_df)
-        if not det_item:
-            return {}
-        category_col = det_cat
-        item_col = det_item
-        cat_map = {}
-        for _, r in menu_df.iterrows():
-            name = str(r.get(item_col, "")).strip()
-            cat = r.get(category_col) if category_col else None
-            if name:
-                cat_map[name.lower()] = cat if pd.notna(cat) else None
-        return cat_map
-    except Exception:
-        return {}
+        cur.execute("""
+            MERGE INTO MENU AS target
+            USING (SELECT ? AS CATEGORY, ? AS ITEM, ? AS PRICE) AS source
+            ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
+            WHEN MATCHED THEN
+                UPDATE SET target.PRICE = source.PRICE
+            WHEN NOT MATCHED THEN
+                INSERT (CATEGORY, ITEM, PRICE) VALUES (source.CATEGORY, source.ITEM, source.PRICE)
+        """, (category, item, price))
+
+        # Depending on your setup, you may need to commit.
+        # For Snowflake, it's often autocommitted, but explicit is safer.
+        cur.connection.commit()
+        logging.info(f"Successfully upserted menu item: {item}")
+    except Exception as e:
+        logging.error(f"Error upserting menu item: {e}")
+    finally:
+        if cur:
+            cur.close()
 
 def _normalize_items_for_receipt(items):
     """
