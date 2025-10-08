@@ -222,103 +222,67 @@ def user_exists(username: str) -> bool:
 # RECEIPTS (normalize items before saving)
 # ---------------------------
 # ---------------------------
-# Load Menu Function
+# MENU MANAGEMENT (FIXED)
 # ---------------------------
 def load_menu():
-    """
-    Loads the menu data from Snowflake into a pandas DataFrame.
-    Returns an empty DataFrame if the menu is empty or cursor fails.
-    """
-    cur = get_db_cursor()
-    if cur is None:
-        logging.warning("Database cursor not available. Returning empty menu.")
+    conn = get_connection()
+    if not conn:
         return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
-
     try:
+        cur = conn.cursor()
         cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM")
         df = cur.fetch_pandas_all()
-        # Ensure PRICE is numeric
-        if "PRICE" in df.columns:
-            df["PRICE"] = pd.to_numeric(df["PRICE"], errors="coerce").fillna(0)
+        df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
         return df
-    except Exception as e:
-        logging.error(f"Error loading menu: {e}")
+    except:
         return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
     finally:
         cur.close()
+        conn.close()
 
-# ---------------------------
-# Upsert Menu Function
-# ---------------------------
-def upsert_menu(edited):
-    """
-    Inserts new menu items or updates existing ones in Snowflake MENU table.
-    """
-    if edited.empty:
-        st.warning("Nothing to save. Menu is empty.")
+def upsert_menu(df: pd.DataFrame):
+    if df.empty:
+        st.warning("Menu is empty. Nothing to save.")
         return
-
-    # Clean data
-    edited = edited.fillna("")
-    edited["PRICE"] = pd.to_numeric(edited["PRICE"], errors="coerce").fillna(0)
-    edited = edited.dropna(subset=["CATEGORY", "ITEM"])  # Must have CATEGORY & ITEM
-
-    cur = get_db_cursor()
-    if cur is None:
-        logging.error("Database cursor not available.")
-        st.error("Database connection failed.")
+    df = df.fillna("")
+    df["PRICE"] = pd.to_numeric(df["PRICE"], errors="coerce").fillna(0)
+    conn = get_connection()
+    if not conn:
+        st.error("Database connection failed. Cannot save menu.")
         return
-
     try:
-        for _, row in edited.iterrows():
-            category = str(row["CATEGORY"]).replace("'", "''")
+        cur = conn.cursor()
+        for _, row in df.iterrows():
+            cat = str(row["CATEGORY"]).replace("'", "''")
             item = str(row["ITEM"]).replace("'", "''")
             price = row["PRICE"]
-
             sql = f"""
                 MERGE INTO MENU AS target
-                USING (SELECT '{category}' AS CATEGORY, '{item}' AS ITEM, {price} AS PRICE) AS source
+                USING (SELECT '{cat}' AS CATEGORY, '{item}' AS ITEM, {price} AS PRICE) AS source
                 ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
                 WHEN MATCHED THEN UPDATE SET target.PRICE = source.PRICE
-                WHEN NOT MATCHED THEN INSERT (CATEGORY, ITEM, PRICE)
-                VALUES (source.CATEGORY, source.ITEM, source.PRICE)
+                WHEN NOT MATCHED THEN INSERT (CATEGORY, ITEM, PRICE) VALUES (source.CATEGORY, source.ITEM, source.PRICE)
             """
             cur.execute(sql)
-
-        cur.connection.commit()
+        conn.commit()
         st.success("✅ Menu updated successfully!")
-        logging.info("Menu upsert completed successfully.")
     except Exception as e:
-        st.error(f"❌ Error saving menu: {e}")
-        logging.error(f"Error upserting menu items: {e}")
+        st.error(f"❌ Error updating menu: {e}")
     finally:
         cur.close()
+        conn.close()
 
-# ---------------------------
-# Streamlit Manage Menu Block
-# ---------------------------
 def manage_menu():
     st.subheader("📖 Manage Menu")
     menu_df = load_menu()
-
     if not menu_df.empty:
         edited = st.data_editor(menu_df, num_rows="dynamic")
-
         if st.button("Save Menu Updates"):
-            if not edited.empty:
-                upsert_menu(edited)
-                st.experimental_rerun()
-            else:
-                st.warning("Menu is empty. Cannot save.")
+            upsert_menu(edited)
+            st.experimental_rerun()
     else:
         st.info("No menu items available.")
-
-# ---------------------------
-# Example usage
-# ---------------------------
-if __name__ == "__main__":
-    st.title("BiteHub Staff Portal")
-    manage_menu()
+        
 def _normalize_items_for_receipt(items):
     """
     Accepts many formats and returns a list of dicts:
@@ -864,7 +828,7 @@ if st.session_state.page == "login":
 
     with col3:
         if st.button("🎟️ Guest Account", use_container_width=True):
-            st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0}
+            st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0, "cart": []}
             st.session_state.page = "main"
             st.rerun()
 
@@ -872,6 +836,7 @@ if st.session_state.page == "login":
         if st.button("📝 Create Account", use_container_width=True):
             st.session_state.page = "signup"
             st.rerun()
+
 
 # ---------------------------
 # SIGNUP PAGE
@@ -899,6 +864,7 @@ elif st.session_state.page == "signup":
     if st.button("⬅️ Back to Login"):
         st.session_state.page = "login"
         st.rerun()
+
 
 # ---------------------------
 # MAIN PORTAL (Staff / Non-Staff / Guest)
@@ -996,7 +962,7 @@ elif st.session_state.page == "main":
                     for cat in sales_summary["CATEGORY"].unique():
                         st.markdown(f"### {cat} Sales Breakdown")
                         cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
-                        fig, ax = plt.subplots(figsize=(3, 3))
+                        fig, ax = plt.subplots(figsize=(4, 4))
                         ax.pie(cat_data["QUANTITY"], labels=cat_data["ITEM_NAME"], autopct="%1.1f%%", startangle=90)
                         ax.axis("equal")
                         st.pyplot(fig)
