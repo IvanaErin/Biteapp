@@ -251,40 +251,37 @@ def load_menu():
 # Upsert Menu Function
 # ---------------------------
 def upsert_menu(edited):
-    """
-    Inserts a new menu item or updates an existing one in the MENU table
-    in Snowflake using a MERGE statement.
-    """
     if edited.empty:
         st.warning("Nothing to save. Menu is empty.")
         return
 
-    # Fill missing values and ensure PRICE is numeric
     edited = edited.fillna("")
-    if "PRICE" in edited.columns:
-        edited["PRICE"] = pd.to_numeric(edited["PRICE"], errors="coerce").fillna(0)
+    edited["PRICE"] = pd.to_numeric(edited["PRICE"], errors="coerce").fillna(0)
+    edited = edited.dropna(subset=["CATEGORY", "ITEM"])  # must have category & item
 
     cur = get_db_cursor()
     if cur is None:
-        logging.error("Database cursor not available. Failed to upsert menu.")
+        logging.error("Database cursor not available.")
         return
 
     try:
         for _, row in edited.iterrows():
-            cur.execute("""
+            category = str(row["CATEGORY"]).replace("'", "''")
+            item = str(row["ITEM"]).replace("'", "''")
+            price = row["PRICE"]
+
+            sql = f"""
                 MERGE INTO MENU AS target
-                USING (SELECT %s AS CATEGORY, %s AS ITEM, %s AS PRICE) AS source
+                USING (SELECT '{category}' AS CATEGORY, '{item}' AS ITEM, {price} AS PRICE) AS source
                 ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
-                WHEN MATCHED THEN
-                    UPDATE SET target.PRICE = source.PRICE
-                WHEN NOT MATCHED THEN
-                    INSERT (CATEGORY, ITEM, PRICE)
-                    VALUES (source.CATEGORY, source.ITEM, source.PRICE)
-            """, (row["CATEGORY"], row["ITEM"], row["PRICE"]))
+                WHEN MATCHED THEN UPDATE SET target.PRICE = source.PRICE
+                WHEN NOT MATCHED THEN INSERT (CATEGORY, ITEM, PRICE)
+                VALUES (source.CATEGORY, source.ITEM, source.PRICE)
+            """
+            cur.execute(sql)
 
         cur.connection.commit()
         st.success("✅ Menu updated successfully!")
-        logging.info("Successfully upserted menu items.")
     except Exception as e:
         st.error(f"❌ Error saving menu: {e}")
         logging.error(f"Error upserting menu items: {e}")
