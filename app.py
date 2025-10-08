@@ -854,17 +854,49 @@ elif st.session_state.page == "payment":
         st.subheader("💳 Payment Confirmation")
         st.write(f"### Total: ₱{total:.2f}")
 
-        method = st.radio("Payment Method", ["Cash", "GCash (QR)", "Card"])
+        method = st.radio("Select Payment Method", ["Cash", "GCash (QR)", "Card"])
         pickup_time = st.text_input("Pickup Time (YYYY-MM-DD HH:MM)", datetime.now().strftime("%Y-%m-%d %H:%M"))
 
+        # ---- GCash ----
         if method == "GCash (QR)":
-            st.image("Qr.jpg", caption="Scan to pay", width=250)
+            st.image("Qr.jpg", caption="📱 Scan to pay via GCash", width=250)
             st.info(f"Pay ₱{total:.2f} and then confirm below.")
 
+        # ---- Card ----
+        elif method == "Card":
+            st.markdown("### 💳 Enter Card Details Securely")
+            card_col1, card_col2 = st.columns(2)
+            with card_col1:
+                card_name = st.text_input("Cardholder Name")
+                card_number = st.text_input("Card Number", max_chars=19, placeholder="1234 5678 9012 3456")
+            with card_col2:
+                exp_date = st.text_input("Expiry Date (MM/YY)", max_chars=5)
+                cvv = st.text_input("CVV", max_chars=3, type="password")
+
+            if not card_name or not card_number or not exp_date or not cvv:
+                st.warning("⚠️ Please complete all card details before confirming.")
+
+        # ---- Confirm Button ----
         if st.button("✅ Confirm Order"):
+            if method == "Card":
+                # Validate card details before proceeding
+                if not card_name or not card_number or not exp_date or not cvv:
+                    st.error("❌ Please fill out all card fields.")
+                    st.stop()
+                elif len(card_number.replace(" ", "")) < 13 or len(card_number.replace(" ", "")) > 19:
+                    st.error("❌ Invalid card number.")
+                    st.stop()
+                elif not re.match(r"^(0[1-9]|1[0-2])\/\d{2}$", exp_date):
+                    st.error("❌ Invalid expiry date format (MM/YY).")
+                    st.stop()
+                elif not cvv.isdigit() or len(cvv) != 3:
+                    st.error("❌ Invalid CVV.")
+                    st.stop()
+
             order_id = f"ORD-{random.randint(100000,999999)}"
             save_receipt(order_id, cart, total, method, user.get("username", "Guest"), pickup_time, status="Pending")
-            st.success(f"✅ Order {order_id} placed! Wait for staff to mark as Ready.")
+
+            st.success(f"✅ Order {order_id} placed successfully! Wait for staff to mark as Ready.")
             st.session_state.cart.clear()
             st.session_state.page = "main"
             st.rerun()
