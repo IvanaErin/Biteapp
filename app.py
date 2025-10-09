@@ -1213,7 +1213,7 @@ elif st.session_state.page == "main":
             last_refresh = st.session_state.get("last_history_refresh", datetime.now())
             if (datetime.now() - last_refresh).seconds >= refresh_interval:
                 st.session_state["last_history_refresh"] = datetime.now()
-                st.experimental_rerun()
+                st.rerun()
 
             # --- Load Order History ---
             hist = load_receipts_df()
@@ -1231,7 +1231,6 @@ elif st.session_state.page == "main":
                 del st.session_state[k]
             st.session_state.page = "login"
             st.rerun()
-
 
 # ---------------------------
 # PAYMENT PAGE
