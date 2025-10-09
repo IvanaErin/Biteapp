@@ -435,31 +435,6 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
         "status": status
     })
 
-        return
-
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO receipts 
-            (order_id, items, total, payment_method, user_id, pickup_time, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                order_id,
-                items_json,
-                float(total),
-                payment_method,
-                user_id,
-                datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M"),
-                status
-            )
-        )
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
-
 def load_receipts_df():
     conn = get_connection()
     if not conn:
