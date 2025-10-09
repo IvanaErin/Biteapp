@@ -927,73 +927,72 @@ elif st.session_state.page == "main":
             else:
                 st.info("No pending orders.")
 
-elif choice == "Manage Menu":
-    st.subheader("📖 Manage Menu")
-    menu_df = load_menu()
+        elif choice == "Manage Menu":
+            st.subheader("📖 Manage Menu")
+            menu_df = load_menu()
 
-    if not menu_df.empty:
-        # Add a checkbox column for deletion
-        menu_df["Delete"] = False
-        edited = st.data_editor(menu_df, num_rows="dynamic")
+            if not menu_df.empty:
+                menu_df["Delete"] = False
+                edited = st.data_editor(menu_df, num_rows="dynamic")
 
-        # Save updates (update/insert)
-        if st.button("💾 Save Menu Updates"):
-            upsert_menu(edited.drop(columns=["Delete"]))  # Keep only real columns
-            st.success("✅ Menu updated successfully!")
-            st.rerun()
+                # Save updates
+                if st.button("💾 Save Menu Updates"):
+                    upsert_menu(edited.drop(columns=["Delete"]))
+                    st.success("✅ Menu updated successfully!")
+                    st.rerun()
 
-        # Delete selected rows
-        if st.button("🗑️ Delete Selected Rows"):
-            to_delete = edited[edited["Delete"] == True]
-            if not to_delete.empty:
-                delete_menu_items(to_delete["ITEM"].tolist())
-                st.success(f"🗑️ Deleted {len(to_delete)} item(s) successfully!")
-                st.rerun()
+                # Delete selected rows
+                if st.button("🗑️ Delete Selected Rows"):
+                    to_delete = edited[edited["Delete"] == True]
+                    if not to_delete.empty:
+                        delete_menu_items(to_delete["ITEM"].tolist())
+                        st.success(f"🗑️ Deleted {len(to_delete)} item(s) successfully!")
+                        st.rerun()
+                    else:
+                        st.info("No rows selected for deletion.")
             else:
-                st.info("No rows selected for deletion.")
-    else:
-        st.info("No menu items available.")
+                st.info("No menu items available.")
 
-elif choice == "AI Assistant":
-    st.subheader("🤖 AI Assistant")
-    q = st.text_area("Ask AI something:", key="staff_ai_q")
-    if st.button("Ask AI", key="ask_ai_staff"):
-        st.write(run_ai(q))
+        elif choice == "AI Assistant":
+            st.subheader("🤖 AI Assistant")
+            q = st.text_area("Ask AI something:", key="staff_ai_q")
+            if st.button("Ask AI", key="ask_ai_staff"):
+                st.write(run_ai(q))
 
-elif choice == "Feedback Review":
-    st.subheader("📢 Feedback Review")
-    fb = load_feedbacks_df()
-    st.dataframe(fb, use_container_width=True) if not fb.empty else st.info("No feedbacks yet.")
+        elif choice == "Feedback Review":
+            st.subheader("📢 Feedback Review")
+            fb = load_feedbacks_df()
+            st.dataframe(fb, use_container_width=True) if not fb.empty else st.info("No feedbacks yet.")
 
-elif choice == "Sales Report":
-    st.subheader("💰 Sales Report")
-    receipts = load_receipts_df()
-    local = st.session_state.get("_local_receipts", [])
-    if local:
-        receipts = pd.concat([receipts, pd.DataFrame(local)], ignore_index=True)
-    if receipts.empty:
-        st.info("No sales yet.")
-    else:
-        all_items = []
-        for _, row in receipts.iterrows():
-            try:
-                for it in _normalize_items_for_receipt(row.get("items", [])):
-                    all_items.append({
-                        "CATEGORY": it.get("category", "Uncategorized"),
-                        "ITEM_NAME": it.get("name", "Unknown"),
-                        "QUANTITY": int(it.get("qty", 1))
-                    })
-            except Exception:
-                pass
-        if all_items:
-            sales_summary = pd.DataFrame(all_items).groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
-            for cat in sales_summary["CATEGORY"].unique():
-                st.markdown(f"### {cat} Sales Breakdown")
-                cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
-                fig, ax = plt.subplots(figsize=(4, 4))
-                ax.pie(cat_data["QUANTITY"], labels=cat_data["ITEM_NAME"], autopct="%1.1f%%", startangle=90)
-                ax.axis("equal")
-                st.pyplot(fig)
+        elif choice == "Sales Report":
+            st.subheader("💰 Sales Report")
+            receipts = load_receipts_df()
+            local = st.session_state.get("_local_receipts", [])
+            if local:
+                receipts = pd.concat([receipts, pd.DataFrame(local)], ignore_index=True)
+            if receipts.empty:
+                st.info("No sales yet.")
+            else:
+                all_items = []
+                for _, row in receipts.iterrows():
+                    try:
+                        for it in _normalize_items_for_receipt(row.get("items", [])):
+                            all_items.append({
+                                "CATEGORY": it.get("category", "Uncategorized"),
+                                "ITEM_NAME": it.get("name", "Unknown"),
+                                "QUANTITY": int(it.get("qty", 1))
+                            })
+                    except Exception:
+                        pass
+                if all_items:
+                    sales_summary = pd.DataFrame(all_items).groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
+                    for cat in sales_summary["CATEGORY"].unique():
+                        st.markdown(f"### {cat} Sales Breakdown")
+                        cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+                        fig, ax = plt.subplots(figsize=(4, 4))
+                        ax.pie(cat_data["QUANTITY"], labels=cat_data["ITEM_NAME"], autopct="%1.1f%%", startangle=90)
+                        ax.axis("equal")
+                        st.pyplot(fig)
 
     # ---------------------------
     # NON-STAFF / GUEST PORTAL
@@ -1012,11 +1011,8 @@ elif choice == "Sales Report":
             with st.expander("💬 Ask BiteHub AI", expanded=False):
                 q = st.text_input("Ask something:", key="user_ai_q", placeholder="e.g. What’s the best seller?")
                 if st.button("Ask AI", key="ask_ai_user"):
-                    # Load menu from DB
                     menu_df = load_menu()
                     menu_list = "\n".join([f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})" for _, row in menu_df.iterrows()])
-
-                    # Construct prompt
                     prompt = f"""
                     You are BiteHub's AI assistant. Only use items from the menu below.
                     Prices are in Pesos (₱). Do NOT invent items or prices.
@@ -1026,8 +1022,6 @@ elif choice == "Sales Report":
 
                     USER QUESTION: {q}
                     """
-
-                    # Run AI with context
                     st.write(run_ai(prompt))
 
             st.markdown("### 📖 Menu & Ordering")
@@ -1050,7 +1044,7 @@ elif choice == "Sales Report":
                                 st.session_state.cart[name]["qty"] += 1
                             st.success(f"{name} added to cart!")
 
-            # 🛒 CART SECTION — always visible
+            # 🛒 CART SECTION
             st.markdown("### 🛒 Your Cart")
             cart = st.session_state.cart
             if not cart:
@@ -1084,7 +1078,7 @@ elif choice == "Sales Report":
                     st.session_state.cart_total = total
                     st.rerun()
 
-        # RIGHT SIDE — Feedbacks, Notifications, Order History
+        # RIGHT SIDE
         with right_col:
             st.subheader("⭐ Feedbacks")
             if not is_guest:
@@ -1129,7 +1123,10 @@ elif choice == "Sales Report":
             st.session_state.page = "login"
             st.rerun()
 
-# ---------- PAYMENT PAGE ----------
+
+# ---------------------------
+# PAYMENT PAGE
+# ---------------------------
 elif st.session_state.page == "payment":
     user = st.session_state.user or {"username": "Guest", "role": "Guest"}
     pending_cart = st.session_state.get("cart", {})
@@ -1150,7 +1147,6 @@ elif st.session_state.page == "payment":
             value=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
 
-        # always save as Pending so staff marks Ready manually
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
                 order_id = f"ORD-{random.randint(100000,999999)}"
