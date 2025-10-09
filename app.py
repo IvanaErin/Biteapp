@@ -1147,15 +1147,23 @@ elif st.session_state.page == "payment":
             value=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
 
+        def record_order(payment_method):
+            """Record order only if user is not a Guest"""
+            if user.get("role", "Guest") != "Guest":
+                order_id = f"ORD-{random.randint(100000,999999)}"
+                save_receipt(order_id, pending_cart, total_cost, payment_method,
+                             user.get("username"), pickup_dt, status="Pending")
+                add_notification(user.get("username"), f"Your order #{order_id} has been placed successfully!")
+            else:
+                st.info("Guest orders are not saved to history.")
+            st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
+            st.session_state.cart.clear()
+            st.session_state.page = "main"
+            st.rerun()
+
         if method == "Cash":
             if st.button("Confirm Cash Payment"):
-                order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "Cash",
-                             user.get("username", "Guest"), pickup_dt, status="Pending")
-                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
-                st.session_state.cart.clear()
-                st.session_state.page = "main"
-                st.rerun()
+                record_order("Cash")
 
         elif method == "GCash (Scan QR)":
             st.info("📱 Please scan the QR code below using your GCash app to pay.")
@@ -1163,23 +1171,11 @@ elif st.session_state.page == "payment":
             st.markdown(f"**Amount to pay:** ₱{total_cost:.2f}")
 
             if st.button("✅ I've Paid via GCash"):
-                order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "GCash",
-                             user.get("username", "Guest"), pickup_dt, status="Pending")
-                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
-                st.session_state.cart.clear()
-                st.session_state.page = "main"
-                st.rerun()
+                record_order("GCash")
 
         elif method == "Card":
             st.text_input("Card Number", key="card_num")
             st.text_input("Expiry (MM/YY)", key="card_exp")
             st.text_input("CVV", key="card_cvv")
             if st.button("Simulate Card Payment Success"):
-                order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, "Card",
-                             user.get("username", "Guest"), pickup_dt, status="Pending")
-                st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
-                st.session_state.cart.clear()
-                st.session_state.page = "main"
-                st.rerun()
+                record_order("Card")
