@@ -954,46 +954,46 @@ elif choice == "Manage Menu":
     else:
         st.info("No menu items available.")
 
-        elif choice == "AI Assistant":
-            st.subheader("🤖 AI Assistant")
-            q = st.text_area("Ask AI something:", key="staff_ai_q")
-            if st.button("Ask AI", key="ask_ai_staff"):
-                st.write(run_ai(q))
+elif choice == "AI Assistant":
+    st.subheader("🤖 AI Assistant")
+    q = st.text_area("Ask AI something:", key="staff_ai_q")
+    if st.button("Ask AI", key="ask_ai_staff"):
+        st.write(run_ai(q))
 
-        elif choice == "Feedback Review":
-            st.subheader("📢 Feedback Review")
-            fb = load_feedbacks_df()
-            st.dataframe(fb, use_container_width=True) if not fb.empty else st.info("No feedbacks yet.")
+elif choice == "Feedback Review":
+    st.subheader("📢 Feedback Review")
+    fb = load_feedbacks_df()
+    st.dataframe(fb, use_container_width=True) if not fb.empty else st.info("No feedbacks yet.")
 
-        elif choice == "Sales Report":
-            st.subheader("💰 Sales Report")
-            receipts = load_receipts_df()
-            local = st.session_state.get("_local_receipts", [])
-            if local:
-                receipts = pd.concat([receipts, pd.DataFrame(local)], ignore_index=True)
-            if receipts.empty:
-                st.info("No sales yet.")
-            else:
-                all_items = []
-                for _, row in receipts.iterrows():
-                    try:
-                        for it in _normalize_items_for_receipt(row.get("items", [])):
-                            all_items.append({
-                                "CATEGORY": it.get("category", "Uncategorized"),
-                                "ITEM_NAME": it.get("name", "Unknown"),
-                                "QUANTITY": int(it.get("qty", 1))
-                            })
-                    except Exception:
-                        pass
-                if all_items:
-                    sales_summary = pd.DataFrame(all_items).groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
-                    for cat in sales_summary["CATEGORY"].unique():
-                        st.markdown(f"### {cat} Sales Breakdown")
-                        cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
-                        fig, ax = plt.subplots(figsize=(4, 4))
-                        ax.pie(cat_data["QUANTITY"], labels=cat_data["ITEM_NAME"], autopct="%1.1f%%", startangle=90)
-                        ax.axis("equal")
-                        st.pyplot(fig)
+elif choice == "Sales Report":
+    st.subheader("💰 Sales Report")
+    receipts = load_receipts_df()
+    local = st.session_state.get("_local_receipts", [])
+    if local:
+        receipts = pd.concat([receipts, pd.DataFrame(local)], ignore_index=True)
+    if receipts.empty:
+        st.info("No sales yet.")
+    else:
+        all_items = []
+        for _, row in receipts.iterrows():
+            try:
+                for it in _normalize_items_for_receipt(row.get("items", [])):
+                    all_items.append({
+                        "CATEGORY": it.get("category", "Uncategorized"),
+                        "ITEM_NAME": it.get("name", "Unknown"),
+                        "QUANTITY": int(it.get("qty", 1))
+                    })
+            except Exception:
+                pass
+        if all_items:
+            sales_summary = pd.DataFrame(all_items).groupby(["CATEGORY", "ITEM_NAME"], as_index=False).sum()
+            for cat in sales_summary["CATEGORY"].unique():
+                st.markdown(f"### {cat} Sales Breakdown")
+                cat_data = sales_summary[sales_summary["CATEGORY"] == cat]
+                fig, ax = plt.subplots(figsize=(4, 4))
+                ax.pie(cat_data["QUANTITY"], labels=cat_data["ITEM_NAME"], autopct="%1.1f%%", startangle=90)
+                ax.axis("equal")
+                st.pyplot(fig)
 
     # ---------------------------
     # NON-STAFF / GUEST PORTAL
