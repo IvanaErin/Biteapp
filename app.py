@@ -952,27 +952,32 @@ elif st.session_state.page == "main":
         elif choice == "Pending Orders":
             st.subheader("📦 Pending Orders")
 
-            # Auto-refresh every 10 seconds (adjust as needed)
-            st_autorefresh = st.experimental_rerun if False else None  # placeholder safety
-            from streamlit_autorefresh import st_autorefresh
-            st_autorefresh(interval=10000, key="refresh_pending_orders")  # every 10s
+            # 🔄 Auto-refresh every 10 seconds (Streamlit native)
+            refresh_interval = 10  # seconds
+            last_refresh = st.session_state.get("last_refresh", datetime.now())
 
-            # Load receipts from database (non-guests)
+            if (datetime.now() - last_refresh).seconds >= refresh_interval:
+                st.session_state["last_refresh"] = datetime.now()
+                st.rerun()
+
+            # Load receipts from Snowflake
             receipts = load_receipts_df()
 
-            # Include local (guest or temporary) receipts
+            # Include local guest orders
             local = st.session_state.get("_local_receipts", [])
             if local:
                 local_df = pd.DataFrame(local)
                 receipts = pd.concat([receipts, local_df], ignore_index=True)
 
-            # Filter only pending ones
+            # Filter for pending
             pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
 
             if not pending_orders.empty:
                 for idx, row in pending_orders.iterrows():
                     order_id = row.get("order_id")
-                    st.markdown(f"**Order ID:** {order_id} | **User:** {row.get('user_id')} | **Payment:** {row.get('payment_method')}")
+                    st.markdown(
+                        f"**Order ID:** {order_id} | **User:** {row.get('user_id')} | **Payment:** {row.get('payment_method')}"
+                    )
                     st.write("Items:", row.get("items"))
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
