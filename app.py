@@ -951,8 +951,24 @@ elif st.session_state.page == "main":
 
         elif choice == "Pending Orders":
             st.subheader("📦 Pending Orders")
+
+            # Auto-refresh every 10 seconds (adjust as needed)
+            st_autorefresh = st.experimental_rerun if False else None  # placeholder safety
+            from streamlit_autorefresh import st_autorefresh
+            st_autorefresh(interval=10000, key="refresh_pending_orders")  # every 10s
+
+            # Load receipts from database (non-guests)
             receipts = load_receipts_df()
+
+            # Include local (guest or temporary) receipts
+            local = st.session_state.get("_local_receipts", [])
+            if local:
+                local_df = pd.DataFrame(local)
+                receipts = pd.concat([receipts, local_df], ignore_index=True)
+
+            # Filter only pending ones
             pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
+
             if not pending_orders.empty:
                 for idx, row in pending_orders.iterrows():
                     order_id = row.get("order_id")
