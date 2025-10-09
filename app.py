@@ -873,32 +873,35 @@ if st.session_state.page == "login":
     col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
     with col2:
         if st.button("🔑 Log In", use_container_width=True):
-            acc = get_account(username)
             
-            # Check password
-            if acc and (
-                (acc.get("role") == "Staff" and acc["password"] == password)  # plain text for staff
-                or verify_password(acc["password"], password)                  # hashed for normal users
-            ):
-                role_value = acc.get("role", "Guest")
-                try:
-                    normalized_role = str(role_value).strip().capitalize()
-                except Exception:
-                    normalized_role = "Guest"
-                acc["role"] = normalized_role
-                st.session_state.user = acc
-
-                # Route based on role
-                if normalized_role == "Staff":
-                    st.session_state.page = "staff_dashboard"
-                    st.success(f"✅ Welcome Staff {acc['username']}!")
-                else:
-                    st.session_state.page = "main"
-                    st.success(f"✅ Welcome {acc['username']}!")
-
+            # 1️⃣ Check if hardcoded staff
+            if username == "staff1" and password == "staff123":
+                st.session_state.user = {"username": "staff1", "role": "Staff", "loyalty_points": 0}
+                st.session_state.page = "staff_dashboard"
+                st.success(f"✅ Welcome Staff {username}!")
                 st.rerun()
+            
+            # 2️⃣ Check database users
             else:
-                st.error("❌ Invalid username or password.")
+                acc = get_account(username)
+                if acc and verify_password(acc["password"], password):
+                    role_value = acc.get("role", "Non-Staff")
+                    try:
+                        normalized_role = str(role_value).strip().capitalize()
+                    except Exception:
+                        normalized_role = "Non-Staff"
+                    acc["role"] = normalized_role
+                    st.session_state.user = acc
+
+                    if normalized_role == "Staff":
+                        st.session_state.page = "staff_dashboard"
+                        st.success(f"✅ Welcome Staff {acc['username']}!")
+                    else:
+                        st.session_state.page = "main"
+                        st.success(f"✅ Welcome {acc['username']}!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password.")
 
     with col3:
         if st.button("🎟️ Guest Account", use_container_width=True):
@@ -922,10 +925,7 @@ elif st.session_state.page == "signup":
     new_password = st.text_input("Create Password", type="password", key="new_pass")
     confirm_password = st.text_input("Confirm Password", type="password", key="conf_pass")
 
-    # Role selection (Non-Staff only)
-    new_role = st.selectbox("Role", ["Non-Staff"], key="signup_role", disabled=True)
-
-    # Password rules validation
+    # --- live validation ---
     rules = password_valid_rules(new_password)
     st.markdown("*Password rules:* (all must be ✅ to register)")
     st.write(f"- Minimum 12 chars: {'✅' if rules['length'] else '❌'}")
@@ -940,11 +940,13 @@ elif st.session_state.page == "signup":
         elif new_password != confirm_password:
             st.warning("⚠️ Passwords do not match.")
         elif not all(rules.values()):
-            st.warning("⚠️ Password does not meet all requirements.")
+            st.warning("⚠️ Password does not meet requirements.")
         elif get_account(new_username):
             st.error("⚠️ Username already exists.")
         else:
-            save_account(new_username, new_password, new_role)
+            # --- HASH PASSWORD BEFORE SAVING ---
+            hashed_pass = hash_password(new_password)
+            save_account(new_username, hashed_pass, role="Non-Staff")
             st.success("🎉 Account created successfully! Please log in.")
             st.session_state.page = "login"
             st.rerun()
