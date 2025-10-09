@@ -1304,9 +1304,11 @@ elif st.session_state.page == "main":
 
         st.divider()
         if st.button("🚪 Log Out"):
-            # Clear all session keys
+            # Clear all session keys except "page"
+            keys_to_keep = ["page"]
             for k in list(st.session_state.keys()):
-                del st.session_state[k]
+                if k not in keys_to_keep:
+                    del st.session_state[k]
             
             # Set page to login
             st.session_state["page"] = "login"
