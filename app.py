@@ -1153,9 +1153,23 @@ elif st.session_state.page == "main":
                         pass
                 if all_items:
                     sales_summary = pd.DataFrame(all_items).groupby("ITEM_NAME", as_index=False).sum()
+                    
                     fig, ax = plt.subplots(figsize=(3, 3))
-                    ax.pie(sales_summary["QUANTITY"], labels=sales_summary["ITEM_NAME"], autopct="%1.1f%%", startangle=90)
-                    ax.axis("equal")
+                    ax.pie(
+                        sales_summary["QUANTITY"],
+                        labels=None,          # hide slice labels to prevent overlap
+                        autopct="%1.1f%%",   # show percentages inside slices
+                        startangle=90
+                    )
+                    ax.axis("equal")  # keep pie circular
+
+                    # Add legend for item names
+                    plt.legend(
+                        sales_summary["ITEM_NAME"],
+                        bbox_to_anchor=(1.05, 1),
+                        loc="upper left"
+                    )
+
                     st.pyplot(fig)
 
     # ---------------------------
