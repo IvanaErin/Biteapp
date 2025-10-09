@@ -434,6 +434,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
         "pickup_dt": pickup_dt,
         "status": status
     })
+
         return
 
     try:
