@@ -1056,7 +1056,11 @@ elif st.session_state.page == "main":
                     # ✅ Mark ready button
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
-                        add_notification(user_id, f"Your order #{order_id} is ready for pickup!")
+
+                        # --- Send notification to user (guest or non-staff) ---
+                        notify_user_id = row.get("user_id") or "Guest"
+                        add_notification(notify_user_id, f"Your order #{order_id} is ready for pickup!")
+
                         st.success(f"Order #{order_id} marked as Ready!")
                         st.rerun()
 
@@ -1231,14 +1235,31 @@ elif st.session_state.page == "main":
 
             st.divider()
             st.subheader("📢 Notifications")
-            notes = get_notifications_for_user(user["username"])
+
+            # Use "Guest" if user is not logged in
+            user_id = user.get("username") if user.get("username") else "Guest"
+
+            # 🔄 Manual refresh button
+            if st.button("🔄 Refresh Notifications"):
+                st.session_state["last_notif_refresh"] = datetime.now()
+                st.rerun()
+
+            # 🔁 Auto-refresh every 10 seconds
+            notif_refresh_interval = 10  # seconds
+            last_notif_refresh = st.session_state.get("last_notif_refresh", datetime.now())
+            if (datetime.now() - last_notif_refresh).seconds >= notif_refresh_interval:
+                st.session_state["last_notif_refresh"] = datetime.now()
+                st.rerun()
+
+            notes = get_notifications_for_user(user_id)
             if notes:
                 for n in notes:
                     st.info(n)
             else:
                 st.info("No notifications yet.")
+
             if st.button("Clear"):
-                clear_notifications_for_user(user["username"])
+                clear_notifications_for_user(user_id)
                 st.success("Cleared.")
 
             st.divider()
