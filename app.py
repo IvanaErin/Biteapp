@@ -856,7 +856,7 @@ def password_valid_rules(pw: str):
     return rules
 
 # ---------------------------
-# LOGIN PAGE (unchanged design)
+# LOGIN PAGE
 # ---------------------------
 if st.session_state.page == "login":
     st.markdown(
@@ -883,7 +883,7 @@ if st.session_state.page == "login":
                 acc["role"] = normalized_role
                 st.session_state.user = acc
 
-                # Route staff to staff_dashboard
+                # Route based on role
                 if normalized_role == "Staff":
                     st.session_state.page = "staff_dashboard"
                     st.success(f"✅ Welcome Staff {acc['username']}!")
@@ -908,7 +908,7 @@ if st.session_state.page == "login":
 
 
 # ---------------------------
-# SIGNUP PAGE (old version with role & password rules)
+# SIGNUP PAGE
 # ---------------------------
 elif st.session_state.page == "signup":
     st.markdown("<h1 style='text-align: center; color: #FF6F61;'>📝 BiteHub — Sign Up</h1>", unsafe_allow_html=True)
@@ -917,7 +917,7 @@ elif st.session_state.page == "signup":
     new_password = st.text_input("Create Password", type="password", key="new_pass")
     confirm_password = st.text_input("Confirm Password", type="password", key="conf_pass")
 
-    # Role selection (default Non-Staff)
+    # Role selection (Non-Staff only)
     new_role = st.selectbox("Role", ["Non-Staff"], key="signup_role", disabled=True)
 
     # Password rules validation
