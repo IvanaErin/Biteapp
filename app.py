@@ -1286,6 +1286,16 @@ elif st.session_state.page == "main":
                 if not hist.empty:
                     u_orders = hist[hist["user_id"] == user["username"]]
                     if not u_orders.empty:
+                        # --- Fix columns for PyArrow ---
+                        # Ensure timestamp column is proper datetime
+                        u_orders["timestamp"] = pd.to_datetime(u_orders["timestamp"], errors="coerce")
+                        
+                        # Convert any object columns (like dicts/lists) to strings
+                        for col in u_orders.columns:
+                            if u_orders[col].dtype == "object":
+                                u_orders[col] = u_orders[col].astype(str)
+                        
+                        # --- Display safely ---
                         st.dataframe(u_orders.sort_values(by="timestamp", ascending=False))
                     else:
                         st.info("No orders yet.")
