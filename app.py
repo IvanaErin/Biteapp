@@ -874,7 +874,12 @@ if st.session_state.page == "login":
     with col2:
         if st.button("🔑 Log In", use_container_width=True):
             acc = get_account(username)
-            if acc and verify_password(acc["password"], password):
+            
+            # Check password
+            if acc and (
+                (acc.get("role") == "Staff" and acc["password"] == password)  # plain text for staff
+                or verify_password(acc["password"], password)                  # hashed for normal users
+            ):
                 role_value = acc.get("role", "Guest")
                 try:
                     normalized_role = str(role_value).strip().capitalize()
