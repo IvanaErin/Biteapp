@@ -377,6 +377,26 @@ def delete_menu_items(items):
     cur.close()
     conn.close()
 
+def _build_menu_category_map():
+    """
+    Returns a lowercase map of menu item name → category.
+    Used for receipt normalization to ensure every item has a category.
+    """
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT item_name, category FROM menu")
+            rows = cur.fetchall()
+        return {str(name).strip().lower(): cat for name, cat in rows}
+    except Exception as e:
+        print(f"⚠️ Could not build menu category map: {e}")
+        return {}
+    finally:
+        try:
+            conn.close()
+        except:
+            pass
+
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
     Save a receipt. Ensures `items` are normalized to a consistent JSON list format.
@@ -385,7 +405,18 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 
     # Skip saving guest orders completely
     if str(user_id).strip().lower() == "guest":
-        print("⚠️ Guest order detected — not saving to history.")
+        print("⚠️ Guest order detected — not saving to history, but visible to staff temporarily.")
+        if "_local_receipts" not in st.session_state:
+            st.session_state["_local_receipts"] = []
+        st.session_state["_local_receipts"].append({
+            "order_id": order_id,
+            "items": _normalize_items_for_receipt(items),
+            "total": total,
+            "payment_method": payment_method,
+            "user_id": user_id,
+            "pickup_dt": pickup_dt,
+            "status": status
+        })
         return
 
     # Normalize items (handle cart dicts or mixed formats)
