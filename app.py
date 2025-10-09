@@ -399,7 +399,8 @@ def _build_menu_category_map():
 
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
-    Save a receipt. Guests' orders are saved to DB (for staff visibility),
+    Save a receipt to Snowflake for both guests and logged-in users.
+    Guests' orders are stored in the DB (for staff visibility)
     but excluded from user order history display.
     """
 
@@ -419,24 +420,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 
     items_json = json.dumps(normalized_items)
 
-    # ✅ Handle guest orders separately
-    if str(user_id).strip().lower() == "guest":
-        print("⚠️ Guest order detected — saving to DB for staff visibility only.")
-        try:
-            conn = get_connection()
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_time, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (order_id, items_json, total, payment_method, "Guest", pickup_dt, status))
-            conn.commit()
-            conn.close()
-            print(f"✅ Guest order {order_id} saved for staff view only.")
-        except Exception as e:
-            print(f"❌ Error saving guest order {order_id}: {e}")
-        return  # Stop here; don’t include in user history
-
-    # ✅ For logged-in users (normal flow)
+    # ✅ Always save to DB (so staff can see all)
     try:
         conn = get_connection()
         with conn.cursor() as cur:
@@ -446,13 +430,14 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
             """, (order_id, items_json, total, payment_method, user_id, pickup_dt, status))
         conn.commit()
         conn.close()
-        print(f"✅ Saved order {order_id} ({user_id}) to DB")
+        print(f"✅ Order {order_id} saved for user: {user_id}")
     except Exception as e:
         print(f"❌ Error saving to DB: {e}")
 
-    # Keep a local copy (optional)
+    # ✅ Keep local copy for active session
     if "_local_receipts" not in st.session_state:
         st.session_state["_local_receipts"] = []
+
     st.session_state["_local_receipts"].append({
         "order_id": order_id,
         "items": normalized_items,
@@ -463,6 +448,8 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
         "status": status
     })
 
+    print(f"✅ Local receipt added. Total local: {len(st.session_state['_local_receipts'])}")
+    
 def load_receipts_df():
     conn = get_connection()
     if not conn:
@@ -1233,16 +1220,21 @@ elif st.session_state.page == "main":
                 st.session_state["last_history_refresh"] = datetime.now()
                 st.rerun()
 
-            # --- Load Order History ---
-            hist = load_receipts_df()
-            if not hist.empty:
-                u_orders = hist[hist["user_id"] == user["username"]]
-                if not u_orders.empty:
-                    st.dataframe(u_orders.sort_values(by="timestamp", ascending=False))
-                else:
-                    st.info("No orders yet.")
+            # --- Guest Check ---
+            if user.get("username", "").strip().lower() == "guest":
+                st.warning("⚠️ Orders can't be saved. Please log in to view your order history.")
             else:
-                st.info("No receipts found.")
+                # --- Load Order History ---
+                hist = load_receipts_df()
+                if not hist.empty:
+                    u_orders = hist[hist["user_id"] == user["username"]]
+                    if not u_orders.empty:
+                        st.dataframe(u_orders.sort_values(by="timestamp", ascending=False))
+                    else:
+                        st.info("No orders yet.")
+                else:
+                    st.info("No receipts found.")
+
         st.divider()
         if st.button("🚪 Log Out"):
             for k in list(st.session_state.keys()):
