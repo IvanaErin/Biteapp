@@ -399,62 +399,43 @@ def _build_menu_category_map():
 
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
-    Save a receipt. Guests are NOT saved to DB, but are stored locally in session for staff.
+    Save a receipt. Guests' orders are saved to DB (for staff visibility),
+    but excluded from user order history display.
     """
 
-    # Normalize items (handle cart dicts or mixed formats)
+    # Normalize items
     normalized_items = _normalize_items_for_receipt(items)
-
     if not normalized_items and isinstance(items, dict):
         for name, info in items.items():
             qty = int(info.get("qty", 1))
             price = float(info.get("price", 0.0))
             cat = _build_menu_category_map().get(name.lower()) or "Uncategorized"
-            normalized_items.append({"name": name, "qty": qty, "price": price, "category": cat})
+            normalized_items.append({
+                "name": name,
+                "qty": qty,
+                "price": price,
+                "category": cat
+            })
 
     items_json = json.dumps(normalized_items)
 
-    # Ensure local list exists
-    if "_local_receipts" not in st.session_state:
-        st.session_state["_local_receipts"] = []
-
-    print(f"\n--- SAVE RECEIPT DEBUG ---")
-    print(f"User ID: {user_id}")
-    print(f"Order ID: {order_id}")
-    print(f"Items: {normalized_items}")
-    print(f"Session has _local_receipts: {'_local_receipts' in st.session_state}")
-    print(f"Guest? {str(user_id).strip().lower() == 'guest'}")
-
-    # Guests → store locally only
-    if str(user_id).strip().lower() == "guest":
-        print("⚠️ Guest order detected — saving locally only.")
-        st.session_state["_local_receipts"].append({
-            "order_id": order_id,
-            "items": normalized_items,
-            "total": total,
-            "payment_method": payment_method,
-            "user_id": user_id,
-            "pickup_dt": pickup_dt,
-            "status": status
-        })
-        print(f"✅ Local receipts count now: {len(st.session_state['_local_receipts'])}")
-        return
-
-    # Normal users → save to Snowflake
+    # Always save to DB so staff can see it
     try:
         conn = get_connection()
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status)
+                INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_time, status)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (order_id, items_json, total, payment_method, user_id, pickup_dt, status))
         conn.commit()
         conn.close()
-        print(f"✅ Order {order_id} saved to DB for user: {user_id}")
+        print(f"✅ Saved order {order_id} ({user_id}) to DB")
     except Exception as e:
-        print(f"❌ DB save failed: {e}")
+        print(f"❌ Error saving to DB: {e}")
 
-    # Also keep in session for staff auto-refresh
+    # Still keep a local copy (optional)
+    if "_local_receipts" not in st.session_state:
+        st.session_state["_local_receipts"] = []
     st.session_state["_local_receipts"].append({
         "order_id": order_id,
         "items": normalized_items,
@@ -464,29 +445,63 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
         "pickup_dt": pickup_dt,
         "status": status
     })
-    print(f"✅ Local receipts count (after DB): {len(st.session_state['_local_receipts'])}")
 
 def load_receipts_df():
+    """
+    Loads all receipts from Snowflake.
+    If no DB connection, uses local session fallback.
+    """
     conn = get_connection()
+
+    # 🔹 Fallback for offline/local mode
     if not conn:
         _ensure_local_db()
         rows = st.session_state.get("_local_receipts", [])
         return pd.DataFrame(rows) if rows else pd.DataFrame(
-            columns=["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
+            columns=[
+                "order_id", "items", "total", "payment_method",
+                "user_id", "pickup_time", "status", "timestamp"
+            ]
         )
+
+    # 🔹 Pull data from Snowflake
     try:
         cur = conn.cursor()
         cur.execute("""
-SELECT order_id, items, total, payment_method, user_id, pickup_time AS pickup_time, status, timestamp
-FROM receipts
-ORDER BY timestamp DESC
-""")
+            SELECT 
+                order_id, 
+                items, 
+                total, 
+                payment_method, 
+                user_id, 
+                pickup_time, 
+                status, 
+                timestamp
+            FROM receipts
+            ORDER BY timestamp DESC
+        """)
         rows = cur.fetchall()
-        return pd.DataFrame(rows, columns=["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"])
-    finally:
         cur.close()
         conn.close()
 
+        # Convert to DataFrame
+        df = pd.DataFrame(
+            rows,
+            columns=[
+                "order_id", "items", "total", "payment_method",
+                "user_id", "pickup_time", "status", "timestamp"
+            ]
+        )
+        return df
+
+    except Exception as e:
+        print(f"❌ Error loading receipts: {e}")
+        return pd.DataFrame(
+            columns=[
+                "order_id", "items", "total", "payment_method",
+                "user_id", "pickup_time", "status", "timestamp"
+            ]
+        )
 def update_order_status(order_id: str, new_status: str):
     """
     Update order status in DB if available, otherwise update local fallback.
