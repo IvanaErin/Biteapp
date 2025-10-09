@@ -856,7 +856,7 @@ def password_valid_rules(pw: str):
     return rules
 
 # ---------------------------
-# LOGIN PAGE
+# LOGIN PAGE (unchanged design)
 # ---------------------------
 if st.session_state.page == "login":
     st.markdown(
@@ -882,15 +882,22 @@ if st.session_state.page == "login":
                     normalized_role = "Guest"
                 acc["role"] = normalized_role
                 st.session_state.user = acc
-                st.session_state.page = "main"
-                st.success(f"✅ Welcome {acc['username']}!")
+
+                # Route staff to staff_dashboard
+                if normalized_role == "Staff":
+                    st.session_state.page = "staff_dashboard"
+                    st.success(f"✅ Welcome Staff {acc['username']}!")
+                else:
+                    st.session_state.page = "main"
+                    st.success(f"✅ Welcome {acc['username']}!")
+
                 st.rerun()
             else:
                 st.error("❌ Invalid username or password.")
 
     with col3:
         if st.button("🎟️ Guest Account", use_container_width=True):
-            st.session_state.user = {"username": "Guest", "role": "Guest", "loyalty_points": 0, "cart": []}
+            st.session_state.user = {"username": "Guest", "role": "Non-Staff", "loyalty_points": 0, "cart": []}
             st.session_state.page = "main"
             st.rerun()
 
@@ -901,7 +908,7 @@ if st.session_state.page == "login":
 
 
 # ---------------------------
-# SIGNUP PAGE
+# SIGNUP PAGE (old version with role & password rules)
 # ---------------------------
 elif st.session_state.page == "signup":
     st.markdown("<h1 style='text-align: center; color: #FF6F61;'>📝 BiteHub — Sign Up</h1>", unsafe_allow_html=True)
@@ -910,15 +917,29 @@ elif st.session_state.page == "signup":
     new_password = st.text_input("Create Password", type="password", key="new_pass")
     confirm_password = st.text_input("Confirm Password", type="password", key="conf_pass")
 
+    # Role selection (default Non-Staff)
+    new_role = st.selectbox("Role", ["Non-Staff"], key="signup_role", disabled=True)
+
+    # Password rules validation
+    rules = password_valid_rules(new_password)
+    st.markdown("*Password rules:* (all must be ✅ to register)")
+    st.write(f"- Minimum 12 chars: {'✅' if rules['length'] else '❌'}")
+    st.write(f"- Uppercase letter: {'✅' if rules['upper'] else '❌'}")
+    st.write(f"- Lowercase letter: {'✅' if rules['lower'] else '❌'}")
+    st.write(f"- Number: {'✅' if rules['digit'] else '❌'}")
+    st.write(f"- Symbol: {'✅' if rules['symbol'] else '❌'}")
+
     if st.button("✅ Register Account"):
         if not new_username or not new_password:
             st.warning("⚠️ Please fill in all fields.")
         elif new_password != confirm_password:
             st.warning("⚠️ Passwords do not match.")
+        elif not all(rules.values()):
+            st.warning("⚠️ Password does not meet all requirements.")
         elif get_account(new_username):
             st.error("⚠️ Username already exists.")
         else:
-            save_account(new_username, new_password, role="User")
+            save_account(new_username, new_password, new_role)
             st.success("🎉 Account created successfully! Please log in.")
             st.session_state.page = "login"
             st.rerun()
@@ -926,7 +947,6 @@ elif st.session_state.page == "signup":
     if st.button("⬅️ Back to Login"):
         st.session_state.page = "login"
         st.rerun()
-
 
 # ---------------------------
 # MAIN PORTAL (Staff / Non-Staff / Guest)
