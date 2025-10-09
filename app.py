@@ -966,6 +966,10 @@ elif st.session_state.page == "main":
                 else:
                     receipts = pd.concat([receipts, local_df], ignore_index=True)
 
+            # --- Normalize guest user_id ---
+            if receipts is not None and not receipts.empty:
+                receipts["user_id"] = receipts["user_id"].fillna("Guest").astype(str).str.strip()
+
             # --- Filter pending ---
             if receipts is not None and not receipts.empty:
                 pending_orders = receipts[receipts["status"].astype(str).str.lower() == "pending"]
@@ -976,7 +980,7 @@ elif st.session_state.page == "main":
             if not pending_orders.empty:
                 for idx, row in pending_orders.iterrows():
                     order_id = row.get("order_id")
-                    user_id = row.get("user_id", "Unknown")
+                    user_id = row.get("user_id") or "Guest"
                     payment = row.get("payment_method", "N/A")
                     total = row.get("total", 0)
                     pickup_time = row.get("pickup_time", "N/A")
