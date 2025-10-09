@@ -1203,88 +1203,28 @@ elif st.session_state.page == "main":
             st.divider()
             st.subheader("📜 Order History")
 
-            # --- Manual refresh button (no re-login needed) ---
+            # --- Manual Refresh Button ---
             if st.button("🔄 Refresh History"):
-                st.session_state["user_last_refresh"] = datetime.now()
+                st.session_state["last_history_refresh"] = datetime.now()
+                st.rerun()
+
+            # --- Auto-Refresh Every 15 Seconds ---
+            refresh_interval = 15  # seconds
+            last_refresh = st.session_state.get("last_history_refresh", datetime.now())
+            if (datetime.now() - last_refresh).seconds >= refresh_interval:
+                st.session_state["last_history_refresh"] = datetime.now()
                 st.experimental_rerun()
 
-            # --- Auto-refresh every X seconds ---
-            refresh_interval_user = 15  # seconds
-            last_refresh_user = st.session_state.get("user_last_refresh", datetime.now())
-            if (datetime.now() - last_refresh_user).seconds >= refresh_interval_user:
-                st.session_state["user_last_refresh"] = datetime.now()
-                st.experimental_rerun()
-
-            # --- Load receipts ---
+            # --- Load Order History ---
             hist = load_receipts_df()
-
-            # --- Also include local guest orders if available ---
-            local = st.session_state.get("_local_receipts", [])
-            if local:
-                local_df = pd.DataFrame(local)
-                if hist is None or hist.empty:
-                    hist = local_df
+            if not hist.empty:
+                u_orders = hist[hist["user_id"] == user["username"]]
+                if not u_orders.empty:
+                    st.dataframe(u_orders.sort_values(by="timestamp", ascending=False))
                 else:
-                    hist = pd.concat([hist, local_df], ignore_index=True)
-
-            if hist is None or hist.empty:
-                st.info("No receipts found.")
+                    st.info("No orders yet.")
             else:
-                hist["user_id"] = hist["user_id"].astype(str).fillna("").str.strip()
-                username = user.get("username", "") or ""
-                username_lower = username.lower()
-
-                # Guests shouldn't have saved order history
-                if username_lower == "guest" or username_lower == "":
-                    st.info("Guest accounts do not have an order history saved.")
-                else:
-                    # Filter this user's orders (case-insensitive)
-                    u_orders = hist[hist["user_id"].str.lower() == username_lower]
-
-                    if u_orders.empty:
-                        st.info("No orders yet.")
-                    else:
-                        # Sort by latest first
-                        u_orders = u_orders.sort_values(by="timestamp", ascending=False)
-
-                        # Display each order neatly
-                        for _, row in u_orders.iterrows():
-                            oid = row.get("order_id", "—")
-                            status = row.get("status", "—")
-                            total = float(row.get("total") or 0)
-                            pay = row.get("payment_method") or "—"
-                            pickup = row.get("pickup_time") or "—"
-                            ts = row.get("timestamp") or "—"
-
-                            with st.expander(f"🧾 Order {oid} — ₱{total:.2f} — {status}", expanded=False):
-                                items = row.get("items")
-                                if isinstance(items, str):
-                                    try:
-                                        items_parsed = json.loads(items)
-                                    except Exception:
-                                        items_parsed = items
-                                else:
-                                    items_parsed = items
-
-                                # Show items in readable format
-                                if isinstance(items_parsed, list):
-                                    for it in items_parsed:
-                                        name = it.get("name") or it.get("item") or ""
-                                        qty = it.get("qty") or it.get("quantity") or 1
-                                        price = it.get("price") or 0
-                                        st.markdown(f"- **{name}** — Qty: {qty} — ₱{float(price):.2f}")
-                                elif isinstance(items_parsed, dict):
-                                    for k, v in items_parsed.items():
-                                        if isinstance(v, dict):
-                                            q = v.get("qty", 1)
-                                            p = v.get("price", 0)
-                                            st.markdown(f"- **{k}** — Qty: {q} — ₱{float(p):.2f}")
-                                        else:
-                                            st.markdown(f"- **{k}** — Qty: {v}")
-                                else:
-                                    st.write(items_parsed)
-
-                                st.markdown(f"**Payment:** {pay}  \n**Pickup:** {pickup}  \n**Placed:** {ts}")
+                st.info("No receipts found.")
         st.divider()
         if st.button("🚪 Log Out"):
             for k in list(st.session_state.keys()):
