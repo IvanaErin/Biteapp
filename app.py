@@ -446,48 +446,69 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
         "total": total,
         "payment_method": payment_method,
         "user_id": user_id,
-        "pickup_dt": pickup_dt,
-        "status": status
+        "pickup_time": pickup_dt,  # <- matches DB column
+        "status": status,
+        "timestamp": datetime.now()
     })
 
     print(f"✅ Local receipt added. Total local: {len(st.session_state['_local_receipts'])}")
 
 
 def load_receipts_df():
+    """
+    Load all receipts from DB and merge with local guest orders.
+    Ensures guest orders are normalized and appear in staff view.
+    """
     conn = get_connection()
-    if not conn:
-        # fallback: use local in-memory orders
-        rows = st.session_state.get("_local_receipts", [])
-        if not rows:
-            return pd.DataFrame(columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"])
-        df = pd.DataFrame(rows)
+
+    # Load DB receipts
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT order_id, items, total, payment_method, user_id, pickup_time, status, timestamp
+                    FROM receipts
+                    ORDER BY timestamp DESC
+                """)
+                rows = cur.fetchall()
+            conn.close()
+
+            if rows:
+                df = pd.DataFrame(rows, columns=["order_id", "items", "total", "payment_method",
+                                                 "user_id", "pickup_time", "status", "timestamp"])
+            else:
+                df = pd.DataFrame(columns=["order_id", "items", "total", "payment_method",
+                                           "user_id", "pickup_time", "status", "timestamp"])
+        except Exception as e:
+            st.error(f"❌ Error loading receipts: {e}")
+            df = pd.DataFrame(columns=["order_id", "items", "total", "payment_method",
+                                       "user_id", "pickup_time", "status", "timestamp"])
+    else:
+        df = pd.DataFrame(columns=["order_id", "items", "total", "payment_method",
+                                   "user_id", "pickup_time", "status", "timestamp"])
+
+    # Merge local guest orders
+    local = st.session_state.get("_local_receipts", [])
+    if local:
+        local_df = pd.DataFrame(local)
+
+        # Ensure column names match
+        if "pickup_dt" in local_df.columns:
+            local_df = local_df.rename(columns={"pickup_dt": "pickup_time"})
+
+        required_cols = ["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
+        for col in required_cols:
+            if col not in local_df.columns:
+                local_df[col] = None
+
+        df = pd.concat([df, local_df], ignore_index=True)
+
+    # Normalize guest user_id
+    if not df.empty:
         df["user_id"] = df["user_id"].fillna("Guest").astype(str).str.strip()
-        return df
+        df["status"] = df["status"].fillna("").astype(str).str.capitalize()
 
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT order_id, items, total, payment_method, user_id, pickup_time, status, timestamp
-                FROM receipts
-                ORDER BY timestamp DESC
-            """)
-            rows = cur.fetchall()
-        conn.close()
-
-        if not rows:
-            return pd.DataFrame(columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"])
-
-        df = pd.DataFrame(rows, columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"])
-
-        # Normalize text fields
-        df["status"] = df["status"].fillna("").str.strip().str.capitalize()
-        df["user_id"] = df["user_id"].fillna("Guest").astype(str).str.strip()
-
-        return df
-
-    except Exception as e:
-        st.error(f"❌ Error loading receipts: {e}")
-        return pd.DataFrame()
+    return df
         
 def update_order_status(order_id: str, new_status: str):
     """
@@ -960,12 +981,18 @@ elif st.session_state.page == "main":
             local = st.session_state.get("_local_receipts", [])
             if local:
                 local_df = pd.DataFrame(local)
+
+                # Rename pickup_dt → pickup_time for consistency
+                if "pickup_dt" in local_df.columns:
+                    local_df = local_df.rename(columns={"pickup_dt": "pickup_time"})
+
+                # Ensure all required columns exist
                 required_cols = ["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
                 for col in required_cols:
                     if col not in local_df.columns:
                         local_df[col] = None
-                    if receipts is not None and not receipts.empty and col not in receipts.columns:
-                        receipts[col] = None
+
+                # Merge local with DB receipts
                 if receipts is None or receipts.empty:
                     receipts = local_df
                 else:
