@@ -447,61 +447,39 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
     })
 
 def load_receipts_df():
-    """
-    Loads all receipts from Snowflake.
-    If no DB connection, uses local session fallback.
-    """
     conn = get_connection()
-
-    # 🔹 Fallback for offline/local mode
     if not conn:
-        _ensure_local_db()
+        # fallback: use local in-memory orders
         rows = st.session_state.get("_local_receipts", [])
         return pd.DataFrame(rows) if rows else pd.DataFrame(
-            columns=[
-                "order_id", "items", "total", "payment_method",
-                "user_id", "pickup_time", "status", "timestamp"
-            ]
+            columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"]
         )
 
-    # 🔹 Pull data from Snowflake
     try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT 
-                order_id, 
-                items, 
-                total, 
-                payment_method, 
-                user_id, 
-                pickup_time, 
-                status, 
-                timestamp
-            FROM receipts
-            ORDER BY timestamp DESC
-        """)
-        rows = cur.fetchall()
-        cur.close()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT order_id, items, total, payment_method, user_id, pickup_time, status, timestamp
+                FROM receipts
+                ORDER BY timestamp DESC
+            """)
+            rows = cur.fetchall()
         conn.close()
 
-        # Convert to DataFrame
-        df = pd.DataFrame(
-            rows,
-            columns=[
-                "order_id", "items", "total", "payment_method",
-                "user_id", "pickup_time", "status", "timestamp"
-            ]
-        )
+        # ✅ Convert to dataframe safely
+        if not rows:
+            return pd.DataFrame(columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"])
+
+        df = pd.DataFrame(rows, columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"])
+
+        # Normalize text fields
+        df["status"] = df["status"].fillna("").str.strip().str.capitalize()
+        df["user_id"] = df["user_id"].fillna("").str.strip()
         return df
 
     except Exception as e:
-        print(f"❌ Error loading receipts: {e}")
-        return pd.DataFrame(
-            columns=[
-                "order_id", "items", "total", "payment_method",
-                "user_id", "pickup_time", "status", "timestamp"
-            ]
-        )
+        st.error(f"❌ Error loading receipts: {e}")
+        return pd.DataFrame()
+        
 def update_order_status(order_id: str, new_status: str):
     """
     Update order status in DB if available, otherwise update local fallback.
@@ -961,34 +939,42 @@ elif st.session_state.page == "main":
                 st.session_state["last_refresh"] = datetime.now()
                 st.rerun()
 
-            # --- Load orders from DB ---
+            # --- Load orders from Snowflake ---
             receipts = load_receipts_df()
 
             # --- Load local guest receipts ---
             local = st.session_state.get("_local_receipts", [])
             if local:
                 local_df = pd.DataFrame(local)
-                # If receipts is empty, create an empty DataFrame with same columns
+
+                # Ensure both DataFrames have same columns
+                required_cols = ["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
+                for col in required_cols:
+                    if col not in local_df.columns:
+                        local_df[col] = None
+                    if receipts is not None and not receipts.empty and col not in receipts.columns:
+                        receipts[col] = None
+
+                # Combine Snowflake + local guest orders
                 if receipts is None or receipts.empty:
                     receipts = local_df
                 else:
-                    # Combine DB + local guest orders
                     receipts = pd.concat([receipts, local_df], ignore_index=True)
 
-            # --- Filter pending ---
-            if not receipts.empty:
-                pending_orders = receipts[receipts["status"] == "Pending"]
+            # --- Filter pending orders ---
+            if receipts is not None and not receipts.empty:
+                pending_orders = receipts[receipts["status"].astype(str).str.lower() == "pending"]
             else:
                 pending_orders = pd.DataFrame()
 
-            # --- Display ---
+            # --- Display pending orders ---
             if not pending_orders.empty:
                 for idx, row in pending_orders.iterrows():
                     order_id = row.get("order_id")
                     user_id = row.get("user_id", "Unknown")
                     st.markdown(f"**Order ID:** {order_id} | **User:** {user_id} | **Payment:** {row.get('payment_method')}")
 
-                    # Show items clearly
+                    # 🧾 Show items clearly
                     items = row.get("items")
                     if isinstance(items, str):
                         try:
@@ -997,7 +983,7 @@ elif st.session_state.page == "main":
                             pass
                     st.write(items)
 
-                    # Mark as ready
+                    # ✅ Mark as ready
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
                         add_notification(user_id, f"Your order #{order_id} is ready for pickup!")
