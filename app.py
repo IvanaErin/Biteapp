@@ -419,7 +419,24 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 
     items_json = json.dumps(normalized_items)
 
-    # Always save to DB so staff can see it
+    # ✅ Handle guest orders separately
+    if str(user_id).strip().lower() == "guest":
+        print("⚠️ Guest order detected — saving to DB for staff visibility only.")
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_time, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (order_id, items_json, total, payment_method, "Guest", pickup_dt, status))
+            conn.commit()
+            conn.close()
+            print(f"✅ Guest order {order_id} saved for staff view only.")
+        except Exception as e:
+            print(f"❌ Error saving guest order {order_id}: {e}")
+        return  # Stop here; don’t include in user history
+
+    # ✅ For logged-in users (normal flow)
     try:
         conn = get_connection()
         with conn.cursor() as cur:
@@ -433,7 +450,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
     except Exception as e:
         print(f"❌ Error saving to DB: {e}")
 
-    # Still keep a local copy (optional)
+    # Keep a local copy (optional)
     if "_local_receipts" not in st.session_state:
         st.session_state["_local_receipts"] = []
     st.session_state["_local_receipts"].append({
@@ -980,12 +997,13 @@ elif st.session_state.page == "main":
                     st.markdown(
                         f"""
                         <div style="
-                            background-color: #fff5f2;
+                            background-color: #fff;
                             border: 2px solid #FF6F61;
                             border-radius: 15px;
                             padding: 15px 20px;
                             margin-bottom: 15px;
                             box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+                            color: #000000;  /* All text black */
                         ">
                             <h4 style='color:#FF6F61;'>Order #{order_id}</h4>
                             <p><b>User:</b> {user_id}</p>
@@ -1007,10 +1025,10 @@ elif st.session_state.page == "main":
 
                     if isinstance(items, list):
                         for i in items:
-                            st.markdown(f"- {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}")
+                            st.markdown(f"<span style='color:black;'>- {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</span>", unsafe_allow_html=True)
                     elif isinstance(items, dict):
                         for name, details in items.items():
-                            st.markdown(f"- {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}")
+                            st.markdown(f"<span style='color:black;'>- {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</span>", unsafe_allow_html=True)
 
                     # ✅ Mark ready button
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
