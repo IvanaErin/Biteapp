@@ -364,6 +364,19 @@ def _normalize_items_for_receipt(items):
 
     return normalized
 
+def delete_menu_items(items):
+    if not items:
+        return
+    conn = get_snowflake_conn()
+    cur = conn.cursor()
+    # escape single quotes in item names
+    items_str = ",".join([f"'{i.replace('\'', '\'\'')}'" for i in items])
+    sql = f"DELETE FROM MENU WHERE ITEM IN ({items_str})"
+    cur.execute(sql)
+    conn.commit()
+    cur.close()
+    conn.close()
+
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
     Save a receipt. Ensures `items` are normalized to a consistent JSON list format.
@@ -914,17 +927,32 @@ elif st.session_state.page == "main":
             else:
                 st.info("No pending orders.")
 
-        elif choice == "Manage Menu":
-            st.subheader("📖 Manage Menu")
-            menu_df = load_menu()
-            if not menu_df.empty:
-                edited = st.data_editor(menu_df, num_rows="dynamic")
-                if st.button("Save Menu Updates"):
-                    upsert_menu(edited)
-                    st.success("✅ Menu updated successfully!")
-                    st.rerun()
+elif choice == "Manage Menu":
+    st.subheader("📖 Manage Menu")
+    menu_df = load_menu()
+
+    if not menu_df.empty:
+        # Add a checkbox column for deletion
+        menu_df["Delete"] = False
+        edited = st.data_editor(menu_df, num_rows="dynamic")
+
+        # Save updates (update/insert)
+        if st.button("💾 Save Menu Updates"):
+            upsert_menu(edited.drop(columns=["Delete"]))  # Keep only real columns
+            st.success("✅ Menu updated successfully!")
+            st.rerun()
+
+        # Delete selected rows
+        if st.button("🗑️ Delete Selected Rows"):
+            to_delete = edited[edited["Delete"] == True]
+            if not to_delete.empty:
+                delete_menu_items(to_delete["ITEM"].tolist())
+                st.success(f"🗑️ Deleted {len(to_delete)} item(s) successfully!")
+                st.rerun()
             else:
-                st.info("No menu items available.")
+                st.info("No rows selected for deletion.")
+    else:
+        st.info("No menu items available.")
 
         elif choice == "AI Assistant":
             st.subheader("🤖 AI Assistant")
@@ -984,7 +1012,23 @@ elif st.session_state.page == "main":
             with st.expander("💬 Ask BiteHub AI", expanded=False):
                 q = st.text_input("Ask something:", key="user_ai_q", placeholder="e.g. What’s the best seller?")
                 if st.button("Ask AI", key="ask_ai_user"):
-                    st.write(run_ai(q))
+                    # Load menu from DB
+                    menu_df = load_menu()
+                    menu_list = "\n".join([f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})" for _, row in menu_df.iterrows()])
+
+                    # Construct prompt
+                    prompt = f"""
+                    You are BiteHub's AI assistant. Only use items from the menu below.
+                    Prices are in Pesos (₱). Do NOT invent items or prices.
+
+                    MENU:
+                    {menu_list}
+
+                    USER QUESTION: {q}
+                    """
+
+                    # Run AI with context
+                    st.write(run_ai(prompt))
 
             st.markdown("### 📖 Menu & Ordering")
             if menu_df is None or menu_df.empty:
