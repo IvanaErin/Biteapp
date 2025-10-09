@@ -380,11 +380,12 @@ def delete_menu_items(items):
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
     Save a receipt. Ensures `items` are normalized to a consistent JSON list format.
+    Guests' orders are NOT saved to the database or local receipts.
     """
 
-    # Prevent guests from saving their orders in history
-    if str(user_id).lower() == "guest":
-        print("⚠️ Guest order detected — skipping save to database.")
+    # Skip saving guest orders completely
+    if str(user_id).strip().lower() == "guest":
+        print("⚠️ Guest order detected — not saving to history.")
         return
 
     # Normalize items (handle cart dicts or mixed formats)
@@ -406,21 +407,33 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 
     items_json = json.dumps(normalized_items)
 
+    # Save to Snowflake (only for non-guests)
     conn = get_connection()
-    if not conn:
-        _ensure_local_db()
-        if "_local_receipts" not in st.session_state:
-            st.session_state._local_receipts = []
-        st.session_state._local_receipts.append({
-            "order_id": order_id,
-            "items": items_json,
-            "total": float(total),
-            "payment_method": payment_method,
-            "user_id": user_id,
-            "pickup_time": datetime.strptime(pickup_dt, "%Y-%m-%d %H:%M"),
-            "status": status,
-            "timestamp": datetime.now()
-        })
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (order_id, items_json, total, payment_method, user_id, pickup_dt, status))
+        conn.commit()
+        print(f"✅ Order {order_id} saved for user: {user_id}")
+    except Exception as e:
+        print(f"❌ Error saving order {order_id}: {e}")
+    finally:
+        conn.close()
+
+    # Also save locally for staff auto-refresh (non-guests only)
+    if "_local_receipts" not in st.session_state:
+        st.session_state["_local_receipts"] = []
+    st.session_state["_local_receipts"].append({
+        "order_id": order_id,
+        "items": normalized_items,
+        "total": total,
+        "payment_method": payment_method,
+        "user_id": user_id,
+        "pickup_dt": pickup_dt,
+        "status": status
+    })
         return
 
     try:
