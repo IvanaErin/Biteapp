@@ -399,9 +399,7 @@ def _build_menu_category_map():
 
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
-    Save a receipt. Ensures `items` are normalized to a consistent JSON list format.
-    Guests' orders are NOT saved to the database or order history,
-    but they still appear in staff's Pending Orders (via _local_receipts).
+    Save a receipt. Guests are NOT saved to DB, but are stored locally in session for staff.
     """
 
     # Normalize items (handle cart dicts or mixed formats)
@@ -409,26 +407,27 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 
     if not normalized_items and isinstance(items, dict):
         for name, info in items.items():
-            try:
-                qty = int(info.get("qty", 1))
-            except Exception:
-                qty = 1
-            try:
-                price = float(info.get("price", 0.0))
-            except Exception:
-                price = 0.0
+            qty = int(info.get("qty", 1))
+            price = float(info.get("price", 0.0))
             cat = _build_menu_category_map().get(name.lower()) or "Uncategorized"
             normalized_items.append({"name": name, "qty": qty, "price": price, "category": cat})
 
     items_json = json.dumps(normalized_items)
 
-    # Initialize local receipts list if not existing
+    # Ensure local list exists
     if "_local_receipts" not in st.session_state:
         st.session_state["_local_receipts"] = []
 
-    # Save guest orders locally (for staff view) but not in DB
+    print(f"\n--- SAVE RECEIPT DEBUG ---")
+    print(f"User ID: {user_id}")
+    print(f"Order ID: {order_id}")
+    print(f"Items: {normalized_items}")
+    print(f"Session has _local_receipts: {'_local_receipts' in st.session_state}")
+    print(f"Guest? {str(user_id).strip().lower() == 'guest'}")
+
+    # Guests → store locally only
     if str(user_id).strip().lower() == "guest":
-        print("⚠️ Guest order detected — not saving to database or user history, only showing to staff.")
+        print("⚠️ Guest order detected — saving locally only.")
         st.session_state["_local_receipts"].append({
             "order_id": order_id,
             "items": normalized_items,
@@ -438,24 +437,24 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
             "pickup_dt": pickup_dt,
             "status": status
         })
+        print(f"✅ Local receipts count now: {len(st.session_state['_local_receipts'])}")
         return
 
-    # Save to Snowflake for non-guests
-    conn = get_connection()
+    # Normal users → save to Snowflake
     try:
+        conn = get_connection()
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (order_id, items_json, total, payment_method, user_id, pickup_dt, status))
         conn.commit()
-        print(f"✅ Order {order_id} saved for user: {user_id}")
-    except Exception as e:
-        print(f"❌ Error saving order {order_id}: {e}")
-    finally:
         conn.close()
+        print(f"✅ Order {order_id} saved to DB for user: {user_id}")
+    except Exception as e:
+        print(f"❌ DB save failed: {e}")
 
-    # Always add order to local staff tracking
+    # Also keep in session for staff auto-refresh
     st.session_state["_local_receipts"].append({
         "order_id": order_id,
         "items": normalized_items,
@@ -465,19 +464,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
         "pickup_dt": pickup_dt,
         "status": status
     })
-
-    # Also save locally for staff auto-refresh (non-guests only)
-    if "_local_receipts" not in st.session_state:
-        st.session_state["_local_receipts"] = []
-    st.session_state["_local_receipts"].append({
-        "order_id": order_id,
-        "items": normalized_items,
-        "total": total,
-        "payment_method": payment_method,
-        "user_id": user_id,
-        "pickup_dt": pickup_dt,
-        "status": status
-    })
+    print(f"✅ Local receipts count (after DB): {len(st.session_state['_local_receipts'])}")
 
 def load_receipts_df():
     conn = get_connection()
