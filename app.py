@@ -952,40 +952,57 @@ elif st.session_state.page == "main":
         elif choice == "Pending Orders":
             st.subheader("📦 Pending Orders")
 
-            # 🔄 Auto-refresh every 10 seconds (Streamlit native)
+            # 🔄 Auto-refresh every 10 seconds
             refresh_interval = 10  # seconds
             last_refresh = st.session_state.get("last_refresh", datetime.now())
-
             if (datetime.now() - last_refresh).seconds >= refresh_interval:
                 st.session_state["last_refresh"] = datetime.now()
                 st.rerun()
 
-            # Load receipts from Snowflake
+            # --- Load orders from DB ---
             receipts = load_receipts_df()
 
-            # Include local guest orders
+            # --- Load local guest receipts ---
             local = st.session_state.get("_local_receipts", [])
             if local:
                 local_df = pd.DataFrame(local)
-                receipts = pd.concat([receipts, local_df], ignore_index=True)
+                # If receipts is empty, create an empty DataFrame with same columns
+                if receipts is None or receipts.empty:
+                    receipts = local_df
+                else:
+                    # Combine DB + local guest orders
+                    receipts = pd.concat([receipts, local_df], ignore_index=True)
 
-            # Filter for pending
-            pending_orders = receipts[receipts["status"] == "Pending"] if not receipts.empty else pd.DataFrame()
+            # --- Filter pending ---
+            if not receipts.empty:
+                pending_orders = receipts[receipts["status"] == "Pending"]
+            else:
+                pending_orders = pd.DataFrame()
 
+            # --- Display ---
             if not pending_orders.empty:
                 for idx, row in pending_orders.iterrows():
                     order_id = row.get("order_id")
-                    st.markdown(
-                        f"**Order ID:** {order_id} | **User:** {row.get('user_id')} | **Payment:** {row.get('payment_method')}"
-                    )
-                    st.write("Items:", row.get("items"))
+                    user_id = row.get("user_id", "Unknown")
+                    st.markdown(f"**Order ID:** {order_id} | **User:** {user_id} | **Payment:** {row.get('payment_method')}")
+
+                    # Show items clearly
+                    items = row.get("items")
+                    if isinstance(items, str):
+                        try:
+                            items = json.loads(items)
+                        except Exception:
+                            pass
+                    st.write(items)
+
+                    # Mark as ready
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
-                        add_notification(row.get("user_id"), f"Your order #{order_id} is ready for pickup!")
+                        add_notification(user_id, f"Your order #{order_id} is ready for pickup!")
                         st.success(f"Order #{order_id} marked as Ready!")
                         st.rerun()
             else:
-                st.info("No pending orders.")
+                st.info("No pending orders found.")
 
         elif choice == "Manage Menu":
             st.subheader("📖 Manage Menu")
