@@ -400,9 +400,11 @@ def _build_menu_category_map():
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
     Save a receipt to Snowflake for both guests and logged-in users.
-    Guests' orders are stored in the DB (for staff visibility)
-    but excluded from user order history display.
+    Guests are assigned user_id="Guest" for staff visibility.
     """
+
+    # Normalize user_id for guest
+    user_id = user_id or "Guest"
 
     # Normalize items
     normalized_items = _normalize_items_for_receipt(items)
@@ -420,7 +422,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 
     items_json = json.dumps(normalized_items)
 
-    # ✅ Always save to DB (so staff can see all)
+    # Save to DB
     try:
         conn = get_connection()
         with conn.cursor() as cur:
@@ -434,7 +436,7 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
     except Exception as e:
         print(f"❌ Error saving to DB: {e}")
 
-    # ✅ Keep local copy for active session
+    # Keep local copy
     if "_local_receipts" not in st.session_state:
         st.session_state["_local_receipts"] = []
 
@@ -449,15 +451,18 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
     })
 
     print(f"✅ Local receipt added. Total local: {len(st.session_state['_local_receipts'])}")
-    
+
+
 def load_receipts_df():
     conn = get_connection()
     if not conn:
         # fallback: use local in-memory orders
         rows = st.session_state.get("_local_receipts", [])
-        return pd.DataFrame(rows) if rows else pd.DataFrame(
-            columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"]
-        )
+        if not rows:
+            return pd.DataFrame(columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"])
+        df = pd.DataFrame(rows)
+        df["user_id"] = df["user_id"].fillna("Guest").astype(str).str.strip()
+        return df
 
     try:
         with conn.cursor() as cur:
@@ -469,7 +474,6 @@ def load_receipts_df():
             rows = cur.fetchall()
         conn.close()
 
-        # ✅ Convert to dataframe safely
         if not rows:
             return pd.DataFrame(columns=["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"])
 
@@ -477,7 +481,8 @@ def load_receipts_df():
 
         # Normalize text fields
         df["status"] = df["status"].fillna("").str.strip().str.capitalize()
-        df["user_id"] = df["user_id"].fillna("").str.strip()
+        df["user_id"] = df["user_id"].fillna("Guest").astype(str).str.strip()
+
         return df
 
     except Exception as e:
