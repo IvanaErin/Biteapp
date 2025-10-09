@@ -381,6 +381,12 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
     """
     Save a receipt. Ensures `items` are normalized to a consistent JSON list format.
     """
+
+    # Prevent guests from saving their orders in history
+    if str(user_id).lower() == "guest":
+        print("⚠️ Guest order detected — skipping save to database.")
+        return
+
     # Normalize items (handle cart dicts or mixed formats)
     normalized_items = _normalize_items_for_receipt(items)
 
