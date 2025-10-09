@@ -1304,9 +1304,14 @@ elif st.session_state.page == "main":
 
         st.divider()
         if st.button("🚪 Log Out"):
+            # Clear all session keys
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
-            st.session_state.page = "login"
+            
+            # Set page to login
+            st.session_state["page"] = "login"
+            
+            # Force rerun to redirect immediately
             st.rerun()
 
 # ---------------------------
