@@ -400,29 +400,13 @@ def _build_menu_category_map():
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     """
     Save a receipt. Ensures `items` are normalized to a consistent JSON list format.
-    Guests' orders are NOT saved to the database or local receipts.
+    Guests' orders are NOT saved to the database or order history,
+    but they still appear in staff's Pending Orders (via _local_receipts).
     """
-
-    # Skip saving guest orders completely
-    if str(user_id).strip().lower() == "guest":
-        print("⚠️ Guest order detected — not saving to history, but visible to staff temporarily.")
-        if "_local_receipts" not in st.session_state:
-            st.session_state["_local_receipts"] = []
-        st.session_state["_local_receipts"].append({
-            "order_id": order_id,
-            "items": _normalize_items_for_receipt(items),
-            "total": total,
-            "payment_method": payment_method,
-            "user_id": user_id,
-            "pickup_dt": pickup_dt,
-            "status": status
-        })
-        return
 
     # Normalize items (handle cart dicts or mixed formats)
     normalized_items = _normalize_items_for_receipt(items)
 
-    # If items were passed as session cart dict {name: {qty, price}}, normalize too
     if not normalized_items and isinstance(items, dict):
         for name, info in items.items():
             try:
@@ -438,7 +422,25 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 
     items_json = json.dumps(normalized_items)
 
-    # Save to Snowflake (only for non-guests)
+    # Initialize local receipts list if not existing
+    if "_local_receipts" not in st.session_state:
+        st.session_state["_local_receipts"] = []
+
+    # Save guest orders locally (for staff view) but not in DB
+    if str(user_id).strip().lower() == "guest":
+        print("⚠️ Guest order detected — not saving to database or user history, only showing to staff.")
+        st.session_state["_local_receipts"].append({
+            "order_id": order_id,
+            "items": normalized_items,
+            "total": total,
+            "payment_method": payment_method,
+            "user_id": user_id,
+            "pickup_dt": pickup_dt,
+            "status": status
+        })
+        return
+
+    # Save to Snowflake for non-guests
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -452,6 +454,17 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
         print(f"❌ Error saving order {order_id}: {e}")
     finally:
         conn.close()
+
+    # Always add order to local staff tracking
+    st.session_state["_local_receipts"].append({
+        "order_id": order_id,
+        "items": normalized_items,
+        "total": total,
+        "payment_method": payment_method,
+        "user_id": user_id,
+        "pickup_dt": pickup_dt,
+        "status": status
+    })
 
     # Also save locally for staff auto-refresh (non-guests only)
     if "_local_receipts" not in st.session_state:
