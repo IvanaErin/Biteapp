@@ -1302,15 +1302,22 @@ elif st.session_state.page == "payment":
         )
 
         def record_order(payment_method):
-            """Record order only if user is not a Guest"""
-            if user.get("role", "Guest") != "Guest":
-                order_id = f"ORD-{random.randint(100000,999999)}"
-                save_receipt(order_id, pending_cart, total_cost, payment_method,
-                             user.get("username"), pickup_dt, status="Pending")
-                add_notification(user.get("username"), f"Your order #{order_id} has been placed successfully!")
-            else:
-                st.info("Guest orders are not saved to history.")
-            st.success("✅ Order recorded (Pending). Staff will mark it Ready when prepared.")
+            """Record order for both logged-in users and guests"""
+            order_id = f"ORD-{random.randint(100000,999999)}"
+            # Determine user_id
+            user_id = user.get("username") if user.get("role") != "Guest" else "Guest"
+
+            # Save receipt to DB and local session
+            save_receipt(order_id, pending_cart, total_cost, payment_method,
+                         user_id, pickup_dt, status="Pending")
+
+            # Add notification for the user
+            add_notification(user_id, f"Your order #{order_id} has been placed successfully!")
+
+            # Show success message
+            st.success(f"✅ Order #{order_id} recorded (Pending). Staff will mark it Ready when prepared.")
+
+            # Clear cart and return to main
             st.session_state.cart.clear()
             st.session_state.page = "main"
             st.rerun()
