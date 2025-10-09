@@ -930,9 +930,14 @@ elif st.session_state.page == "main":
             st.info("Metrics and KPIs coming soon.")
 
         elif choice == "Pending Orders":
-            st.subheader("📦 Pending Orders")
+            st.markdown("<h2 style='color:#FF6F61;'>📦 Pending Orders</h2>", unsafe_allow_html=True)
 
-            # 🔄 Auto-refresh every 10 seconds
+            # 🔄 Manual refresh button
+            if st.button("🔄 Refresh Orders"):
+                st.session_state["last_refresh"] = datetime.now()
+                st.rerun()
+
+            # 🔁 Auto-refresh every 10 seconds
             refresh_interval = 10  # seconds
             last_refresh = st.session_state.get("last_refresh", datetime.now())
             if (datetime.now() - last_refresh).seconds >= refresh_interval:
@@ -946,49 +951,75 @@ elif st.session_state.page == "main":
             local = st.session_state.get("_local_receipts", [])
             if local:
                 local_df = pd.DataFrame(local)
-
-                # Ensure both DataFrames have same columns
                 required_cols = ["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
                 for col in required_cols:
                     if col not in local_df.columns:
                         local_df[col] = None
                     if receipts is not None and not receipts.empty and col not in receipts.columns:
                         receipts[col] = None
-
-                # Combine Snowflake + local guest orders
                 if receipts is None or receipts.empty:
                     receipts = local_df
                 else:
                     receipts = pd.concat([receipts, local_df], ignore_index=True)
 
-            # --- Filter pending orders ---
+            # --- Filter pending ---
             if receipts is not None and not receipts.empty:
                 pending_orders = receipts[receipts["status"].astype(str).str.lower() == "pending"]
             else:
                 pending_orders = pd.DataFrame()
 
-            # --- Display pending orders ---
+            # --- Display styled cards ---
             if not pending_orders.empty:
                 for idx, row in pending_orders.iterrows():
                     order_id = row.get("order_id")
                     user_id = row.get("user_id", "Unknown")
-                    st.markdown(f"**Order ID:** {order_id} | **User:** {user_id} | **Payment:** {row.get('payment_method')}")
+                    payment = row.get("payment_method", "N/A")
+                    total = row.get("total", 0)
+                    pickup_time = row.get("pickup_time", "N/A")
 
-                    # 🧾 Show items clearly
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background-color: #fff5f2;
+                            border: 2px solid #FF6F61;
+                            border-radius: 15px;
+                            padding: 15px 20px;
+                            margin-bottom: 15px;
+                            box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+                        ">
+                            <h4 style='color:#FF6F61;'>Order #{order_id}</h4>
+                            <p><b>User:</b> {user_id}</p>
+                            <p><b>Payment:</b> {payment}</p>
+                            <p><b>Total:</b> ₱{total:.2f}</p>
+                            <p><b>Pickup Time:</b> {pickup_time}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    # 🧾 Show items cleanly
                     items = row.get("items")
                     if isinstance(items, str):
                         try:
                             items = json.loads(items)
                         except Exception:
                             pass
-                    st.write(items)
 
-                    # ✅ Mark as ready
+                    if isinstance(items, list):
+                        for i in items:
+                            st.markdown(f"- {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}")
+                    elif isinstance(items, dict):
+                        for name, details in items.items():
+                            st.markdown(f"- {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}")
+
+                    # ✅ Mark ready button
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
                         add_notification(user_id, f"Your order #{order_id} is ready for pickup!")
                         st.success(f"Order #{order_id} marked as Ready!")
                         st.rerun()
+
+                    st.divider()
             else:
                 st.info("No pending orders found.")
 
@@ -1171,16 +1202,89 @@ elif st.session_state.page == "main":
 
             st.divider()
             st.subheader("📜 Order History")
-            hist = load_receipts_df()
-            if not hist.empty:
-                u_orders = hist[hist["user_id"] == user["username"]]
-                if not u_orders.empty:
-                    st.dataframe(u_orders.sort_values(by="timestamp", ascending=False))
-                else:
-                    st.info("No orders yet.")
-            else:
-                st.info("No receipts found.")
 
+            # --- Manual refresh button (no re-login needed) ---
+            if st.button("🔄 Refresh History"):
+                st.session_state["user_last_refresh"] = datetime.now()
+                st.experimental_rerun()
+
+            # --- Auto-refresh every X seconds ---
+            refresh_interval_user = 15  # seconds
+            last_refresh_user = st.session_state.get("user_last_refresh", datetime.now())
+            if (datetime.now() - last_refresh_user).seconds >= refresh_interval_user:
+                st.session_state["user_last_refresh"] = datetime.now()
+                st.experimental_rerun()
+
+            # --- Load receipts ---
+            hist = load_receipts_df()
+
+            # --- Also include local guest orders if available ---
+            local = st.session_state.get("_local_receipts", [])
+            if local:
+                local_df = pd.DataFrame(local)
+                if hist is None or hist.empty:
+                    hist = local_df
+                else:
+                    hist = pd.concat([hist, local_df], ignore_index=True)
+
+            if hist is None or hist.empty:
+                st.info("No receipts found.")
+            else:
+                hist["user_id"] = hist["user_id"].astype(str).fillna("").str.strip()
+                username = user.get("username", "") or ""
+                username_lower = username.lower()
+
+                # Guests shouldn't have saved order history
+                if username_lower == "guest" or username_lower == "":
+                    st.info("Guest accounts do not have an order history saved.")
+                else:
+                    # Filter this user's orders (case-insensitive)
+                    u_orders = hist[hist["user_id"].str.lower() == username_lower]
+
+                    if u_orders.empty:
+                        st.info("No orders yet.")
+                    else:
+                        # Sort by latest first
+                        u_orders = u_orders.sort_values(by="timestamp", ascending=False)
+
+                        # Display each order neatly
+                        for _, row in u_orders.iterrows():
+                            oid = row.get("order_id", "—")
+                            status = row.get("status", "—")
+                            total = float(row.get("total") or 0)
+                            pay = row.get("payment_method") or "—"
+                            pickup = row.get("pickup_time") or "—"
+                            ts = row.get("timestamp") or "—"
+
+                            with st.expander(f"🧾 Order {oid} — ₱{total:.2f} — {status}", expanded=False):
+                                items = row.get("items")
+                                if isinstance(items, str):
+                                    try:
+                                        items_parsed = json.loads(items)
+                                    except Exception:
+                                        items_parsed = items
+                                else:
+                                    items_parsed = items
+
+                                # Show items in readable format
+                                if isinstance(items_parsed, list):
+                                    for it in items_parsed:
+                                        name = it.get("name") or it.get("item") or ""
+                                        qty = it.get("qty") or it.get("quantity") or 1
+                                        price = it.get("price") or 0
+                                        st.markdown(f"- **{name}** — Qty: {qty} — ₱{float(price):.2f}")
+                                elif isinstance(items_parsed, dict):
+                                    for k, v in items_parsed.items():
+                                        if isinstance(v, dict):
+                                            q = v.get("qty", 1)
+                                            p = v.get("price", 0)
+                                            st.markdown(f"- **{k}** — Qty: {q} — ₱{float(p):.2f}")
+                                        else:
+                                            st.markdown(f"- **{k}** — Qty: {v}")
+                                else:
+                                    st.write(items_parsed)
+
+                                st.markdown(f"**Payment:** {pay}  \n**Pickup:** {pickup}  \n**Placed:** {ts}")
         st.divider()
         if st.button("🚪 Log Out"):
             for k in list(st.session_state.keys()):
