@@ -877,7 +877,7 @@ if st.session_state.page == "login":
             # 1️⃣ Check if hardcoded staff
             if username == "staff1" and password == "staff123":
                 st.session_state.user = {"username": "staff1", "role": "Staff", "loyalty_points": 0}
-                st.session_state.page = "staff_dashboard"
+                st.session_state.page = "main"
                 st.success(f"✅ Welcome Staff {username}!")
                 st.rerun()
             
