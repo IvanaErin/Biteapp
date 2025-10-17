@@ -1130,7 +1130,11 @@ elif st.session_state.page == "main":
         elif choice == "Feedback Review":
             st.subheader("📢 Feedback Review")
             fb = load_feedbacks_df()
-            st.dataframe(fb, use_container_width=True) if not fb.empty else st.info("No feedbacks yet.")
+
+            if not fb.empty:
+                st.dataframe(fb, use_container_width=True)
+            else:
+                st.info("No feedbacks yet.")
 
         elif choice == "Sales Report":
             st.subheader("💰 Sales Breakdown")
