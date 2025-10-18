@@ -286,87 +286,6 @@ def load_feedbacks_df():
         cur.close()
         conn.close()
 
-
-# ---------------------------
-# MENU FUNCTIONS (with sentiment)
-# ---------------------------
-def load_menu():
-    conn = get_connection()
-    if not conn:
-        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
-
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM")
-        df = cur.fetch_pandas_all()
-        df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
-
-        # --- integrate sentiment ---
-        feedbacks = load_feedbacks_df()
-        if not feedbacks.empty:
-            sentiment_summary = (
-                feedbacks.groupby("item")["sentiment"]
-                .value_counts()
-                .unstack(fill_value=0)
-                .reset_index()
-            )
-            df = df.merge(sentiment_summary, how="left", left_on="ITEM", right_on="item").fillna(0)
-        else:
-            df["Positive"] = 0
-            df["Neutral"] = 0
-            df["Negative"] = 0
-
-        return df
-
-    except Exception as e:
-        print(f"❌ Error loading menu with sentiment: {e}")
-        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
-
-
-def upsert_menu(df: pd.DataFrame):
-    if df.empty:
-        st.warning("Menu is empty. Nothing to save.")
-        return
-    df = df.fillna("")
-    df["PRICE"] = pd.to_numeric(df["PRICE"], errors="coerce").fillna(0)
-
-    conn = get_connection()
-    if not conn:
-        st.error("Database connection failed. Cannot save menu.")
-        return
-
-    try:
-        cur = conn.cursor()
-        for _, row in df.iterrows():
-            cat = str(row["CATEGORY"]).replace("'", "''")
-            item = str(row["ITEM"]).replace("'", "''")
-            price = row["PRICE"]
-            sql = f"""
-                MERGE INTO MENU AS target
-                USING (SELECT '{cat}' AS CATEGORY, '{item}' AS ITEM, {price} AS PRICE) AS source
-                ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
-                WHEN MATCHED THEN UPDATE SET target.PRICE = source.PRICE
-                WHEN NOT MATCHED THEN INSERT (CATEGORY, ITEM, PRICE) VALUES (source.CATEGORY, source.ITEM, source.PRICE)
-            """
-            cur.execute(sql)
-        conn.commit()
-        st.success("✅ Menu updated successfully!")
-    except Exception as e:
-        st.error(f"❌ Error updating menu: {e}")
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
-
-
 # ---------------------------
 # MENU + SENTIMENT DISPLAY
 # ---------------------------
@@ -495,6 +414,93 @@ def display_menu_with_sentiment():
             st.pyplot(fig)
         else:
             st.caption("No feedback yet for this item.")
+
+# ---------------------------
+# NOTIFICATION FUNCTIONS
+# ---------------------------
+
+def save_notification(user_id: str, message: str):
+    """Save a new notification for a specific user."""
+    conn = get_connection()
+    if not conn:
+        # --- Local fallback ---
+        if "_local_notifications" not in st.session_state:
+            st.session_state._local_notifications = []
+        st.session_state._local_notifications.append({
+            "user_id": user_id,
+            "message": message,
+            "timestamp": datetime.now()
+        })
+        return
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO notifications (user_id, message, timestamp) VALUES (%s, %s, %s)",
+            (user_id, message, datetime.now())
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Error saving notification: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
+
+def get_notifications_for_user(user_id: str):
+    """Retrieve notifications for a specific user."""
+    conn = get_connection()
+    if not conn:
+        # --- Local fallback ---
+        if "_local_notifications" in st.session_state:
+            notes = [n["message"] for n in st.session_state._local_notifications if n["user_id"] == user_id]
+            return sorted(notes, reverse=True)
+        return []
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT message FROM notifications WHERE user_id = %s ORDER BY timestamp DESC",
+            (user_id,)
+        )
+        rows = cur.fetchall()
+        return [r[0] for r in rows] if rows else []
+    except Exception as e:
+        print(f"❌ Error loading notifications: {e}")
+        return []
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
+
+def clear_notifications_for_user(user_id: str):
+    """Clear all notifications for a specific user."""
+    conn = get_connection()
+    if not conn:
+        if "_local_notifications" in st.session_state:
+            st.session_state._local_notifications = [
+                n for n in st.session_state._local_notifications if n["user_id"] != user_id
+            ]
+        return
+
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Error clearing notifications: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
             
 # ---------------------------
 # AI
