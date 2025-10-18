@@ -523,30 +523,26 @@ def clear_notifications_for_user(user_id: str):
             pass
 
 
-def save_receipt(user_id, items, total):
-    """Save a completed order receipt."""
+def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
     conn = get_connection()
     if not conn:
-        # --- Local fallback ---
-        if "_local_receipts" not in st.session_state:
-            st.session_state._local_receipts = []
-        st.session_state._local_receipts.append({
-            "user_id": user_id,
-            "items": items,
-            "total": total,
-            "timestamp": datetime.now()
-        })
-        return
+        return False
 
     try:
         cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO receipts (user_id, items, total, timestamp) VALUES (%s, %s, %s, %s)",
-            (user_id, json.dumps(items), total, datetime.now())
-        )
+        # Convert items dict to string (if needed)
+        items_str = json.dumps(items)
+
+        sql = f"""
+            INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        """
+        cur.execute(sql, (order_id, items_str, total, payment_method, user_id, pickup_dt, status))
         conn.commit()
+        return True
     except Exception as e:
         print(f"❌ Error saving receipt: {e}")
+        return False
     finally:
         try:
             cur.close()
