@@ -501,6 +501,66 @@ def clear_notifications_for_user(user_id: str):
             conn.close()
         except Exception:
             pass
+
+
+def save_receipt(user_id, items, total):
+    """Save a completed order receipt."""
+    conn = get_connection()
+    if not conn:
+        # --- Local fallback ---
+        if "_local_receipts" not in st.session_state:
+            st.session_state._local_receipts = []
+        st.session_state._local_receipts.append({
+            "user_id": user_id,
+            "items": items,
+            "total": total,
+            "timestamp": datetime.now()
+        })
+        return
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO receipts (user_id, items, total, timestamp) VALUES (%s, %s, %s, %s)",
+            (user_id, json.dumps(items), total, datetime.now())
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Error saving receipt: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
+
+def load_receipts_df():
+    """Load all receipts from the database or local fallback."""
+    conn = get_connection()
+    if not conn:
+        # --- Local fallback ---
+        if "_local_receipts" not in st.session_state:
+            st.session_state._local_receipts = []
+        rows = st.session_state._local_receipts
+        return pd.DataFrame(rows) if rows else pd.DataFrame(columns=[
+            "user_id", "items", "total", "timestamp"
+        ])
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT user_id, items, total, timestamp FROM receipts ORDER BY timestamp DESC")
+        rows = cur.fetchall()
+        return pd.DataFrame(rows, columns=["user_id", "items", "total", "timestamp"])
+    except Exception as e:
+        print(f"❌ Error loading receipts: {e}")
+        return pd.DataFrame(columns=["user_id", "items", "total", "timestamp"])
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
             
 # ---------------------------
 # AI
