@@ -12,6 +12,8 @@ import secrets
 import re
 from PIL import Image
 import json
+from textblob import TextBlob
+
 
 # Try to import st_autorefresh helper if available
 try:
@@ -219,26 +221,113 @@ def user_exists(username: str) -> bool:
         conn.close()
 
 # ---------------------------
-# RECEIPTS (normalize items before saving)
+# SENTIMENT ANALYSIS
 # ---------------------------
+def analyze_sentiment(feedback: str):
+    """
+    Analyze text using TextBlob and return sentiment label + polarity score.
+    """
+    blob = TextBlob(feedback)
+    polarity = blob.sentiment.polarity  # -1 (negative) → +1 (positive)
+    if polarity > 0.1:
+        sentiment = "Positive"
+    elif polarity < -0.1:
+        sentiment = "Negative"
+    else:
+        sentiment = "Neutral"
+    return sentiment, polarity
+
+
 # ---------------------------
-# MENU MANAGEMENT (FIXED)
+# FEEDBACK FUNCTIONS
+# ---------------------------
+def save_feedback(item: str, feedback: str, rating: int, user_id: str):
+    sentiment, polarity = analyze_sentiment(feedback)
+
+    conn = get_connection()
+    if not conn:
+        _ensure_local_db()
+        st.session_state._local_feedbacks.append({
+            "item": item,
+            "feedback": feedback,
+            "rating": rating,
+            "user_id": user_id,
+            "sentiment": sentiment,
+            "polarity": polarity,
+            "timestamp": datetime.now()
+        })
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO feedbacks (item, feedback, rating, user_id, sentiment, polarity) VALUES (%s, %s, %s, %s, %s, %s)",
+            (item, feedback, rating, user_id, sentiment, polarity)
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def load_feedbacks_df():
+    conn = get_connection()
+    if not conn:
+        _ensure_local_db()
+        rows = st.session_state._local_feedbacks
+        return pd.DataFrame(rows) if rows else pd.DataFrame(
+            columns=["item","feedback","rating","user_id","sentiment","polarity","timestamp"]
+        )
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT item, feedback, rating, user_id, sentiment, polarity, timestamp FROM feedbacks ORDER BY timestamp DESC")
+        rows = cur.fetchall()
+        return pd.DataFrame(rows, columns=["item","feedback","rating","user_id","sentiment","polarity","timestamp"])
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ---------------------------
+# MENU FUNCTIONS (with sentiment)
 # ---------------------------
 def load_menu():
     conn = get_connection()
     if not conn:
         return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
+
     try:
         cur = conn.cursor()
         cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM")
         df = cur.fetch_pandas_all()
         df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
+
+        # --- integrate sentiment ---
+        feedbacks = load_feedbacks_df()
+        if not feedbacks.empty:
+            sentiment_summary = (
+                feedbacks.groupby("item")["sentiment"]
+                .value_counts()
+                .unstack(fill_value=0)
+                .reset_index()
+            )
+            df = df.merge(sentiment_summary, how="left", left_on="ITEM", right_on="item").fillna(0)
+        else:
+            df["Positive"] = 0
+            df["Neutral"] = 0
+            df["Negative"] = 0
+
         return df
-    except:
+
+    except Exception as e:
+        print(f"❌ Error loading menu with sentiment: {e}")
         return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
     finally:
-        cur.close()
-        conn.close()
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
 
 def upsert_menu(df: pd.DataFrame):
     if df.empty:
@@ -246,10 +335,12 @@ def upsert_menu(df: pd.DataFrame):
         return
     df = df.fillna("")
     df["PRICE"] = pd.to_numeric(df["PRICE"], errors="coerce").fillna(0)
+
     conn = get_connection()
     if not conn:
         st.error("Database connection failed. Cannot save menu.")
         return
+
     try:
         cur = conn.cursor()
         for _, row in df.iterrows():
@@ -269,540 +360,48 @@ def upsert_menu(df: pd.DataFrame):
     except Exception as e:
         st.error(f"❌ Error updating menu: {e}")
     finally:
-        cur.close()
-        conn.close()
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
 
-def manage_menu():
-    st.subheader("📖 Manage Menu")
+
+# ---------------------------
+# MENU + SENTIMENT DISPLAY
+# ---------------------------
+def display_menu_with_sentiment():
+    st.subheader("🍽️ Menu with Sentiment Insights")
+
     menu_df = load_menu()
-    if not menu_df.empty:
-        edited = st.data_editor(menu_df, num_rows="dynamic")
-        if st.button("Save Menu Updates"):
-            upsert_menu(edited)
-            st.experimental_rerun()
-    else:
+    if menu_df.empty:
         st.info("No menu items available.")
-        
-def _normalize_items_for_receipt(items):
-    """
-    Accepts many formats and returns a list of dicts:
-    [{"name": ..., "qty": int, "price": float, "category": ...}, ...]
-    """
-    normalized = []
-    cat_map = _build_menu_category_map()
-
-    # If items is a dict stringified, try to parse
-    if isinstance(items, str):
-        try:
-            parsed = json.loads(items)
-        except Exception:
-            # fallback: try eval (only if local, not ideal), but avoid for security in production
-            try:
-                parsed = eval(items)
-            except Exception:
-                parsed = items
-    else:
-        parsed = items
-
-    # If parsed is dict like {"Donut": 1} or {"Donut": {"qty":1,...}}
-    if isinstance(parsed, dict):
-        for k, v in parsed.items():
-            name = str(k)
-            if isinstance(v, dict):
-                qty = int(v.get("qty", 1))
-                price = float(v.get("price", 0.0)) if v.get("price") is not None else 0.0
-            else:
-                # v could be integer qty
-                try:
-                    qty = int(v)
-                except Exception:
-                    qty = 1
-                price = 0.0
-            category = cat_map.get(name.lower()) or "Uncategorized"
-            normalized.append({"name": name, "qty": qty, "price": price, "category": category})
-
-    # If parsed is list of dicts: [{"name":..., "qty":..., "price":...}, ...]
-    elif isinstance(parsed, list):
-        for it in parsed:
-            if not isinstance(it, dict):
-                continue
-            # various key possibilities
-            name = it.get("name") or it.get("ITEM_NAME") or it.get("item") or "Unknown"
-            try:
-                qty = int(it.get("qty") or it.get("QUANTITY") or it.get("quantity") or 1)
-            except Exception:
-                qty = 1
-            try:
-                price = float(it.get("price") or it.get("PRICE") or 0.0)
-            except Exception:
-                price = 0.0
-            category = it.get("category") or cat_map.get(str(name).lower()) or "Uncategorized"
-            normalized.append({"name": name, "qty": qty, "price": price, "category": category})
-
-    # If parsed is a single item's structure (like {"name":..., ...})
-    elif isinstance(parsed, (int, float, str)):
-        # not a structured item; ignore or treat as unknown
-        pass
-    else:
-        # unknown structure - attempt best-effort convert if it's a mapping-like
-        try:
-            for k, v in dict(parsed).items():
-                name = str(k)
-                if isinstance(v, dict):
-                    qty = int(v.get("qty", 1))
-                    price = float(v.get("price", 0.0)) if v.get("price") is not None else 0.0
-                else:
-                    try:
-                        qty = int(v)
-                    except Exception:
-                        qty = 1
-                    price = 0.0
-                category = cat_map.get(name.lower()) or "Uncategorized"
-                normalized.append({"name": name, "qty": qty, "price": price, "category": category})
-        except Exception:
-            pass
-
-    return normalized
-
-def delete_menu_items(items):
-    if not items:
         return
-    conn = get_snowflake_conn()
-    cur = conn.cursor()
-    # escape single quotes in item names
-    items_str = ",".join([f"'{i.replace('\'', '\'\'')}'" for i in items])
-    sql = f"DELETE FROM MENU WHERE ITEM IN ({items_str})"
-    cur.execute(sql)
-    conn.commit()
-    cur.close()
-    conn.close()
 
-def _build_menu_category_map():
-    """
-    Returns a lowercase map of menu item name → category.
-    Used for receipt normalization to ensure every item has a category.
-    """
-    try:
-        conn = get_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT item_name, category FROM menu")
-            rows = cur.fetchall()
-        return {str(name).strip().lower(): cat for name, cat in rows}
-    except Exception as e:
-        print(f"⚠️ Could not build menu category map: {e}")
-        return {}
-    finally:
-        try:
-            conn.close()
-        except:
-            pass
+    for _, row in menu_df.iterrows():
+        item = row["ITEM"]
+        st.markdown(f"### {item} — ₱{row['PRICE']:.2f}")
 
-def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
-    """
-    Save a receipt to Snowflake for both guests and logged-in users.
-    Guests are assigned user_id="Guest" for staff visibility.
-    """
+        # Extract sentiment counts (already merged)
+        pos = int(row.get("Positive", 0))
+        neu = int(row.get("Neutral", 0))
+        neg = int(row.get("Negative", 0))
+        total = pos + neu + neg
 
-    # Normalize user_id for guest
-    user_id = user_id or "Guest"
+        if total > 0:
+            st.progress(pos / total)
+            st.caption(f"😊 Positive: {pos} | 😐 Neutral: {neu} | 😞 Negative: {neg}")
 
-    # Normalize items
-    normalized_items = _normalize_items_for_receipt(items)
-    if not normalized_items and isinstance(items, dict):
-        for name, info in items.items():
-            qty = int(info.get("qty", 1))
-            price = float(info.get("price", 0.0))
-            cat = _build_menu_category_map().get(name.lower()) or "Uncategorized"
-            normalized_items.append({
-                "name": name,
-                "qty": qty,
-                "price": price,
-                "category": cat
-            })
-
-    items_json = json.dumps(normalized_items)
-
-    # Save to DB
-    try:
-        conn = get_connection()
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_time, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (order_id, items_json, total, payment_method, user_id, pickup_dt, status))
-        conn.commit()
-        conn.close()
-        print(f"✅ Order {order_id} saved for user: {user_id}")
-    except Exception as e:
-        print(f"❌ Error saving to DB: {e}")
-
-    # Keep local copy
-    if "_local_receipts" not in st.session_state:
-        st.session_state["_local_receipts"] = []
-
-    st.session_state["_local_receipts"].append({
-        "order_id": order_id,
-        "items": normalized_items,
-        "total": total,
-        "payment_method": payment_method,
-        "user_id": user_id,
-        "pickup_time": pickup_dt,  # <- matches DB column
-        "status": status,
-        "timestamp": datetime.now()
-    })
-
-    print(f"✅ Local receipt added. Total local: {len(st.session_state['_local_receipts'])}")
-
-
-def load_receipts_df():
-    """
-    Load all receipts from DB and merge with local guest orders.
-    Ensures guest orders are normalized and appear in staff view.
-    """
-    conn = get_connection()
-
-    # Load DB receipts
-    if conn:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT order_id, items, total, payment_method, user_id, pickup_time, status, timestamp
-                    FROM receipts
-                    ORDER BY timestamp DESC
-                """)
-                rows = cur.fetchall()
-            conn.close()
-
-            if rows:
-                df = pd.DataFrame(rows, columns=["order_id", "items", "total", "payment_method",
-                                                 "user_id", "pickup_time", "status", "timestamp"])
-            else:
-                df = pd.DataFrame(columns=["order_id", "items", "total", "payment_method",
-                                           "user_id", "pickup_time", "status", "timestamp"])
-        except Exception as e:
-            st.error(f"❌ Error loading receipts: {e}")
-            df = pd.DataFrame(columns=["order_id", "items", "total", "payment_method",
-                                       "user_id", "pickup_time", "status", "timestamp"])
-    else:
-        df = pd.DataFrame(columns=["order_id", "items", "total", "payment_method",
-                                   "user_id", "pickup_time", "status", "timestamp"])
-
-    # Merge local guest orders
-    local = st.session_state.get("_local_receipts", [])
-    if local:
-        local_df = pd.DataFrame(local)
-
-        # Ensure column names match
-        if "pickup_dt" in local_df.columns:
-            local_df = local_df.rename(columns={"pickup_dt": "pickup_time"})
-
-        required_cols = ["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
-        for col in required_cols:
-            if col not in local_df.columns:
-                local_df[col] = None
-
-        df = pd.concat([df, local_df], ignore_index=True)
-
-    # Normalize guest user_id
-    if not df.empty:
-        df["user_id"] = df["user_id"].fillna("Guest").astype(str).str.strip()
-        df["status"] = df["status"].fillna("").astype(str).str.capitalize()
-
-    return df
-        
-def update_order_status(order_id: str, new_status: str):
-    """
-    Update order status in DB if available, otherwise update local fallback.
-    """
-    conn = get_connection()
-    if not conn:
-        _ensure_local_db()
-        updated = False
-        for r in st.session_state.get("_local_receipts", []):
-            if r.get("order_id") == order_id:
-                r["status"] = new_status
-                updated = True
-        return updated
-
-    try:
-        cur = conn.cursor()
-        cur.execute("UPDATE receipts SET status = %s WHERE order_id = %s", (new_status, order_id))
-        conn.commit()
-        return True
-    except Exception:
-        return False
-    finally:
-        cur.close()
-        conn.close()
-
-# ---------------------------
-# NOTIFICATIONS (DB-backed + session fallback)
-# ---------------------------
-def add_notification(user_id: str, message: str):
-    """
-    Persist notification to DB (if available) and append to session fallback.
-    """
-    _ensure_local_db()
-    note_msg = f"{message}"
-    timestamp = datetime.now()
-
-    # Append to session fallback list of dicts for instant local visibility
-    st.session_state.notifications.append({"user_id": user_id, "message": note_msg, "timestamp": timestamp})
-
-    # Try to persist to DB notifications table (best-effort)
-    conn = get_connection()
-    if not conn:
-        return
-    try:
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO notifications (user_id, message, timestamp, is_read) VALUES (%s, %s, %s, %s)",
-                (user_id, note_msg, timestamp, False)
-            )
-            conn.commit()
-        except Exception:
-            # ignore if notifications table doesn't exist or insert fails
-            pass
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
-
-def get_notifications_for_user(user_id: str):
-    """
-    Return list of messages (strings) for the given user combining DB and session fallback.
-    DB results are ordered newest first.
-    """
-    _ensure_local_db()
-    results = []
-
-    # First, try DB-backed notifications (unread)
-    conn = get_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            try:
-                # Try to select unread notifications first; if no is_read column, fallback to messages
-                cur.execute("""
-SELECT message, timestamp FROM notifications
-WHERE user_id = %s AND (is_read = FALSE OR is_read IS NULL)
-ORDER BY timestamp DESC
-""", (user_id,))
-                rows = cur.fetchall()
-                for r in rows:
-                    msg = r[0]
-                    ts = r[1] if len(r) > 1 else None
-                    results.append(f"[{ts}] {msg}" if ts else msg)
-            except Exception:
-                # If notifications table schema differs, attempt generic select
-                try:
-                    cur.execute("SELECT message, timestamp FROM notifications WHERE user_id = %s ORDER BY timestamp DESC", (user_id,))
-                    rows = cur.fetchall()
-                    for r in rows:
-                        msg = r[0]
-                        ts = r[1] if len(r) > 1 else None
-                        results.append(f"[{ts}] {msg}" if ts else msg)
-                except Exception:
-                    pass
-        finally:
-            try:
-                cur.close()
-                conn.close()
-            except Exception:
-                pass
-
-    # Merge session notifications (they may be instant and not yet in DB)
-    for n in st.session_state.get("notifications", []):
-        if n.get("user_id") == user_id:
-            ts = n.get("timestamp")
-            if isinstance(ts, datetime):
-                ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
-            else:
-                ts_str = str(ts)
-            results.insert(0, f"[{ts_str}] {n.get('message')}")
-
-    # Deduplicate while preserving order
-    seen = set()
-    deduped = []
-    for r in results:
-        if r not in seen:
-            deduped.append(r)
-            seen.add(r)
-
-    return deduped
-
-def clear_notifications_for_user(user_id: str):
-    """
-    Mark notifications read in DB (if possible) and clear session fallback.
-    """
-    # Clear session fallback
-    st.session_state.notifications = [n for n in st.session_state.get("notifications", []) if n.get("user_id") != user_id]
-
-    # Mark DB notifications as read if possible
-    conn = get_connection()
-    if not conn:
-        return
-    try:
-        cur = conn.cursor()
-        try:
-            # best-effort: set is_read true if column exists
-            cur.execute("UPDATE notifications SET is_read = TRUE WHERE user_id = %s", (user_id,))
-            conn.commit()
-        except Exception:
-            # try deleting older notifications (if update fails)
-            try:
-                cur.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
-                conn.commit()
-            except Exception:
-                pass
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
-
-# ---------------------------
-# FEEDBACK
-# ---------------------------
-def save_feedback(item: str, feedback: str, rating: int, user_id: str):
-    conn = get_connection()
-    if not conn:
-        _ensure_local_db()
-        st.session_state._local_feedbacks.append({
-            "item": item, "feedback": feedback, "rating": rating, "user_id": user_id, "timestamp": datetime.now()
-        })
-        return
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO feedbacks (item, feedback, rating, user_id) VALUES (%s, %s, %s, %s)",
-            (item, feedback, rating, user_id)
-        )
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
-
-def load_feedbacks_df():
-    conn = get_connection()
-    if not conn:
-        _ensure_local_db()
-        rows = st.session_state._local_feedbacks
-        return pd.DataFrame(rows) if rows else pd.DataFrame(columns=["item","feedback","rating","user_id","timestamp"])
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT item, feedback, rating, user_id, timestamp FROM feedbacks ORDER BY timestamp DESC")
-        rows = cur.fetchall()
-        return pd.DataFrame(rows, columns=["item","feedback","rating","user_id","timestamp"])
-    finally:
-        cur.close()
-        conn.close()
-
-# ---------------------------
-# MENU (with resilient column detection)
-# ---------------------------
-def detect_menu_columns(df: pd.DataFrame):
-    # return tuple (category_col, item_col, price_col)
-    cols = [c.upper() for c in df.columns.tolist()]
-    category_col = None
-    item_col = None
-    price_col = None
-
-    for c in df.columns:
-        cu = c.upper()
-        if category_col is None and ("CATEGORY" in cu or cu == "CAT"):
-            category_col = c
-        if item_col is None and ("ITEM" in cu or "NAME" in cu):
-            item_col = c
-        if price_col is None and ("PRICE" in cu or "COST" in cu or "AMOUNT" in cu):
-            price_col = c
-
-    # fallbacks
-    if category_col is None:
-        for c in df.columns:
-            if "TYPE" in c.upper():
-                category_col = c
-                break
-    if item_col is None:
-        # prefer first column that isn't category or numeric price
-        for c in df.columns:
-            if c != category_col and not pd.api.types.is_numeric_dtype(df[c]):
-                item_col = c
-                break
-    if price_col is None:
-        # pick first numeric column
-        for c in df.columns:
-            if pd.api.types.is_numeric_dtype(df[c]):
-                price_col = c
-                break
-
-    return category_col, item_col, price_col
-
-def load_menu():
-    conn = get_snowflake_conn()
-    # if no connection, return a fallback DataFrame
-    if not conn:
-        default_menu = {
-            "CATEGORY": ["Breakfast","Breakfast","Lunch","Lunch","Drinks","Drinks","Snacks","Snacks"],
-            "ITEM": ["","","","","","","",""],
-            "PRICE": [0]
-        }
-        return pd.DataFrame(default_menu)
-
-    try:
-        df = pd.read_sql("SELECT * FROM MENU ORDER BY CATEGORY, ITEM", conn)
-        # ensure CATEGORY, ITEM, PRICE exist; if not try to insert defaults
-        # if table exists but empty, populate defaults
-        if df.empty:
-            default_menu = {
-                "CATEGORY": ["Breakfast","Breakfast","Lunch","Lunch","Drinks","Drinks","Snacks","Snacks"],
-                "ITEM": ["Pancakes","Omelette","Burger","Pizza","Coffee","Juice","Chips","Donut"],
-                "PRICE": [50,40,80,120,30,40,20,25]
-            }
-            cursor = conn.cursor()
-            for cat, item, price in zip(default_menu["CATEGORY"], default_menu["ITEM"], default_menu["PRICE"]):
-                try:
-                    cursor.execute("INSERT INTO MENU (CATEGORY, ITEM, PRICE) VALUES (%s, %s, %s)", (cat, item, price))
-                except Exception:
-                    # ignore insertion errors (table might have different schema)
-                    pass
-            conn.commit()
-            df = pd.read_sql("SELECT * FROM MENU ORDER BY CATEGORY, ITEM", conn)
-        return df
-    finally:
-        conn.close()
-
-def upsert_menu(df: pd.DataFrame):
-    conn = get_snowflake_conn()
-    if not conn:
-        return
-    try:
-        cur = conn.cursor()
-        for _, row in df.iterrows():
-            # handle gracefully if columns missing
-            category = row.get("CATEGORY", row.get("Category", None))
-            item = row.get("ITEM", row.get("Item", None))
-            price = row.get("PRICE", row.get("Price", None))
-            if category is None or item is None or price is None:
-                continue
-            cur.execute("""
-                MERGE INTO MENU AS target
-                USING (SELECT %s AS CATEGORY, %s AS ITEM, %s AS PRICE) AS source
-                ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
-                WHEN MATCHED THEN
-                    UPDATE SET PRICE = source.PRICE
-                WHEN NOT MATCHED THEN
-                    INSERT (CATEGORY, ITEM, PRICE) VALUES (source.CATEGORY, source.ITEM, source.PRICE)
-            """, (category, item, price))
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
-
+            # Optional mini pie chart
+            labels = ["Positive", "Neutral", "Negative"]
+            values = [pos, neu, neg]
+            fig, ax = plt.subplots(figsize=(3, 3))
+            ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90)
+            ax.axis("equal")
+            st.pyplot(fig)
+        else:
+            st.caption("No feedback yet for this item.")
+            
 # ---------------------------
 # AI
 # ---------------------------
@@ -1262,6 +861,29 @@ elif st.session_state.page == "main":
 
         # RIGHT SIDE
         with right_col:
+            st.subheader("💬 Sentiment Analysis")
+            feedback_df = load_feedbacks_df()
+
+            if feedback_df.empty:
+                st.info("No feedback data available yet.")
+            else:
+                avg_sentiment = feedback_df.groupby("item")["rating"].mean().reset_index()
+                avg_sentiment.columns = ["Item", "Average Rating"]
+
+                selected_item = st.selectbox("Select item to view sentiment:", avg_sentiment["Item"].unique())
+
+                if selected_item:
+                    avg_score = avg_sentiment.loc[avg_sentiment["Item"] == selected_item, "Average Rating"].values[0]
+                    st.metric(label=f"Sentiment for {selected_item}", value=f"{avg_score:.2f} ⭐")
+
+                    if avg_score >= 4:
+                        st.success("😊 Customers love this item!")
+                    elif avg_score >= 3:
+                        st.warning("😐 Mixed feedback from customers.")
+                    else:
+                        st.error("😞 Needs improvement based on reviews.")
+
+            st.divider()
             st.subheader("⭐ Feedbacks")
             if not is_guest:
                 with st.form("feedback_form"):
@@ -1328,15 +950,10 @@ elif st.session_state.page == "main":
                     u_orders = hist[hist["user_id"] == user["username"]]
                     if not u_orders.empty:
                         # --- Fix columns for PyArrow ---
-                        # Ensure timestamp column is proper datetime
                         u_orders["timestamp"] = pd.to_datetime(u_orders["timestamp"], errors="coerce")
-                        
-                        # Convert any object columns (like dicts/lists) to strings
                         for col in u_orders.columns:
                             if u_orders[col].dtype == "object":
                                 u_orders[col] = u_orders[col].astype(str)
-                        
-                        # --- Display safely ---
                         st.dataframe(u_orders.sort_values(by="timestamp", ascending=False))
                     else:
                         st.info("No orders yet.")
@@ -1345,16 +962,11 @@ elif st.session_state.page == "main":
 
         st.divider()
         if st.button("🚪 Log Out"):
-            # Clear all session keys except "page"
             keys_to_keep = ["page"]
             for k in list(st.session_state.keys()):
                 if k not in keys_to_keep:
                     del st.session_state[k]
-            
-            # Set page to login
             st.session_state["page"] = "login"
-            
-            # Force rerun to redirect immediately
             st.rerun()
 
 # ---------------------------
