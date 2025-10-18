@@ -383,6 +383,9 @@ def upsert_menu(df: pd.DataFrame):
 # ---------------------------
 # MENU + SENTIMENT DISPLAY
 # ---------------------------
+# ---------------------------
+# MENU + SENTIMENT DISPLAY (Dynamic per item)
+# ---------------------------
 def display_menu_with_sentiment():
     st.subheader("🍽️ Menu with Sentiment Insights")
 
@@ -391,29 +394,46 @@ def display_menu_with_sentiment():
         st.info("No menu items available.")
         return
 
-    for _, row in menu_df.iterrows():
-        item = row["ITEM"]
-        st.markdown(f"### {item} — ₱{row['PRICE']:.2f}")
+    # --- Dropdown to choose which item to view ---
+    selected_item = st.selectbox("Select an item to view sentiment:", menu_df["ITEM"].unique())
 
-        # Extract sentiment counts (already merged)
-        pos = int(row.get("Positive", 0))
-        neu = int(row.get("Neutral", 0))
-        neg = int(row.get("Negative", 0))
+    # --- Load feedbacks separately for accurate sentiment mapping ---
+    feedbacks = load_feedbacks_df()
+    item_feedbacks = feedbacks[feedbacks["item"] == selected_item] if not feedbacks.empty else pd.DataFrame()
+
+    # --- Show menu item details ---
+    row = menu_df[menu_df["ITEM"] == selected_item].iloc[0]
+    st.markdown(f"### {selected_item} — ₱{row['PRICE']:.2f}")
+
+    if not item_feedbacks.empty:
+        # Count sentiment distribution
+        sentiment_counts = item_feedbacks["sentiment"].value_counts().to_dict()
+        pos = sentiment_counts.get("Positive", 0)
+        neu = sentiment_counts.get("Neutral", 0)
+        neg = sentiment_counts.get("Negative", 0)
         total = pos + neu + neg
 
         if total > 0:
             st.progress(pos / total)
             st.caption(f"😊 Positive: {pos} | 😐 Neutral: {neu} | 😞 Negative: {neg}")
 
-            # Optional mini pie chart
+            # Mini pie chart
             labels = ["Positive", "Neutral", "Negative"]
             values = [pos, neu, neg]
             fig, ax = plt.subplots(figsize=(3, 3))
-            ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90)
+            wedges, texts, autotexts = ax.pie(
+                values,
+                labels=labels,
+                autopct=lambda p: f"{p:.1f}%" if p > 0 else "",
+                startangle=90,
+                textprops={"fontsize": 9}
+            )
             ax.axis("equal")
             st.pyplot(fig)
         else:
-            st.caption("No feedback yet for this item.")
+            st.caption("No feedbacks yet for this item.")
+    else:
+        st.caption("No feedbacks yet for this item.")
 
 # ---------------------------
 # NOTIFICATION FUNCTIONS
