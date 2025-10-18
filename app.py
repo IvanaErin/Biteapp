@@ -370,6 +370,100 @@ def upsert_menu(df: pd.DataFrame):
 # ---------------------------
 # MENU + SENTIMENT DISPLAY
 # ---------------------------
+def load_menu():
+    conn = get_connection()
+    if not conn:
+        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT CATEGORY, ITEM, PRICE FROM MENU ORDER BY CATEGORY, ITEM")
+        df = cur.fetch_pandas_all()
+        df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
+
+        # --- integrate sentiment ---
+        feedbacks = load_feedbacks_df()
+        if not feedbacks.empty:
+            sentiment_summary = (
+                feedbacks.groupby("item")["sentiment"]
+                .value_counts()
+                .unstack(fill_value=0)
+                .reset_index()
+            )
+            df = df.merge(sentiment_summary, how="left", left_on="ITEM", right_on="item").fillna(0)
+        else:
+            df["Positive"] = 0
+            df["Neutral"] = 0
+            df["Negative"] = 0
+
+        return df
+
+    except Exception as e:
+        print(f"❌ Error loading menu with sentiment: {e}")
+        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE"])
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
+
+def detect_menu_columns(menu_df):
+    """
+    Automatically detects which columns in the menu DataFrame 
+    correspond to category, item, and price.
+    """
+    cols_lower = [c.lower() for c in menu_df.columns]
+
+    cat_col = next((c for c in menu_df.columns if "category" in c.lower()), menu_df.columns[0])
+    item_col = next((c for c in menu_df.columns if "item" in c.lower()), menu_df.columns[1])
+    price_col = next((c for c in menu_df.columns if "price" in c.lower()), menu_df.columns[2])
+
+    return cat_col, item_col, price_col
+
+
+def upsert_menu(df: pd.DataFrame):
+    if df.empty:
+        st.warning("Menu is empty. Nothing to save.")
+        return
+    df = df.fillna("")
+    df["PRICE"] = pd.to_numeric(df["PRICE"], errors="coerce").fillna(0)
+
+    conn = get_connection()
+    if not conn:
+        st.error("Database connection failed. Cannot save menu.")
+        return
+
+    try:
+        cur = conn.cursor()
+        for _, row in df.iterrows():
+            cat = str(row["CATEGORY"]).replace("'", "''")
+            item = str(row["ITEM"]).replace("'", "''")
+            price = row["PRICE"]
+            sql = f"""
+                MERGE INTO MENU AS target
+                USING (SELECT '{cat}' AS CATEGORY, '{item}' AS ITEM, {price} AS PRICE) AS source
+                ON target.CATEGORY = source.CATEGORY AND target.ITEM = source.ITEM
+                WHEN MATCHED THEN UPDATE SET target.PRICE = source.PRICE
+                WHEN NOT MATCHED THEN INSERT (CATEGORY, ITEM, PRICE) VALUES (source.CATEGORY, source.ITEM, source.PRICE)
+            """
+            cur.execute(sql)
+        conn.commit()
+        st.success("✅ Menu updated successfully!")
+    except Exception as e:
+        st.error(f"❌ Error updating menu: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
+
+# ---------------------------
+# MENU + SENTIMENT DISPLAY
+# ---------------------------
 def display_menu_with_sentiment():
     st.subheader("🍽️ Menu with Sentiment Insights")
 
