@@ -439,6 +439,30 @@ def display_menu_with_sentiment():
 # NOTIFICATION FUNCTIONS
 # ---------------------------
 
+def add_notification(user_id, message):
+    """Save a notification for the user."""
+    conn = get_connection()
+    if not conn:
+        print("⚠️ No DB connection for add_notification.")
+        return
+
+    try:
+        cur = conn.cursor()
+        sql = f"""
+            INSERT INTO notifications (user_id, message, timestamp)
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+        """
+        cur.execute(sql, (user_id, message))
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Error saving notification: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
 def save_notification(user_id: str, message: str):
     """Save a new notification for a specific user."""
     conn = get_connection()
