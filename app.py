@@ -810,34 +810,25 @@ elif st.session_state.page == "main":
             local = st.session_state.get("_local_receipts", [])
             if local:
                 local_df = pd.DataFrame(local)
-
-                # Rename pickup_dt → pickup_time for consistency
                 if "pickup_dt" in local_df.columns:
                     local_df = local_df.rename(columns={"pickup_dt": "pickup_time"})
 
-                # Ensure all required columns exist
                 required_cols = ["order_id", "items", "total", "payment_method", "user_id", "pickup_time", "status", "timestamp"]
                 for col in required_cols:
                     if col not in local_df.columns:
                         local_df[col] = None
 
-                # Merge local with DB receipts
                 if receipts is None or receipts.empty:
                     receipts = local_df
                 else:
                     receipts = pd.concat([receipts, local_df], ignore_index=True)
 
-            # --- Normalize guest user_id ---
             if receipts is not None and not receipts.empty:
                 receipts["user_id"] = receipts["user_id"].fillna("Guest").astype(str).str.strip()
-
-            # --- Filter pending ---
-            if receipts is not None and not receipts.empty:
                 pending_orders = receipts[receipts["status"].astype(str).str.lower() == "pending"]
             else:
                 pending_orders = pd.DataFrame()
 
-            # --- Display styled cards ---
             if not pending_orders.empty:
                 for idx, row in pending_orders.iterrows():
                     order_id = row.get("order_id")
@@ -845,10 +836,25 @@ elif st.session_state.page == "main":
                     payment = row.get("payment_method", "N/A")
                     total = row.get("total", 0)
                     pickup_time = row.get("pickup_time", "N/A")
+                    items_html = ""
 
-                    # 🧾 Unified container box
-                    st.markdown(
-                        f"""
+                    # 🧾 Build ordered items HTML
+                    items = row.get("items")
+                    if isinstance(items, str):
+                        try:
+                            items = json.loads(items)
+                        except Exception:
+                            pass
+
+                    if isinstance(items, list):
+                        for i in items:
+                            items_html += f"<p style='color:black; font-size:14px; margin:3px 0;'>- {i.get('name','')} — Qty: {i.get('qty',1)} @ ₱{i.get('price',0)}</p>"
+                    elif isinstance(items, dict):
+                        for name, details in items.items():
+                            items_html += f"<p style='color:black; font-size:14px; margin:3px 0;'>- {name} — Qty: {details.get('qty',1)} @ ₱{details.get('price',0)}</p>"
+
+                    # 🧱 Render everything together in one HTML container
+                    order_html = f"""
                         <div style="
                             background-color: #fff;
                             border: 2px solid #FF6F61;
@@ -871,41 +877,17 @@ elif st.session_state.page == "main":
                             </div>
                             <div style="flex: 1; min-width: 250px;">
                                 <h4 style='color:#FF6F61;'>🧾 Ordered Items:</h4>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                    # 🧾 Ordered items inside the same box (small font)
-                    items = row.get("items")
-                    if isinstance(items, str):
-                        try:
-                            items = json.loads(items)
-                        except Exception:
-                            pass
-
-                    if isinstance(items, list):
-                        for i in items:
-                            st.markdown(
-                                f"<p style='color:black; font-size:14px; margin:2px 0;'>- {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</p>",
-                                unsafe_allow_html=True,
-                            )
-                    elif isinstance(items, dict):
-                        for name, details in items.items():
-                            st.markdown(
-                                f"<p style='color:black; font-size:14px; margin:2px 0;'>- {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</p>",
-                                unsafe_allow_html=True,
-                            )
-
-                    # ✅ Close the container div
-                    st.markdown("</div></div>", unsafe_allow_html=True)
+                                {items_html}
+                            </div>
+                        </div>
+                    """
+                    st.markdown(order_html, unsafe_allow_html=True)
 
                     # ✅ Mark as Ready button
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
-
                         notify_user_id = row.get("user_id") or "Guest"
                         add_notification(notify_user_id, f"Your order #{order_id} is ready for pickup!")
-
                         st.success(f"Order #{order_id} marked as Ready!")
                         st.rerun()
 
