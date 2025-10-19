@@ -578,23 +578,39 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
 def load_receipts_df():
     """Load all receipts from the database or local fallback."""
     conn = get_connection()
+    expected_cols = [
+        "order_id", "user_id", "items", "total",
+        "payment_method", "pickup_time", "status", "timestamp"
+    ]
+
+    # --- Local fallback ---
     if not conn:
-        # --- Local fallback ---
         if "_local_receipts" not in st.session_state:
             st.session_state._local_receipts = []
         rows = st.session_state._local_receipts
-        return pd.DataFrame(rows) if rows else pd.DataFrame(columns=[
-            "user_id", "items", "total", "timestamp"
-        ])
+        df = pd.DataFrame(rows)
+        # Ensure all expected columns exist
+        for col in expected_cols:
+            if col not in df.columns:
+                df[col] = None
+        return df[expected_cols]
 
+    # --- Load from Snowflake ---
     try:
         cur = conn.cursor()
-        cur.execute("SELECT user_id, items, total, timestamp FROM receipts ORDER BY timestamp DESC")
+        sql = """
+            SELECT order_id, user_id, items, total, payment_method, pickup_time, status, timestamp
+            FROM receipts
+            ORDER BY timestamp DESC
+        """
+        cur.execute(sql)
         rows = cur.fetchall()
-        return pd.DataFrame(rows, columns=["user_id", "items", "total", "timestamp"])
+        df = pd.DataFrame(rows, columns=expected_cols)
+        return df
     except Exception as e:
         print(f"❌ Error loading receipts: {e}")
-        return pd.DataFrame(columns=["user_id", "items", "total", "timestamp"])
+        # Return empty DataFrame with all expected columns
+        return pd.DataFrame(columns=expected_cols)
     finally:
         try:
             cur.close()
