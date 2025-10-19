@@ -871,23 +871,40 @@ elif st.session_state.page == "main":
 
                 st.divider()
 
-                # --- SALES TREND ---
-                st.subheader("📈 Sales Trend")
-                sales_trend = receipts.groupby(receipts["timestamp"].dt.date)["total"].sum().reset_index()
-                sales_trend.columns = ["Date", "Total Sales"]
+                # --- SALES BY DAY OF MONTH ---
+                st.subheader("📅 Sales by Day of the Month")
+                receipts["day_of_month"] = receipts["timestamp"].dt.day
+                daily_sales = receipts.groupby("day_of_month")["total"].sum().reset_index()
+                daily_sales.columns = ["Day of Month", "Total Sales"]
 
-                if not sales_trend.empty:
-                    fig, ax = plt.subplots(figsize=(4, 2.5))  # small chart
-                    ax.plot(sales_trend["Date"], sales_trend["Total Sales"], marker="o", linewidth=2)
-                    ax.set_title("💵 Daily Sales Trend", fontsize=10)
-                    ax.set_xlabel("Date", fontsize=8)
-                    ax.set_ylabel("Revenue (₱)", fontsize=8)
-                    ax.set_ylim(0, 500)  # manual upper limit
-                    ax.tick_params(axis='x', rotation=45, labelsize=7)
-                    ax.tick_params(axis='y', labelsize=7)
-                    st.pyplot(fig)
-                else:
-                    st.info("No trend data available yet.")
+                fig, ax = plt.subplots(figsize=(6, 3))
+                ax.plot(daily_sales["Day of Month"], daily_sales["Total Sales"], marker="o", linestyle='-', color='tab:blue')
+                ax.set_title("Sales Activity by Day of the Month", fontsize=10)
+                ax.set_xlabel("Day of Month", fontsize=8)
+                ax.set_ylabel("Total Sales (₱)", fontsize=8)
+                ax.tick_params(axis='x', rotation=45, labelsize=7)
+                ax.tick_params(axis='y', labelsize=7)
+                st.pyplot(fig)
+
+                st.divider()
+
+                # --- SALES BY DAY OF WEEK ---
+                st.subheader("📆 Sales by Day of the Week")
+                receipts["day_of_week"] = receipts["timestamp"].dt.dayofweek
+                weekly_sales = receipts.groupby("day_of_week")["total"].sum().reset_index()
+                weekly_sales.columns = ["Day of Week", "Total Sales"]
+                weekly_sales["Day of Week"] = weekly_sales["Day of Week"].map({
+                    0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"
+                })
+
+                fig, ax = plt.subplots(figsize=(6, 3))
+                ax.plot(weekly_sales["Day of Week"], weekly_sales["Total Sales"], marker="o", linestyle='-', color='tab:green')
+                ax.set_title("Sales Activity by Day of the Week", fontsize=10)
+                ax.set_xlabel("Day of Week", fontsize=8)
+                ax.set_ylabel("Total Sales (₱)", fontsize=8)
+                ax.tick_params(axis='x', rotation=45, labelsize=7)
+                ax.tick_params(axis='y', labelsize=7)
+                st.pyplot(fig)
 
                 st.divider()
 
