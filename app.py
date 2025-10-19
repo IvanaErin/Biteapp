@@ -948,10 +948,12 @@ elif st.session_state.page == "main":
                 all_items = []
 
                 def parse_items(data):
+                    """Ensure items are returned as a list of dicts, safely parsed from JSON if needed."""
                     if isinstance(data, str):
                         try:
-                            return json.loads(data)
-                        except:
+                            parsed = json.loads(data)
+                            return parsed if isinstance(parsed, list) else []
+                        except Exception:
                             return []
                     elif isinstance(data, list):
                         return data
@@ -959,9 +961,15 @@ elif st.session_state.page == "main":
                         return []
 
                 for _, row in receipts.iterrows():
-                    for it in parse_items(row.get("items", [])):
-                        name = it.get("name", "Unknown")
-                        qty = int(it.get("qty", 1))
+                    items = parse_items(row.get("items", []))
+                    for it in items:
+                        if isinstance(it, dict):
+                            name = it.get("name", "Unknown")
+                            qty = int(it.get("qty", 1))
+                        else:
+                            # Handle malformed or string entries gracefully
+                            name = str(it)
+                            qty = 1
                         all_items.append({"Item": name, "Quantity Sold": qty})
 
                 if not all_items:
@@ -974,7 +982,7 @@ elif st.session_state.page == "main":
                         .sort_values(by="Quantity Sold", ascending=False)
                     )
 
-                    # --- PIE CHART WITH LEGEND BESIDE (no table) ---
+                    # --- PIE CHART WITH LEGEND BESIDE ---
                     fig, ax = plt.subplots(figsize=(6, 5))
                     wedges, texts, autotexts = ax.pie(
                         sales_summary["Quantity Sold"],
@@ -984,7 +992,6 @@ elif st.session_state.page == "main":
                         labeldistance=1.1
                     )
 
-                    # Legend beside chart
                     ax.legend(
                         wedges,
                         sales_summary["Item"],
@@ -993,12 +1000,11 @@ elif st.session_state.page == "main":
                         bbox_to_anchor=(1, 0, 0.5, 1)
                     )
 
-                    # Improve percentage visibility
                     for autotext in autotexts:
                         autotext.set_color("black")
                         autotext.set_fontsize(8)
 
-                    ax.axis("equal")  # Keep pie circular
+                    ax.axis("equal")
                     st.pyplot(fig)
 
     # ---------------------------
