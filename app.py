@@ -958,7 +958,6 @@ elif st.session_state.page == "main":
             else:
                 all_items = []
 
-                # Helper to safely parse items JSON or list
                 def parse_items(data):
                     if isinstance(data, str):
                         try:
@@ -974,34 +973,46 @@ elif st.session_state.page == "main":
                     for it in parse_items(row.get("items", [])):
                         name = it.get("name", "Unknown")
                         qty = int(it.get("qty", 1))
-                        all_items.append({"ITEM_NAME": name, "QUANTITY": qty})
+                        all_items.append({"Item": name, "Quantity Sold": qty})
 
                 if not all_items:
                     st.warning("No item sales data found yet.")
                 else:
                     sales_summary = (
                         pd.DataFrame(all_items)
-                        .groupby("ITEM_NAME", as_index=False)
+                        .groupby("Item", as_index=False)
                         .sum()
-                        .sort_values(by="QUANTITY", ascending=False)
+                        .sort_values(by="Quantity Sold", ascending=False)
                     )
 
+                    st.markdown("### 🧾 Item Sales Summary")
                     st.dataframe(sales_summary, use_container_width=True)
 
-                    fig, ax = plt.subplots(figsize=(5, 5))
+                    # --- PIE CHART WITH LEGEND BESIDE ---
+                    fig, ax = plt.subplots(figsize=(6, 5))
                     wedges, texts, autotexts = ax.pie(
-                        sales_summary["QUANTITY"],
-                        labels=sales_summary["ITEM_NAME"],
+                        sales_summary["Quantity Sold"],
                         autopct="%1.1f%%",
                         startangle=90,
-                        pctdistance=0.85,
-                        labeldistance=1.15
+                        pctdistance=0.8,
+                        labeldistance=1.1
                     )
+
+                    # Create legend beside chart
+                    ax.legend(
+                        wedges,
+                        sales_summary["Item"],
+                        title="Items",
+                        loc="center left",
+                        bbox_to_anchor=(1, 0, 0.5, 1)
+                    )
+
+                    # Improve percentage visibility
                     for autotext in autotexts:
                         autotext.set_color("black")
-                        autotext.set_fontsize(9)
+                        autotext.set_fontsize(8)
 
-                    ax.axis("equal")
+                    ax.axis("equal")  # Keep pie circular
                     st.pyplot(fig)
 
     # ---------------------------
