@@ -54,9 +54,11 @@ def set_background(image_file: str | None = None, plain_white: bool = False):
             }}
             """
         )
-        text_color = "#fff"  # white text on login
+        text_color = "#fff"
+        input_bg = "rgba(0,0,0,0.55)"
+        button_bg = "#FF6F61"
+        button_text = "#fff"
     else:
-        # Plain white background for all other pages
         css_parts.append(
             """
             [data-testid="stAppViewContainer"] {
@@ -64,38 +66,40 @@ def set_background(image_file: str | None = None, plain_white: bool = False):
             }
             """
         )
-        text_color = "#000"  # black text on white portals
+        text_color = "#000"
+        input_bg = "#fff"
+        button_bg = "#FF6F61"
+        button_text = "#fff"
 
-    # Common styles
     css_parts.append(
         f"""
-        [data-testid="stAppViewContainer"] > section:first-child {{
-            padding-top: 18px !important;
-            margin-top: 0px !important;
+        .stContainer, .stMarkdown, .stExpander {{
+            color: {text_color};
         }}
-        #MainMenu {{ visibility: hidden; }}
-        footer {{ visibility: hidden; }}
+
+        .stTextInput>div>div>input, .stTextInput>div>div>div>input {{
+            background: {input_bg};
+            color: {text_color};
+        }}
+
+        div.stButton > button {{
+            background-color: {button_bg};
+            color: {button_text};
+            border: none;
+            border-radius: 8px;
+            width: 100%;
+            height: 44px;
+            font-size: 15px;
+        }}
+
         .login-card {{
-            background: rgba(10,10,10,0.6);
+            background: {'rgba(10,10,10,0.6)' if not plain_white else 'transparent'};
             padding: 1.6rem;
             border-radius: 12px;
             max-width: 840px;
             margin: 18px auto;
-            color: #fff;
-            box-shadow: 0 8px 28px rgba(0,0,0,0.5);
-        }}
-        div.stButton > button {{
-            width: 100%;
-            height: 44px;
-            font-size: 15px;
-            border-radius: 8px;
-        }}
-        .stTextInput>div>div>input, .stTextInput>div>div>div>input {{
-            background: rgba(0,0,0,0.55);
-            color: #fff;
-        }}
-        .stContainer, .stMarkdown, .stExpander {{
             color: {text_color};
+            box-shadow: 0 8px 28px rgba(0,0,0,0.5);
         }}
         """
     )
@@ -398,10 +402,6 @@ def upsert_menu(df: pd.DataFrame):
         except Exception:
             pass
 
-
-# ---------------------------
-# MENU + SENTIMENT DISPLAY
-# ---------------------------
 # ---------------------------
 # MENU + SENTIMENT DISPLAY (Dynamic per item)
 # ---------------------------
