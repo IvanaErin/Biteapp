@@ -798,15 +798,8 @@ elif st.session_state.page == "main":
         elif choice == "Pending Orders":
             st.markdown("<h2 style='color:#FF6F61;'>📦 Pending Orders</h2>", unsafe_allow_html=True)
 
-            # 🔄 Manual refresh button
+            # 🔄 Manual refresh button — only refresh when clicked
             if st.button("🔄 Refresh Orders"):
-                st.session_state["last_refresh"] = datetime.now()
-                st.rerun()
-
-            # 🔁 Auto-refresh every 10 seconds
-            refresh_interval = 10  # seconds
-            last_refresh = st.session_state.get("last_refresh", datetime.now())
-            if (datetime.now() - last_refresh).seconds >= refresh_interval:
                 st.session_state["last_refresh"] = datetime.now()
                 st.rerun()
 
@@ -862,7 +855,7 @@ elif st.session_state.page == "main":
                             padding: 15px 20px;
                             margin-bottom: 15px;
                             box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-                            color: #000000;  /* All text black */
+                            color: #000000;
                         ">
                             <h4 style='color:#FF6F61;'>Order #{order_id}</h4>
                             <p><b>User:</b> {user_id}</p>
@@ -873,21 +866,6 @@ elif st.session_state.page == "main":
                         """,
                         unsafe_allow_html=True,
                     )
-
-                    # 🧾 Show items cleanly
-                    items = row.get("items")
-                    if isinstance(items, str):
-                        try:
-                            items = json.loads(items)
-                        except Exception:
-                            pass
-
-                    if isinstance(items, list):
-                        for i in items:
-                            st.markdown(f"<span style='color:black;'>- {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</span>", unsafe_allow_html=True)
-                    elif isinstance(items, dict):
-                        for name, details in items.items():
-                            st.markdown(f"<span style='color:black;'>- {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</span>", unsafe_allow_html=True)
 
                     # ✅ Mark ready button
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
