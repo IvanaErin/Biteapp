@@ -547,21 +547,20 @@ def clear_notifications_for_user(user_id: str):
             pass
 
 
-def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, status="Pending"):
+def save_receipt(order_id, items, total, payment_method, user_id, pickup_time, status="Pending"):
     conn = get_connection()
     if not conn:
         return False
 
     try:
         cur = conn.cursor()
-        # Convert items dict to string (if needed)
         items_str = json.dumps(items)
 
-        sql = f"""
-            INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_dt, status, timestamp)
+        sql = """
+            INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_time, status, timestamp)
             VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         """
-        cur.execute(sql, (order_id, items_str, total, payment_method, user_id, pickup_dt, status))
+        cur.execute(sql, (order_id, items_str, total, payment_method, user_id, pickup_time, status))
         conn.commit()
         return True
     except Exception as e:
@@ -573,7 +572,6 @@ def save_receipt(order_id, items, total, payment_method, user_id, pickup_dt, sta
             conn.close()
         except Exception:
             pass
-
 
 def load_receipts_df():
     """Load all receipts from the database or local fallback."""
@@ -1122,16 +1120,18 @@ elif st.session_state.page == "main":
 
             st.divider()
             st.subheader("⭐ Feedbacks")
-            if not is_guest:
+
+            # Only allow feedbacks for logged-in (non-guest) users
+            if is_guest or not user.get("username"):
+                st.warning("Guests cannot submit feedbacks. Please log in to share your thoughts.")
+            else:
                 with st.form("feedback_form"):
                     item = st.selectbox("Item", menu_df["ITEM"].unique())
                     fb = st.text_area("Your feedback")
                     rt = st.slider("Rating", 1, 5, 3)
                     if st.form_submit_button("Submit"):
                         save_feedback(item, fb, rt, user["username"])
-                        st.success("Feedback submitted!")
-            else:
-                st.warning("Guests cannot submit feedbacks.")
+                        st.success("✅ Feedback submitted!")
 
             st.divider()
             st.subheader("📢 Notifications")
