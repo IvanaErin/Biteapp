@@ -963,6 +963,8 @@ elif st.session_state.page == "main":
 
         elif choice == "Sales Report":
             st.subheader("💰 Sales Breakdown")
+
+            # 🔄 Always load latest receipts from database
             receipts = load_receipts_df()
             local = st.session_state.get("_local_receipts", [])
             if local:
@@ -975,73 +977,88 @@ elif st.session_state.page == "main":
                 receipts["status"] = receipts["status"].astype(str).str.strip().str.lower()
                 receipts = receipts[receipts["status"].isin(["ready", "completed"])]
 
-                all_items = []
+                if receipts.empty:
+                    st.info("No ready or completed orders yet.")
+                else:
+                    all_items = []
 
-                def parse_items(data):
-                    """Ensure items are returned as a list of dicts, safely parsed from JSON if needed."""
-                    if isinstance(data, str):
+                    # ✅ FIXED PARSER (handles single quotes, malformed JSON, or list directly)
+                    def parse_items(data):
+                        """Safely parse items JSON from DB even if it's single-quoted or malformed."""
+                        if isinstance(data, list):
+                            return data
+
+                        if not isinstance(data, str):
+                            return []
+
+                        data = data.strip()
+
+                        # Try proper JSON first
                         try:
                             parsed = json.loads(data)
-                            return parsed if isinstance(parsed, list) else []
+                            if isinstance(parsed, list):
+                                return parsed
                         except json.JSONDecodeError:
-                            # Try to handle single-quote formatted JSON (from some DBs)
-                            try:
-                                return json.loads(data.replace("'", '"'))
-                            except Exception:
-                                return []
+                            pass
+
+                        # Try fixing single quotes and backslashes
+                        try:
+                            fixed = data.replace("'", '"').replace("\\", "")
+                            parsed = json.loads(fixed)
+                            if isinstance(parsed, list):
+                                return parsed
                         except Exception:
-                            return []
-                    elif isinstance(data, list):
-                        return data
-                    else:
+                            pass
+
                         return []
 
-                for _, row in receipts.iterrows():
-                    items = parse_items(row.get("items", []))
-                    for it in items:
-                        if isinstance(it, dict):
-                            name = it.get("name", "Unknown")
-                            qty = int(it.get("qty", 1))
-                        else:
-                            # Handle malformed or string entries gracefully
-                            name = str(it)
-                            qty = 1
-                        all_items.append({"Item": name, "Quantity Sold": qty})
+                    # 🔍 Loop through receipts and extract items
+                    for _, row in receipts.iterrows():
+                        items = parse_items(row.get("items", []))
+                        for it in items:
+                            if isinstance(it, dict):
+                                name = it.get("name", "Unknown")
+                                qty = int(it.get("qty", 1))
+                            else:
+                                name = str(it)
+                                qty = 1
+                            all_items.append({"Item": name, "Quantity Sold": qty})
 
-                if not all_items:
-                    st.warning("No item sales data found yet.")
-                else:
-                    sales_summary = (
-                        pd.DataFrame(all_items)
-                        .groupby("Item", as_index=False)
-                        .sum()
-                        .sort_values(by="Quantity Sold", ascending=False)
-                    )
+                    # 🧾 If still empty
+                    if not all_items:
+                        st.warning("No item sales data found yet.")
+                    else:
+                        sales_summary = (
+                            pd.DataFrame(all_items)
+                            .groupby("Item", as_index=False)
+                            .sum()
+                            .sort_values(by="Quantity Sold", ascending=False)
+                        )
 
-                    # --- PIE CHART WITH LEGEND BESIDE ---
-                    fig, ax = plt.subplots(figsize=(6, 5))
-                    wedges, texts, autotexts = ax.pie(
-                        sales_summary["Quantity Sold"],
-                        autopct="%1.1f%%",
-                        startangle=90,
-                        pctdistance=0.8,
-                        labeldistance=1.1
-                    )
+                        # --- PIE CHART WITH LEGEND BESIDE ---
+                        fig, ax = plt.subplots(figsize=(6, 5))
+                        wedges, texts, autotexts = ax.pie(
+                            sales_summary["Quantity Sold"],
+                            autopct="%1.1f%%",
+                            startangle=90,
+                            pctdistance=0.8,
+                            labeldistance=1.1
+                        )
 
-                    ax.legend(
-                        wedges,
-                        sales_summary["Item"],
-                        title="Items",
-                        loc="center left",
-                        bbox_to_anchor=(1, 0, 0.5, 1)
-                    )
+                        ax.legend(
+                            wedges,
+                            sales_summary["Item"],
+                            title="Items",
+                            loc="center left",
+                            bbox_to_anchor=(1, 0, 0.5, 1)
+                        )
 
-                    for autotext in autotexts:
-                        autotext.set_color("black")
-                        autotext.set_fontsize(8)
+                        for autotext in autotexts:
+                            autotext.set_color("black")
+                            autotext.set_fontsize(8)
 
-                    ax.axis("equal")
-                    st.pyplot(fig)
+                        ax.axis("equal")
+                        st.pyplot(fig)
 
     # ---------------------------
     # NON-STAFF / GUEST PORTAL
