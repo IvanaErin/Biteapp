@@ -1121,8 +1121,11 @@ elif st.session_state.page == "main":
             st.divider()
             st.subheader("⭐ Feedbacks")
 
-            # Only allow feedbacks for logged-in (non-guest) users
-            if is_guest or not user.get("username"):
+            # Detect if user is guest (no username or explicitly Guest)
+            username = user.get("username", "")
+            is_guest = not username or username.lower() == "guest"
+
+            if is_guest:
                 st.warning("Guests cannot submit feedbacks. Please log in to share your thoughts.")
             else:
                 with st.form("feedback_form"):
@@ -1130,7 +1133,7 @@ elif st.session_state.page == "main":
                     fb = st.text_area("Your feedback")
                     rt = st.slider("Rating", 1, 5, 3)
                     if st.form_submit_button("Submit"):
-                        save_feedback(item, fb, rt, user["username"])
+                        save_feedback(item, fb, rt, username)
                         st.success("✅ Feedback submitted!")
 
             st.divider()
@@ -1139,17 +1142,14 @@ elif st.session_state.page == "main":
             # Use "Guest" if user is not logged in
             user_id = user.get("username") if user.get("username") else "Guest"
 
-            # 🔄 Manual refresh button
-            if st.button("🔄 Refresh Notifications"):
-                st.session_state["last_notif_refresh"] = datetime.now()
+            # 🔄 Manual Refresh Button — only triggers once
+            if st.button("🔄 Refresh Data"):
+                st.session_state["manual_refresh"] = True
                 st.rerun()
 
-            # 🔁 Auto-refresh every 10 seconds
-            notif_refresh_interval = 10  # seconds
-            last_notif_refresh = st.session_state.get("last_notif_refresh", datetime.now())
-            if (datetime.now() - last_notif_refresh).seconds >= notif_refresh_interval:
-                st.session_state["last_notif_refresh"] = datetime.now()
-                st.rerun()
+            if st.session_state.get("manual_refresh"):
+                # Perform your refresh logic here (reload menu, receipts, notifications, etc.)
+                st.session_state["manual_refresh"] = False
 
             notes = get_notifications_for_user(user_id)
             if notes:
