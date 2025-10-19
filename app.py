@@ -104,13 +104,10 @@ def set_background(image_file: str | None = None, plain_white: bool = False):
 # ---------------------------
 # APPLY BACKGROUND BASED ON PAGE
 # ---------------------------
-# Make sure `choice` is set before calling set_background
-choice = st.session_state.get("choice", "Login")  # or wherever you store the current page
-
-if choice == "Login":
-    set_background("back.jpg")  # Image only for login
+if st.session_state.page == "login":
+    set_background("back.jpg")  # Image background only on login
 else:
-    set_background(plain_white=True)  # White background for all other portals
+    set_background(plain_white=True)  # White background for all other pages
 
 # ---------------------------
 # SNOWFLAKE CONNECTION
