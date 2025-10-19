@@ -795,129 +795,100 @@ elif st.session_state.page == "main":
             st.subheader("📊 Staff Dashboard")
             st.info("Metrics and KPIs coming soon.")
 
-        elif choice == "Pending Orders":
-            st.markdown("<h2 style='color:#FF6F61;'>📦 Pending Orders</h2>", unsafe_allow_html=True)
+elif choice == "Pending Orders":
+    st.markdown("<h2 style='color:#FF6F61;'>📦 Pending Orders</h2>", unsafe_allow_html=True)
 
-            # 🔄 Manual refresh button — only refresh when clicked
-            if st.button("🔄 Refresh Orders"):
-                st.session_state["last_refresh"] = datetime.now()
+    # 🔄 Manual refresh
+    if st.button("🔄 Refresh Orders"):
+        st.session_state["last_refresh"] = datetime.now()
+        st.rerun()
+
+    receipts = load_receipts_df()
+    local = st.session_state.get("_local_receipts", [])
+    if local:
+        local_df = pd.DataFrame(local)
+        if "pickup_dt" in local_df.columns:
+            local_df = local_df.rename(columns={"pickup_dt": "pickup_time"})
+        required_cols = ["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
+        for col in required_cols:
+            if col not in local_df.columns:
+                local_df[col] = None
+        if receipts is None or receipts.empty:
+            receipts = local_df
+        else:
+            receipts = pd.concat([receipts, local_df], ignore_index=True)
+
+    if receipts is not None and not receipts.empty:
+        receipts["user_id"] = receipts["user_id"].fillna("Guest").astype(str).str.strip()
+        pending_orders = receipts[receipts["status"].astype(str).str.lower() == "pending"]
+    else:
+        pending_orders = pd.DataFrame()
+
+    if not pending_orders.empty:
+        for _, row in pending_orders.iterrows():
+            order_id = row.get("order_id")
+            user_id = row.get("user_id") or "Guest"
+            payment = row.get("payment_method", "N/A")
+            total = row.get("total", 0)
+            pickup_time = row.get("pickup_time", "N/A")
+            items = row.get("items")
+
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except Exception:
+                    items = []
+            elif not isinstance(items, (list, dict)):
+                items = []
+
+            # 🔲 Stylish card with 2-column grid layout
+            html = f"""
+            <div style="
+                background-color: #fff;
+                border: 2px solid #FF6F61;
+                border-radius: 15px;
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+                color: #000;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 40px;
+                align-items: start;
+            ">
+                <div>
+                    <h4 style='color:#FF6F61; margin-bottom:5px;'>Order #{order_id}</h4>
+                    <p><b>User:</b> {user_id}</p>
+                    <p><b>Payment:</b> {payment}</p>
+                    <p><b>Total:</b> ₱{total:.2f}</p>
+                    <p><b>Pickup Time:</b> {pickup_time}</p>
+                </div>
+                <div>
+                    <p><b>🧾 Ordered Items:</b></p>
+            """
+
+            # Add items cleanly
+            if isinstance(items, list) and items:
+                for i in items:
+                    html += f"<p style='margin:0;'>• {i.get('name','')} — Qty: {i.get('qty',1)} @ ₱{i.get('price',0)}</p>"
+            elif isinstance(items, dict) and items:
+                for name, details in items.items():
+                    html += f"<p style='margin:0;'>• {name} — Qty: {details.get('qty',1)} @ ₱{details.get('price',0)}</p>"
+            else:
+                html += "<i style='color:gray;'>No items found.</i>"
+
+            html += "</div></div>"
+            st.markdown(html, unsafe_allow_html=True)
+
+            # ✅ Button below card
+            if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
+                update_order_status(order_id, "Ready")
+                notify_user_id = row.get("user_id") or "Guest"
+                add_notification(notify_user_id, f"Your order #{order_id} is ready for pickup!")
+                st.success(f"Order #{order_id} marked as Ready!")
                 st.rerun()
-
-            # --- Load orders from Snowflake ---
-            receipts = load_receipts_df()
-
-            # --- Load local guest receipts ---
-            local = st.session_state.get("_local_receipts", [])
-            if local:
-                local_df = pd.DataFrame(local)
-
-                # Rename pickup_dt → pickup_time for consistency
-                if "pickup_dt" in local_df.columns:
-                    local_df = local_df.rename(columns={"pickup_dt": "pickup_time"})
-
-                # Ensure all required columns exist
-                required_cols = ["order_id","items","total","payment_method","user_id","pickup_time","status","timestamp"]
-                for col in required_cols:
-                    if col not in local_df.columns:
-                        local_df[col] = None
-
-                # Merge local with DB receipts
-                if receipts is None or receipts.empty:
-                    receipts = local_df
-                else:
-                    receipts = pd.concat([receipts, local_df], ignore_index=True)
-
-            # --- Normalize guest user_id ---
-            if receipts is not None and not receipts.empty:
-                receipts["user_id"] = receipts["user_id"].fillna("Guest").astype(str).str.strip()
-
-            # --- Filter pending ---
-            if receipts is not None and not receipts.empty:
-                pending_orders = receipts[receipts["status"].astype(str).str.lower() == "pending"]
-            else:
-                pending_orders = pd.DataFrame()
-
-            # --- Display styled cards ---
-            if not pending_orders.empty:
-                for idx, row in pending_orders.iterrows():
-                    order_id = row.get("order_id")
-                    user_id = row.get("user_id") or "Guest"
-                    payment = row.get("payment_method", "N/A")
-                    total = row.get("total", 0)
-                    pickup_time = row.get("pickup_time", "N/A")
-
-                    # --- Create bordered container ---
-                    st.markdown(
-                        f"""
-                        <div style="
-                            background-color: #fff;
-                            border: 2px solid #FF6F61;
-                            border-radius: 15px;
-                            padding: 20px;
-                            margin-bottom: 20px;
-                            box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-                            color: #000000;
-                        ">
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                    # --- Create columns inside container ---
-                    left_col, right_col = st.columns([1.2, 1])
-
-                    with left_col:
-                        st.markdown(
-                            f"""
-                            <h4 style='color:#FF6F61; margin-bottom:5px;'>Order #{order_id}</h4>
-                            <p><b>User:</b> {user_id}</p>
-                            <p><b>Payment:</b> {payment}</p>
-                            <p><b>Total:</b> ₱{total:.2f}</p>
-                            <p><b>Pickup Time:</b> {pickup_time}</p>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-
-                    with right_col:
-                        items = row.get("items")
-                        if isinstance(items, str):
-                            try:
-                                items = json.loads(items)
-                            except Exception:
-                                items = []
-
-                        st.markdown("<p><b>🧾 Ordered Items:</b></p>", unsafe_allow_html=True)
-
-                        if isinstance(items, list) and items:
-                            for i in items:
-                                st.markdown(
-                                    f"<p style='color:black; margin:0;'>• {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</p>",
-                                    unsafe_allow_html=True,
-                                )
-                        elif isinstance(items, dict) and items:
-                            for name, details in items.items():
-                                st.markdown(
-                                    f"<p style='color:black; margin:0;'>• {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</p>",
-                                    unsafe_allow_html=True,
-                                )
-                        else:
-                            st.markdown("<i style='color:gray;'>No items found.</i>", unsafe_allow_html=True)
-
-                    # ✅ Mark ready button centered below columns
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
-                        update_order_status(order_id, "Ready")
-
-                        # --- Send notification to user (guest or non-staff) ---
-                        notify_user_id = row.get("user_id") or "Guest"
-                        add_notification(notify_user_id, f"Your order #{order_id} is ready for pickup!")
-
-                        st.success(f"Order #{order_id} marked as Ready!")
-                        st.rerun()
-
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    st.divider()
-            else:
-                st.info("No pending orders found.")
+    else:
+        st.info("No pending orders found.")
 
         elif choice == "Manage Menu":
             st.subheader("📖 Manage Menu")
