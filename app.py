@@ -589,27 +589,23 @@ def load_receipts_df():
             st.session_state._local_receipts = []
         rows = st.session_state._local_receipts
         df = pd.DataFrame(rows)
-        # Ensure all expected columns exist
         for col in expected_cols:
             if col not in df.columns:
                 df[col] = None
         return df[expected_cols]
 
-    # --- Load from Snowflake ---
     try:
         cur = conn.cursor()
-        sql = """
+        cur.execute("""
             SELECT order_id, user_id, items, total, payment_method, pickup_time, status, timestamp
             FROM receipts
             ORDER BY timestamp DESC
-        """
-        cur.execute(sql)
+        """)
         rows = cur.fetchall()
         df = pd.DataFrame(rows, columns=expected_cols)
         return df
     except Exception as e:
         print(f"❌ Error loading receipts: {e}")
-        # Return empty DataFrame with all expected columns
         return pd.DataFrame(columns=expected_cols)
     finally:
         try:
@@ -961,17 +957,36 @@ elif st.session_state.page == "main":
                 st.info("No sales yet.")
             else:
                 all_items = []
+
+                # Helper to safely parse items JSON or list
+                def parse_items(data):
+                    if isinstance(data, str):
+                        try:
+                            return json.loads(data)
+                        except:
+                            return []
+                    elif isinstance(data, list):
+                        return data
+                    else:
+                        return []
+
                 for _, row in receipts.iterrows():
-                    try:
-                        for it in _normalize_items_for_receipt(row.get("items", [])):
-                            all_items.append({
-                                "ITEM_NAME": it.get("name", "Unknown"),
-                                "QUANTITY": int(it.get("qty", 1))
-                            })
-                    except Exception:
-                        pass
-                if all_items:
-                    sales_summary = pd.DataFrame(all_items).groupby("ITEM_NAME", as_index=False).sum()
+                    for it in parse_items(row.get("items", [])):
+                        name = it.get("name", "Unknown")
+                        qty = int(it.get("qty", 1))
+                        all_items.append({"ITEM_NAME": name, "QUANTITY": qty})
+
+                if not all_items:
+                    st.warning("No item sales data found yet.")
+                else:
+                    sales_summary = (
+                        pd.DataFrame(all_items)
+                        .groupby("ITEM_NAME", as_index=False)
+                        .sum()
+                        .sort_values(by="QUANTITY", ascending=False)
+                    )
+
+                    st.dataframe(sales_summary, use_container_width=True)
 
                     fig, ax = plt.subplots(figsize=(5, 5))
                     wedges, texts, autotexts = ax.pie(
@@ -979,16 +994,14 @@ elif st.session_state.page == "main":
                         labels=sales_summary["ITEM_NAME"],
                         autopct="%1.1f%%",
                         startangle=90,
-                        pctdistance=0.8,   # move percentages further out
-                        labeldistance=1.1  # move labels further from center
+                        pctdistance=0.85,
+                        labeldistance=1.15
                     )
-                    
-                    # Make lines connecting labels to slices
                     for autotext in autotexts:
-                        autotext.set_color('black')
-                        autotext.set_fontsize(8)
+                        autotext.set_color("black")
+                        autotext.set_fontsize(9)
 
-                    ax.axis("equal")  # keep pie circular
+                    ax.axis("equal")
                     st.pyplot(fig)
 
     # ---------------------------
