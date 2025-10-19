@@ -846,15 +846,15 @@ elif st.session_state.page == "main":
                     total = row.get("total", 0)
                     pickup_time = row.get("pickup_time", "N/A")
 
-                    # --- Card container ---
+                    # --- Create bordered container ---
                     st.markdown(
                         f"""
                         <div style="
                             background-color: #fff;
                             border: 2px solid #FF6F61;
                             border-radius: 15px;
-                            padding: 15px 20px;
-                            margin-bottom: 15px;
+                            padding: 20px;
+                            margin-bottom: 20px;
                             box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
                             color: #000000;
                         ">
@@ -862,13 +862,13 @@ elif st.session_state.page == "main":
                         unsafe_allow_html=True,
                     )
 
-                    # --- Two-column layout (details + items) ---
-                    left_col, right_col = st.columns([1, 1])
+                    # --- Create columns inside container ---
+                    left_col, right_col = st.columns([1.2, 1])
 
                     with left_col:
                         st.markdown(
                             f"""
-                            <h4 style='color:#FF6F61;'>Order #{order_id}</h4>
+                            <h4 style='color:#FF6F61; margin-bottom:5px;'>Order #{order_id}</h4>
                             <p><b>User:</b> {user_id}</p>
                             <p><b>Payment:</b> {payment}</p>
                             <p><b>Total:</b> ₱{total:.2f}</p>
@@ -884,16 +884,26 @@ elif st.session_state.page == "main":
                                 items = json.loads(items)
                             except Exception:
                                 items = []
-                        st.markdown("<b>🧾 Ordered Items:</b>", unsafe_allow_html=True)
-                        if isinstance(items, list):
-                            for i in items:
-                                st.markdown(f"<span style='color:black;'>• {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</span>", unsafe_allow_html=True)
-                        elif isinstance(items, dict):
-                            for name, details in items.items():
-                                st.markdown(f"<span style='color:black;'>• {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</span>", unsafe_allow_html=True)
 
-                    # ✅ Mark ready button below the two columns
-                    st.markdown("</div>", unsafe_allow_html=True)
+                        st.markdown("<p><b>🧾 Ordered Items:</b></p>", unsafe_allow_html=True)
+
+                        if isinstance(items, list) and items:
+                            for i in items:
+                                st.markdown(
+                                    f"<p style='color:black; margin:0;'>• {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</p>",
+                                    unsafe_allow_html=True,
+                                )
+                        elif isinstance(items, dict) and items:
+                            for name, details in items.items():
+                                st.markdown(
+                                    f"<p style='color:black; margin:0;'>• {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</p>",
+                                    unsafe_allow_html=True,
+                                )
+                        else:
+                            st.markdown("<i style='color:gray;'>No items found.</i>", unsafe_allow_html=True)
+
+                    # ✅ Mark ready button centered below columns
+                    st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
 
@@ -904,6 +914,7 @@ elif st.session_state.page == "main":
                         st.success(f"Order #{order_id} marked as Ready!")
                         st.rerun()
 
+                    st.markdown("</div>", unsafe_allow_html=True)
                     st.divider()
             else:
                 st.info("No pending orders found.")
