@@ -982,33 +982,40 @@ elif st.session_state.page == "main":
                 else:
                     all_items = []
 
-                    # ✅ FIXED PARSER (handles single quotes, malformed JSON, or list directly)
+                    # ✅ IMPROVED PARSER — handles both old (list) and new (dict) formats
                     def parse_items(data):
-                        """Safely parse items JSON from DB even if it's single-quoted or malformed."""
+                        """Handle items as list of dicts OR dict of dicts."""
+                        if isinstance(data, str):
+                            # Try to parse JSON safely
+                            try:
+                                data = json.loads(data)
+                            except Exception:
+                                # Fix single quotes or malformed JSON
+                                try:
+                                    data = json.loads(data.replace("'", '"'))
+                                except Exception:
+                                    return []
+
+                        # Case 1: list of dicts (old format)
                         if isinstance(data, list):
                             return data
 
-                        if not isinstance(data, str):
-                            return []
-
-                        data = data.strip()
-
-                        # Try proper JSON first
-                        try:
-                            parsed = json.loads(data)
-                            if isinstance(parsed, list):
-                                return parsed
-                        except json.JSONDecodeError:
-                            pass
-
-                        # Try fixing single quotes and backslashes
-                        try:
-                            fixed = data.replace("'", '"').replace("\\", "")
-                            parsed = json.loads(fixed)
-                            if isinstance(parsed, list):
-                                return parsed
-                        except Exception:
-                            pass
+                        # Case 2: dict of dicts (new format)
+                        if isinstance(data, dict):
+                            items_list = []
+                            for name, info in data.items():
+                                if isinstance(info, dict):
+                                    qty = int(info.get("qty", 1))
+                                    price = float(info.get("price", 0))
+                                else:
+                                    qty = 1
+                                    price = 0
+                                items_list.append({
+                                    "name": name.strip(),
+                                    "qty": qty,
+                                    "price": price
+                                })
+                            return items_list
 
                         return []
 
@@ -1016,12 +1023,8 @@ elif st.session_state.page == "main":
                     for _, row in receipts.iterrows():
                         items = parse_items(row.get("items", []))
                         for it in items:
-                            if isinstance(it, dict):
-                                name = it.get("name", "Unknown")
-                                qty = int(it.get("qty", 1))
-                            else:
-                                name = str(it)
-                                qty = 1
+                            name = it.get("name", "Unknown").strip()
+                            qty = int(it.get("qty", 1))
                             all_items.append({"Item": name, "Quantity Sold": qty})
 
                     # 🧾 If still empty
