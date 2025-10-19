@@ -818,8 +818,104 @@ elif st.session_state.page == "main":
 
         if choice == "Dashboard":
             st.subheader("📊 Staff Dashboard")
-            st.info("Metrics and KPIs coming soon.")
 
+            # Load receipts data
+            receipts = load_receipts_df()
+
+            if receipts.empty:
+                st.info("No sales data available yet.")
+            else:
+                # Normalize status
+                receipts["status"] = receipts["status"].astype(str).str.strip().str.lower()
+
+                # Parse dates
+                receipts["timestamp"] = pd.to_datetime(receipts["timestamp"], errors="coerce")
+
+                # --- METRICS SECTION ---
+                total_orders = len(receipts)
+                total_sales = receipts["total"].astype(float).sum()
+                ready_orders = (receipts["status"] == "ready").sum()
+                completed_orders = (receipts["status"] == "completed").sum()
+
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("🧾 Total Orders", total_orders)
+                col2.metric("💰 Total Sales", f"₱{total_sales:,.2f}")
+                col3.metric("✅ Completed", completed_orders)
+                col4.metric("🕒 Ready Orders", ready_orders)
+
+                st.divider()
+
+                # --- SALES TREND ---
+                st.subheader("📈 Sales Trend")
+                sales_trend = receipts.groupby(receipts["timestamp"].dt.date)["total"].sum().reset_index()
+                sales_trend.columns = ["Date", "Total Sales"]
+
+                if not sales_trend.empty:
+                    st.line_chart(sales_trend.set_index("Date"))
+                else:
+                    st.info("No trend data available yet.")
+
+                st.divider()
+
+                # --- TOP SELLING ITEMS ---
+                st.subheader("🏆 Top 5 Best-Selling Items")
+
+                def parse_items(data):
+                    if isinstance(data, str):
+                        try:
+                            parsed = json.loads(data)
+                            if isinstance(parsed, list):
+                                return parsed
+                            elif isinstance(parsed, dict):
+                                return [
+                                    {"name": k, **v} for k, v in parsed.items()
+                                ]
+                        except Exception:
+                            return []
+                    elif isinstance(data, list):
+                        return data
+                    return []
+
+                all_items = []
+                for _, row in receipts.iterrows():
+                    items = parse_items(row["items"])
+                    for it in items:
+                        if isinstance(it, dict):
+                            name = it.get("name", str(it))
+                            qty = int(it.get("qty", 1))
+                        else:
+                            name = str(it)
+                            qty = 1
+                        all_items.append({"Item": name, "Quantity Sold": qty})
+
+                if all_items:
+                    df_items = (
+                        pd.DataFrame(all_items)
+                        .groupby("Item", as_index=False)
+                        .sum()
+                        .sort_values(by="Quantity Sold", ascending=False)
+                        .head(5)
+                    )
+                    st.bar_chart(df_items.set_index("Item"))
+                else:
+                    st.info("No item data yet.")
+
+                st.divider()
+
+                # --- RECENT ORDERS TABLE ---
+                st.subheader("🕒 Recent Orders")
+                st.dataframe(
+                    receipts[["order_id", "user_id", "total", "status", "timestamp"]]
+                    .head(10)
+                    .rename(columns={
+                        "order_id": "Order ID",
+                        "user_id": "Customer",
+                        "total": "Total (₱)",
+                        "status": "Status",
+                        "timestamp": "Time"
+                    })
+                )
+                
         elif choice == "Pending Orders":
             st.markdown("<h2 style='color:#FF6F61;'>📦 Pending Orders</h2>", unsafe_allow_html=True)
 
