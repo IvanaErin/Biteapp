@@ -36,9 +36,10 @@ except Exception:
 # ---------------------------
 st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
 
-def set_background(image_file: str | None = None):
+def set_background(image_file: str | None = None, plain_white: bool = False):
     css_parts = []
-    if image_file and os.path.exists(image_file):
+
+    if image_file and os.path.exists(image_file) and not plain_white:
         with open(image_file, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         ext = image_file.split(".")[-1].lower()
@@ -53,7 +54,17 @@ def set_background(image_file: str | None = None):
             }}
             """
         )
+    else:
+        # Plain white background for all other pages
+        css_parts.append(
+            """
+            [data-testid="stAppViewContainer"] {
+                background-color: white;
+            }
+            """
+        )
 
+    # Common styles
     css_parts.append(
         """
         [data-testid="stAppViewContainer"] > section:first-child {
@@ -89,7 +100,17 @@ def set_background(image_file: str | None = None):
 
     st.markdown("<style>" + "\n".join(css_parts) + "</style>", unsafe_allow_html=True)
 
-set_background("back.jpg")
+
+# ---------------------------
+# APPLY BACKGROUND BASED ON PAGE
+# ---------------------------
+# Make sure `choice` is set before calling set_background
+choice = st.session_state.get("choice", "Login")  # or wherever you store the current page
+
+if choice == "Login":
+    set_background("back.jpg")  # Image only for login
+else:
+    set_background(plain_white=True)  # White background for all other portals
 
 # ---------------------------
 # SNOWFLAKE CONNECTION
