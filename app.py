@@ -877,7 +877,15 @@ elif st.session_state.page == "main":
                 sales_trend.columns = ["Date", "Total Sales"]
 
                 if not sales_trend.empty:
-                    st.line_chart(sales_trend.set_index("Date"))
+                    fig, ax = plt.subplots(figsize=(4, 2.5))  # small chart
+                    ax.plot(sales_trend["Date"], sales_trend["Total Sales"], marker="o", linewidth=2)
+                    ax.set_title("💵 Daily Sales Trend", fontsize=10)
+                    ax.set_xlabel("Date", fontsize=8)
+                    ax.set_ylabel("Revenue (₱)", fontsize=8)
+                    ax.set_ylim(0, 500)  # manual upper limit
+                    ax.tick_params(axis='x', rotation=45, labelsize=7)
+                    ax.tick_params(axis='y', labelsize=7)
+                    st.pyplot(fig)
                 else:
                     st.info("No trend data available yet.")
 
@@ -899,20 +907,6 @@ elif st.session_state.page == "main":
                     st.info("No item data yet.")
 
                 st.divider()
-
-                # --- RECENT ORDERS TABLE ---
-                st.subheader("🕒 Recent Orders")
-                st.dataframe(
-                    receipts[["order_id", "user_id", "total", "status", "timestamp"]]
-                    .head(10)
-                    .rename(columns={
-                        "order_id": "Order ID",
-                        "user_id": "Customer",
-                        "total": "Total (₱)",
-                        "status": "Status",
-                        "timestamp": "Time"
-                    })
-                )
 
                 # --- RECENT ORDERS TABLE ---
                 st.subheader("🕒 Recent Orders")
