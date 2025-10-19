@@ -546,6 +546,31 @@ def clear_notifications_for_user(user_id: str):
         except Exception:
             pass
 
+def update_order_status(order_id, new_status):
+    """Update the order status in the receipts table."""
+    conn = get_connection()
+    if not conn:
+        print("⚠️ No DB connection for update_order_status.")
+        return False
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE receipts SET status = %s WHERE order_id = %s",
+            (new_status, order_id)
+        )
+        conn.commit()
+        print(f"✅ Order {order_id} marked as {new_status}.")
+        return True
+    except Exception as e:
+        print(f"❌ Error updating order status: {e}")
+        return False
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
 
 def save_receipt(order_id, items, total, payment_method, user_id, pickup_time, status="Pending"):
     conn = get_connection()
