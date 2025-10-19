@@ -846,52 +846,63 @@ elif st.session_state.page == "main":
                     total = row.get("total", 0)
                     pickup_time = row.get("pickup_time", "N/A")
 
-                    # 🧾 Create a two-column layout for order details and items
-                    left_col, right_col = st.columns([1.3, 1])
-
-                    with left_col:
-                        st.markdown(
-                            f"""
-                            <div style="
-                                background-color: #fff;
-                                border: 2px solid #FF6F61;
-                                border-radius: 15px;
-                                padding: 15px 20px;
-                                margin-bottom: 15px;
-                                box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-                                color: #000000;
-                            ">
+                    # 🧾 Unified container box
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background-color: #fff;
+                            border: 2px solid #FF6F61;
+                            border-radius: 15px;
+                            padding: 15px 20px;
+                            margin-bottom: 15px;
+                            box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+                            color: #000000;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-start;
+                            flex-wrap: wrap;
+                        ">
+                            <div style="flex: 1; min-width: 250px;">
                                 <h4 style='color:#FF6F61;'>Order #{order_id}</h4>
                                 <p><b>User:</b> {user_id}</p>
                                 <p><b>Payment:</b> {payment}</p>
                                 <p><b>Total:</b> ₱{total:.2f}</p>
                                 <p><b>Pickup Time:</b> {pickup_time}</p>
                             </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+                            <div style="flex: 1; min-width: 250px;">
+                                <h4 style='color:#FF6F61;'>🧾 Ordered Items:</h4>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
-                    with right_col:
-                        st.markdown("### 🧾 Ordered Items:")
-                        items = row.get("items")
-                        if isinstance(items, str):
-                            try:
-                                items = json.loads(items)
-                            except Exception:
-                                pass
+                    # 🧾 Ordered items inside the same box (small font)
+                    items = row.get("items")
+                    if isinstance(items, str):
+                        try:
+                            items = json.loads(items)
+                        except Exception:
+                            pass
 
-                        if isinstance(items, list):
-                            for i in items:
-                                st.markdown(f"<span style='color:black;'>- {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</span>", unsafe_allow_html=True)
-                        elif isinstance(items, dict):
-                            for name, details in items.items():
-                                st.markdown(f"<span style='color:black;'>- {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</span>", unsafe_allow_html=True)
+                    if isinstance(items, list):
+                        for i in items:
+                            st.markdown(
+                                f"<p style='color:black; font-size:14px; margin:2px 0;'>- {i.get('name', '')} — Qty: {i.get('qty', 1)} @ ₱{i.get('price', 0)}</p>",
+                                unsafe_allow_html=True,
+                            )
+                    elif isinstance(items, dict):
+                        for name, details in items.items():
+                            st.markdown(
+                                f"<p style='color:black; font-size:14px; margin:2px 0;'>- {name} — Qty: {details.get('qty', 1)} @ ₱{details.get('price', 0)}</p>",
+                                unsafe_allow_html=True,
+                            )
 
-                    # ✅ Mark as ready button
+                    # ✅ Close the container div
+                    st.markdown("</div></div>", unsafe_allow_html=True)
+
+                    # ✅ Mark as Ready button
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
 
-                        # Send notification to user (guest or non-staff)
                         notify_user_id = row.get("user_id") or "Guest"
                         add_notification(notify_user_id, f"Your order #{order_id} is ready for pickup!")
 
