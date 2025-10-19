@@ -985,10 +985,7 @@ elif st.session_state.page == "main":
                         .sort_values(by="Quantity Sold", ascending=False)
                     )
 
-                    st.markdown("### 🧾 Item Sales Summary")
-                    st.dataframe(sales_summary, use_container_width=True)
-
-                    # --- PIE CHART WITH LEGEND BESIDE ---
+                    # --- PIE CHART WITH LEGEND BESIDE (no table) ---
                     fig, ax = plt.subplots(figsize=(6, 5))
                     wedges, texts, autotexts = ax.pie(
                         sales_summary["Quantity Sold"],
@@ -998,7 +995,7 @@ elif st.session_state.page == "main":
                         labeldistance=1.1
                     )
 
-                    # Create legend beside chart
+                    # Legend beside chart
                     ax.legend(
                         wedges,
                         sales_summary["Item"],
