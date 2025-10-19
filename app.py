@@ -972,7 +972,8 @@ elif st.session_state.page == "main":
                 st.info("No sales yet.")
             else:
                 # 🩶 Include both 'Ready' and 'Completed' orders in the summary
-                receipts = receipts[receipts["status"].astype(str).str.lower().isin(["ready", "completed"])]
+                receipts["status"] = receipts["status"].astype(str).str.strip().str.lower()
+                receipts = receipts[receipts["status"].isin(["ready", "completed"])]
 
                 all_items = []
 
