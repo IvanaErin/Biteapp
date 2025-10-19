@@ -967,9 +967,13 @@ elif st.session_state.page == "main":
             local = st.session_state.get("_local_receipts", [])
             if local:
                 receipts = pd.concat([receipts, pd.DataFrame(local)], ignore_index=True)
+
             if receipts.empty:
                 st.info("No sales yet.")
             else:
+                # 🩶 Include both 'Ready' and 'Completed' orders in the summary
+                receipts = receipts[receipts["status"].astype(str).str.lower().isin(["ready", "completed"])]
+
                 all_items = []
 
                 def parse_items(data):
@@ -978,6 +982,12 @@ elif st.session_state.page == "main":
                         try:
                             parsed = json.loads(data)
                             return parsed if isinstance(parsed, list) else []
+                        except json.JSONDecodeError:
+                            # Try to handle single-quote formatted JSON (from some DBs)
+                            try:
+                                return json.loads(data.replace("'", '"'))
+                            except Exception:
+                                return []
                         except Exception:
                             return []
                     elif isinstance(data, list):
