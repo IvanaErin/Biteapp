@@ -813,9 +813,12 @@ elif st.session_state.page == "main":
     user = st.session_state.user
     role = str(user.get("role", "Guest")).capitalize()
     user["role"] = role
-    is_guest = (role == "Guest")
 
-    # ---------------------------
+    # ✅ Define role flags
+    is_staff = (role == "Staff")
+    is_guest = (role == "Guest")
+    is_nonstaff = not is_staff and not is_guest  # optional but useful for clarity
+
     # ---------------------------
     # WELCOME / INFO MESSAGES
     # ---------------------------
