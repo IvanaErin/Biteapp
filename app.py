@@ -1054,7 +1054,7 @@ elif st.session_state.page == "main":
             else:
                 st.info("No pending orders found.")
         
-            elif choice == "Manage Menu":
+        elif choice == "Manage Menu":
                 st.subheader("📖 Manage Menu")
                 menu_df = load_menu()
 
