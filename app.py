@@ -572,8 +572,8 @@ def update_order_status(order_id, new_status):
         except Exception:
             pass
 
-def save_receipt(order_id, cart, total, payment_method, user_id, pickup_dt, status="Pending"):
-    """Save a new order (receipt) record to the database."""
+def save_receipt(order_id, cart, total, payment_method, user_id, pickup_time, status="Pending"):
+    """Save the order (receipt) into Snowflake."""
     conn = get_connection()
     if not conn:
         print("⚠️ No DB connection for save_receipt.")
@@ -581,34 +581,32 @@ def save_receipt(order_id, cart, total, payment_method, user_id, pickup_dt, stat
 
     try:
         cur = conn.cursor()
+        items_json = json.dumps(cart, ensure_ascii=False)
 
-        # Convert cart items to JSON string
-        items_json = json.dumps([
-            {"name": item, "qty": details["qty"], "price": details["price"]}
-            for item, details in cart.items()
-        ])
-
-        # Insert the new order
-        cur.execute(
-            """
-            INSERT INTO receipts (order_id, user_id, items, total, payment_method, pickup_dt, status, timestamp)
+        sql = """
+            INSERT INTO receipts (ORDER_ID, USER_ID, ITEMS, TOTAL, PAYMENT_METHOD, PICKUP_TIME, STATUS, TIMESTAMP)
             VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """,
-            (order_id, user_id, items_json, total, payment_method, pickup_dt, status)
-        )
-
+        """
+        cur.execute(sql, (
+            order_id,
+            user_id,
+            items_json,
+            float(total),
+            payment_method,
+            pickup_time,
+            status
+        ))
         conn.commit()
-        print(f"✅ Order saved: #{order_id} for user {user_id}")
+        print(f"✅ Order saved: {order_id} for user {user_id}")
 
-        # Add notification for the user
+        # 🔔 Notify user
         add_notification(
             user_id,
-            f"🎉 Your order #{order_id} has been successfully placed! We'll notify you once it's ready for pickup."
+            f"🎉 Your order #{order_id} has been placed successfully! We'll notify you once it's ready for pickup."
         )
 
     except Exception as e:
         print(f"❌ Error saving receipt: {e}")
-
     finally:
         try:
             cur.close()
@@ -617,37 +615,25 @@ def save_receipt(order_id, cart, total, payment_method, user_id, pickup_dt, stat
             pass
             
 def load_receipts_df():
-    """Load all receipts from the database or local fallback."""
+    """Load all receipts from Snowflake."""
     conn = get_connection()
-    expected_cols = [
-        "order_id", "user_id", "items", "total",
-        "payment_method", "pickup_time", "status", "timestamp"
-    ]
-
-    # --- Local fallback ---
     if not conn:
-        if "_local_receipts" not in st.session_state:
-            st.session_state._local_receipts = []
-        rows = st.session_state._local_receipts
-        df = pd.DataFrame(rows)
-        for col in expected_cols:
-            if col not in df.columns:
-                df[col] = None
-        return df[expected_cols]
+        print("⚠️ No DB connection for load_receipts_df.")
+        return pd.DataFrame()
 
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT order_id, user_id, items, total, payment_method, pickup_time, status, timestamp
+            SELECT ORDER_ID, USER_ID, ITEMS, TOTAL, PAYMENT_METHOD, PICKUP_TIME, STATUS, TIMESTAMP
             FROM receipts
-            ORDER BY timestamp DESC
+            ORDER BY TIMESTAMP DESC
         """)
         rows = cur.fetchall()
-        df = pd.DataFrame(rows, columns=expected_cols)
-        return df
+        cols = [desc[0].lower() for desc in cur.description]
+        return pd.DataFrame(rows, columns=cols)
     except Exception as e:
         print(f"❌ Error loading receipts: {e}")
-        return pd.DataFrame(columns=expected_cols)
+        return pd.DataFrame()
     finally:
         try:
             cur.close()
