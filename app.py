@@ -572,32 +572,41 @@ def update_order_status(order_id, new_status):
         except Exception:
             pass
 
-def save_receipt(order_id, items, total, payment_method, user_id, pickup_time, status="Pending"):
+def save_receipt(user_id, cart, total):
+    """Save a new order (receipt) to the database."""
     conn = get_connection()
     if not conn:
-        return False
+        print("⚠️ No DB connection for save_receipt.")
+        return
 
     try:
         cur = conn.cursor()
-        items_str = json.dumps(items)
 
-        sql = """
-            INSERT INTO receipts (order_id, items, total, payment_method, user_id, pickup_time, status, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-        """
-        cur.execute(sql, (order_id, items_str, total, payment_method, user_id, pickup_time, status))
+        # Convert cart items to JSON string
+        items_json = json.dumps([
+            {"name": item, "qty": details["qty"], "price": details["price"]}
+            for item, details in cart.items()
+        ])
+
+        # Insert into receipts table
+        cur.execute(
+            """
+            INSERT INTO receipts (user_id, items, total, payment_method, status, timestamp)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """,
+            (user_id, items_json, total, "Unpaid", "Pending")
+        )
         conn.commit()
-        return True
+        print(f"✅ Receipt saved for user: {user_id}")
     except Exception as e:
         print(f"❌ Error saving receipt: {e}")
-        return False
     finally:
         try:
             cur.close()
             conn.close()
         except Exception:
             pass
-
+            
 def load_receipts_df():
     """Load all receipts from the database or local fallback."""
     conn = get_connection()
