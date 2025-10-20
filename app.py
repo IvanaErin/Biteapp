@@ -32,19 +32,13 @@ except Exception:
     client = None
 
 # ---------------------------
-# SESSION STATE INIT
+# PAGE CONFIG & BACKGROUND
 # ---------------------------
-if "page" not in st.session_state:
-    st.session_state.page = "login"  # default page when app starts
+st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
 
-# ---------------------------
-# BACKGROUND / STYLING FUNCTION
-# ---------------------------
-def set_background(image_file: str | None = None, is_login_page: bool = False):
+def set_background(image_file: str | None = None):
     css_parts = []
-
-    # Login page with background image
-    if image_file and os.path.exists(image_file) and is_login_page:
+    if image_file and os.path.exists(image_file):
         with open(image_file, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         ext = image_file.split(".")[-1].lower()
@@ -59,81 +53,44 @@ def set_background(image_file: str | None = None, is_login_page: bool = False):
             }}
             """
         )
-        text_color = "#fff"
-        input_bg = "rgba(0,0,0,0.55)"
-        button_bg = "#FF6F61"
-        button_text = "#fff"
-        card_bg = "rgba(10,10,10,0.6)"
-    else:
-        # Other pages → plain white
-        css_parts.append(
-            """
-            [data-testid="stAppViewContainer"] {
-                background-color: white;
-            }
-            """
-        )
-        text_color = "#000"
-        input_bg = "#fff"
-        button_bg = "#FF6F61"
-        button_text = "#fff"
-        card_bg = "transparent"
 
-    # Common CSS
     css_parts.append(
-        f"""
-        /* Text color */
-        .stContainer, .stMarkdown, .stExpander, .stDataFrame, .stSelectbox {{
-            color: {text_color} !important;
-        }}
-
-        /* Input fields */
-        .stTextInput>div>div>input,
-        .stTextInput>div>div>div>input,
-        textarea,
-        select {{
-            background-color: {input_bg} !important;
-            color: {text_color} !important;
-        }}
-
-        /* Buttons */
-        div.stButton > button,
-        button,
-        .stButton button {{
-            background-color: {button_bg} !important;
-            color: {button_text} !important;
-            border: none !important;
-            border-radius: 8px !important;
-            width: 100% !important;
-            height: 44px !important;
-            font-size: 15px !important;
-            opacity: 1 !important;
-        }}
-
-        /* Login card or similar containers */
-        .login-card {{
-            background: {card_bg} !important;
+        """
+        [data-testid="stAppViewContainer"] > section:first-child {
+            padding-top: 18px !important;
+            margin-top: 0px !important;
+        }
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
+        .login-card {
+            background: rgba(10,10,10,0.6);
             padding: 1.6rem;
             border-radius: 12px;
             max-width: 840px;
             margin: 18px auto;
-            color: {text_color} !important;
+            color: #fff;
             box-shadow: 0 8px 28px rgba(0,0,0,0.5);
-        }}
+        }
+        div.stButton > button {
+            width: 100%;
+            height: 44px;
+            font-size: 15px;
+            border-radius: 8px;
+        }
+        .stTextInput>div>div>input, .stTextInput>div>div>div>input {
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+        }
+        .stContainer, .stMarkdown, .stExpander {
+            color: #fff;
+        }
         """
     )
 
     st.markdown("<style>" + "\n".join(css_parts) + "</style>", unsafe_allow_html=True)
 
+set_background("back.jpg")
 
-# ---------------------------
-# APPLY BACKGROUND
-# ---------------------------
-if st.session_state.page == "login":
-    set_background("back.jpg", is_login_page=True)  # login page background
-else:
-    set_background()  # white background for all other pages
-    
 # ---------------------------
 # SNOWFLAKE CONNECTION
 # ---------------------------
@@ -422,6 +379,10 @@ def upsert_menu(df: pd.DataFrame):
         except Exception:
             pass
 
+
+# ---------------------------
+# MENU + SENTIMENT DISPLAY
+# ---------------------------
 # ---------------------------
 # MENU + SENTIMENT DISPLAY (Dynamic per item)
 # ---------------------------
