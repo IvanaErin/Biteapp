@@ -533,14 +533,19 @@ def clear_notifications_for_user(user_id: str):
     if not conn:
         if "_local_notifications" in st.session_state:
             st.session_state._local_notifications = [
-                n for n in st.session_state._local_notifications if n["user_id"] != user_id
+                n for n in st.session_state._local_notifications
+                if n["user_id"].strip().lower() != user_id.strip().lower()
             ]
         return
 
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+        cur.execute("""
+            DELETE FROM notifications 
+            WHERE LOWER(TRIM(user_id)) = LOWER(TRIM(%s))
+        """, (user_id,))
         conn.commit()
+        print(f"✅ Notifications cleared for user: {user_id}")
     except Exception as e:
         print(f"❌ Error clearing notifications: {e}")
     finally:
@@ -811,15 +816,22 @@ elif st.session_state.page == "main":
     is_guest = (role == "Guest")
 
     # ---------------------------
+    # ---------------------------
     # WELCOME / INFO MESSAGES
     # ---------------------------
-    st.info("👋 Welcome to BiteHub! Get ready for some amazing deals and updates right here. 😊")
+    if not is_staff:  # 👈 Staff won't see this part
+        st.info("👋 Welcome to BiteHub! Get ready for some amazing meals and updates! 😊")
 
-    if is_guest:
-        st.warning(
-            "⚠️ You are currently using a Guest account. Create a free BiteHub account to save your orders, "
-            "earn loyalty points, receive exclusive deals, and submit feedback!"
-        )
+        if is_guest:
+            st.warning(
+                "⚠️ You're currently browsing as a *Guest*.\n\n"
+                "Create a free BiteHub account to enjoy full features:\n"
+                "- Save your order history 🍽️\n"
+                "- Submit feedback ⭐\n"
+                "- Earn loyalty rewards 🎁\n"
+                "- Get personalized offers 💌\n\n"
+                "👉 Tap **Sign Up** from the login page to get started!"
+            )
 
     # ---------------------------
     # STAFF PORTAL
@@ -1371,21 +1383,25 @@ elif st.session_state.page == "main":
                         save_feedback(item, fb, rt, username)
                         st.success("✅ Feedback submitted!")
 
+            # ---------------------------
+            # 📢 Notifications Section
+            # ---------------------------
             st.divider()
             st.subheader("📢 Notifications")
 
             # Use "Guest" if user is not logged in
             user_id = user.get("username") if user.get("username") else "Guest"
 
-            # 🔄 Manual Refresh Button — only triggers once
+            # 🔄 Manual Refresh
             if st.button("🔄 Refresh Data"):
                 st.session_state["manual_refresh"] = True
                 st.rerun()
 
             if st.session_state.get("manual_refresh"):
-                # Perform your refresh logic here (reload menu, receipts, notifications, etc.)
+                # You can reload data here if needed
                 st.session_state["manual_refresh"] = False
 
+            # Load notifications for this user
             notes = get_notifications_for_user(user_id)
             if notes:
                 for n in notes:
@@ -1393,9 +1409,11 @@ elif st.session_state.page == "main":
             else:
                 st.info("No notifications yet.")
 
-            if st.button("Clear"):
+            # 🧹 Clear Notifications
+            if st.button("🧹 Clear Notifications"):
                 clear_notifications_for_user(user_id)
-                st.success("Cleared.")
+                st.success("✅ All notifications cleared.")
+                st.rerun()
 
             st.divider()
             st.subheader("📜 Order History")
