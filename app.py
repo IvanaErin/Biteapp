@@ -32,15 +32,19 @@ except Exception:
     client = None
 
 # ---------------------------
-# PAGE CONFIG & BACKGROUND
+# SESSION STATE INIT
 # ---------------------------
-st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
+if "page" not in st.session_state:
+    st.session_state.page = "login"  # default page when app starts
 
+# ---------------------------
+# BACKGROUND / STYLING FUNCTION
+# ---------------------------
 def set_background(image_file: str | None = None, is_login_page: bool = False):
     css_parts = []
 
+    # Login page with background image
     if image_file and os.path.exists(image_file) and is_login_page:
-        # Login page with image
         with open(image_file, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         ext = image_file.split(".")[-1].lower()
@@ -61,7 +65,7 @@ def set_background(image_file: str | None = None, is_login_page: bool = False):
         button_text = "#fff"
         card_bg = "rgba(10,10,10,0.6)"
     else:
-        # All other pages → plain white
+        # Other pages → plain white
         css_parts.append(
             """
             [data-testid="stAppViewContainer"] {
@@ -121,14 +125,15 @@ def set_background(image_file: str | None = None, is_login_page: bool = False):
 
     st.markdown("<style>" + "\n".join(css_parts) + "</style>", unsafe_allow_html=True)
 
+
 # ---------------------------
-# APPLY BACKGROUND BASED ON PAGE
+# APPLY BACKGROUND
 # ---------------------------
 if st.session_state.page == "login":
-    set_background("back.jpg")  # Image background only on login
+    set_background("back.jpg", is_login_page=True)  # login page background
 else:
-    set_background(plain_white=True)  # White background for all other pages
-
+    set_background()  # white background for all other pages
+    
 # ---------------------------
 # SNOWFLAKE CONNECTION
 # ---------------------------
