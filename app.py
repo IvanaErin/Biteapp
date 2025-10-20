@@ -803,6 +803,17 @@ elif st.session_state.page == "main":
     is_guest = (role == "Guest")
 
     # ---------------------------
+    # WELCOME / INFO MESSAGES
+    # ---------------------------
+    st.info("👋 Welcome to BiteHub! Get ready for some amazing deals and updates right here. 😊")
+
+    if is_guest:
+        st.warning(
+            "⚠️ You are currently using a Guest account. Create a free BiteHub account to save your orders, "
+            "earn loyalty points, receive exclusive deals, and submit feedback!"
+        )
+
+    # ---------------------------
     # STAFF PORTAL
     # ---------------------------
     if role == "Staff":
@@ -1027,11 +1038,15 @@ elif st.session_state.page == "main":
                     """
                     st.markdown(order_html, unsafe_allow_html=True)
 
-                    # ✅ Mark as Ready button
+                    # ✅ Mark as Ready button with updated notification
                     if st.button("✅ Mark as Ready", key=f"ready_{order_id}"):
                         update_order_status(order_id, "Ready")
                         notify_user_id = row.get("user_id") or "Guest"
-                        add_notification(notify_user_id, f"Your order #{order_id} is ready for pickup!")
+                        add_notification(
+                            notify_user_id,
+                            f"Your delicious order from BiteHub is hot and ready! "
+                            f"Come by at your convenience and show #{order_id} to pick up your meal. Bon appétit!"
+                        )
                         st.success(f"Order #{order_id} marked as Ready!")
                         st.rerun()
 
@@ -1039,31 +1054,44 @@ elif st.session_state.page == "main":
             else:
                 st.info("No pending orders found.")
         
-        elif choice == "Manage Menu":
-            st.subheader("📖 Manage Menu")
-            menu_df = load_menu()
+            elif choice == "Manage Menu":
+                st.subheader("📖 Manage Menu")
+                menu_df = load_menu()
 
-            if not menu_df.empty:
-                menu_df["Delete"] = False
-                edited = st.data_editor(menu_df, num_rows="dynamic")
+                if not menu_df.empty:
+                    menu_df["Delete"] = False
+                    edited = st.data_editor(menu_df, num_rows="dynamic")
 
-                # Save updates
-                if st.button("💾 Save Menu Updates"):
-                    upsert_menu(edited.drop(columns=["Delete"]))
-                    st.success("✅ Menu updated successfully!")
-                    st.rerun()
+                    # Detect newly added items
+                    old_items = set(menu_df["ITEM"].tolist())
+                    new_items = set(edited["ITEM"].tolist()) - old_items
 
-                # Delete selected rows
-                if st.button("🗑️ Delete Selected Rows"):
-                    to_delete = edited[edited["Delete"] == True]
-                    if not to_delete.empty:
-                        delete_menu_items(to_delete["ITEM"].tolist())
-                        st.success(f"🗑️ Deleted {len(to_delete)} item(s) successfully!")
+                    # Save updates
+                    if st.button("💾 Save Menu Updates"):
+                        upsert_menu(edited.drop(columns=["Delete"]))
+                        st.success("✅ Menu updated successfully!")
+
+                        # Notify all non-staff users about new items
+                        for new_item in new_items:
+                            all_users = get_all_non_staff_users()  # implement to fetch usernames of non-staff & guests
+                            for u in all_users:
+                                add_notification(
+                                    u,
+                                    f"Exciting news from BiteHub! We’ve just added a mouthwatering new item to our menu: {new_item}. Come in and try it today!"
+                                )
                         st.rerun()
-                    else:
-                        st.info("No rows selected for deletion.")
-            else:
-                st.info("No menu items available.")
+
+                    # Delete selected rows
+                    if st.button("🗑️ Delete Selected Rows"):
+                        to_delete = edited[edited["Delete"] == True]
+                        if not to_delete.empty:
+                            delete_menu_items(to_delete["ITEM"].tolist())
+                            st.success(f"🗑️ Deleted {len(to_delete)} item(s) successfully!")
+                            st.rerun()
+                        else:
+                            st.info("No rows selected for deletion.")
+                else:
+                    st.info("No menu items available.")
 
         elif choice == "AI Assistant":
             st.subheader("🤖 AI Assistant")
@@ -1411,8 +1439,12 @@ elif st.session_state.page == "payment":
             save_receipt(order_id, pending_cart, total_cost, payment_method,
                          user_id, pickup_dt, status="Pending")
 
-            # Add notification for the user
-            add_notification(user_id, f"Your order #{order_id} has been placed successfully!")
+            # Add notification for feedback request
+            feedback_message = (
+                f"We value your opinion! How was your recent dining experience at BiteHub? "
+                f"Please take a moment to provide us with your feedback. Your input helps us improve."
+            )
+            add_notification(user_id, feedback_message)
 
             # Show success message
             st.success(f"✅ Order #{order_id} recorded (Pending). Staff will mark it Ready when prepared.")
