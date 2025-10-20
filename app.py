@@ -36,10 +36,11 @@ except Exception:
 # ---------------------------
 st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
 
-def set_background(image_file: str | None = None, plain_white: bool = False):
+def set_background(image_file: str | None = None, is_login_page: bool = False):
     css_parts = []
 
-    if image_file and os.path.exists(image_file) and not plain_white:
+    if image_file and os.path.exists(image_file) and is_login_page:
+        # Login page with image
         with open(image_file, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
         ext = image_file.split(".")[-1].lower()
@@ -58,7 +59,9 @@ def set_background(image_file: str | None = None, plain_white: bool = False):
         input_bg = "rgba(0,0,0,0.55)"
         button_bg = "#FF6F61"
         button_text = "#fff"
+        card_bg = "rgba(10,10,10,0.6)"
     else:
+        # All other pages → plain white
         css_parts.append(
             """
             [data-testid="stAppViewContainer"] {
@@ -70,35 +73,47 @@ def set_background(image_file: str | None = None, plain_white: bool = False):
         input_bg = "#fff"
         button_bg = "#FF6F61"
         button_text = "#fff"
+        card_bg = "transparent"
 
+    # Common CSS
     css_parts.append(
         f"""
-        .stContainer, .stMarkdown, .stExpander {{
-            color: {text_color};
+        /* Text color */
+        .stContainer, .stMarkdown, .stExpander, .stDataFrame, .stSelectbox {{
+            color: {text_color} !important;
         }}
 
-        .stTextInput>div>div>input, .stTextInput>div>div>div>input {{
-            background: {input_bg};
-            color: {text_color};
+        /* Input fields */
+        .stTextInput>div>div>input,
+        .stTextInput>div>div>div>input,
+        textarea,
+        select {{
+            background-color: {input_bg} !important;
+            color: {text_color} !important;
         }}
 
-        div.stButton > button {{
-            background-color: {button_bg};
-            color: {button_text};
-            border: none;
-            border-radius: 8px;
-            width: 100%;
-            height: 44px;
-            font-size: 15px;
+        /* Buttons */
+        div.stButton > button,
+        button,
+        .stButton button {{
+            background-color: {button_bg} !important;
+            color: {button_text} !important;
+            border: none !important;
+            border-radius: 8px !important;
+            width: 100% !important;
+            height: 44px !important;
+            font-size: 15px !important;
+            opacity: 1 !important;
         }}
 
+        /* Login card or similar containers */
         .login-card {{
-            background: {'rgba(10,10,10,0.6)' if not plain_white else 'transparent'};
+            background: {card_bg} !important;
             padding: 1.6rem;
             border-radius: 12px;
             max-width: 840px;
             margin: 18px auto;
-            color: {text_color};
+            color: {text_color} !important;
             box-shadow: 0 8px 28px rgba(0,0,0,0.5);
         }}
         """
