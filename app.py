@@ -439,6 +439,8 @@ def display_menu_with_sentiment():
 # NOTIFICATION FUNCTIONS
 # ---------------------------
 
+import uuid
+
 def add_notification(user_id, message):
     """Save a notification for the user."""
     conn = get_connection()
@@ -448,12 +450,13 @@ def add_notification(user_id, message):
 
     try:
         cur = conn.cursor()
-        sql = f"""
-            INSERT INTO notifications (user_id, message, timestamp)
-            VALUES (%s, %s, CURRENT_TIMESTAMP)
-        """
-        cur.execute(sql, (user_id, message))
+        notif_id = str(uuid.uuid4())  # Generate unique ID
+        cur.execute("""
+            INSERT INTO notifications (NOTIF_ID, USER_ID, MESSAGE, STATUS, CREATED_AT)
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+        """, (notif_id, user_id, message, "Unread"))
         conn.commit()
+        print(f"✅ Notification saved for {user_id}: {message}")
     except Exception as e:
         print(f"❌ Error saving notification: {e}")
     finally:
@@ -506,10 +509,12 @@ def get_notifications_for_user(user_id: str):
 
     try:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT message FROM notifications WHERE user_id = %s ORDER BY timestamp DESC",
-            (user_id,)
-        )
+        cur.execute("""
+            SELECT MESSAGE 
+            FROM notifications 
+            WHERE USER_ID = %s 
+            ORDER BY CREATED_AT DESC
+        """, (user_id,))
         rows = cur.fetchall()
         return [r[0] for r in rows] if rows else []
     except Exception as e:
@@ -521,7 +526,6 @@ def get_notifications_for_user(user_id: str):
             conn.close()
         except Exception:
             pass
-
 
 def clear_notifications_for_user(user_id: str):
     """Clear all notifications for a specific user."""
