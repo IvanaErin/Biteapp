@@ -1290,10 +1290,21 @@ elif st.session_state.page == "main":
 
                 st.markdown(f"### 💵 Total: ₱{total:.2f}")
                 if st.button("💳 Proceed to Payment"):
+                    # ✅ Save the order first
+                    user_id = st.session_state.get("user", {}).get("username", "Guest")
+                    save_receipt(user_id, cart, total)
+
+                    # ✅ Send confirmation notification
+                    add_notification(
+                        user_id,
+                        f"🧾 Your order has been placed successfully! We'll notify you once it's ready for pickup."
+                    )
+
+                    st.success("✅ Order placed successfully!")
                     st.session_state.page = "payment"
                     st.session_state.cart_total = total
                     st.rerun()
-
+                    
         # RIGHT SIDE
         with right_col:
             st.subheader("💬 Sentiment Analysis")
