@@ -572,8 +572,8 @@ def update_order_status(order_id, new_status):
         except Exception:
             pass
 
-def save_receipt(user_id, cart, total):
-    """Save a new order (receipt) to the database."""
+def save_receipt(order_id, cart, total, payment_method, user_id, pickup_dt, status="Pending"):
+    """Save a new order (receipt) record to the database."""
     conn = get_connection()
     if not conn:
         print("⚠️ No DB connection for save_receipt.")
@@ -588,18 +588,27 @@ def save_receipt(user_id, cart, total):
             for item, details in cart.items()
         ])
 
-        # Insert into receipts table
+        # Insert the new order
         cur.execute(
             """
-            INSERT INTO receipts (user_id, items, total, payment_method, status, timestamp)
-            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO receipts (order_id, user_id, items, total, payment_method, pickup_dt, status, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """,
-            (user_id, items_json, total, "Unpaid", "Pending")
+            (order_id, user_id, items_json, total, payment_method, pickup_dt, status)
         )
+
         conn.commit()
-        print(f"✅ Receipt saved for user: {user_id}")
+        print(f"✅ Order saved: #{order_id} for user {user_id}")
+
+        # Add notification for the user
+        add_notification(
+            user_id,
+            f"🎉 Your order #{order_id} has been successfully placed! We'll notify you once it's ready for pickup."
+        )
+
     except Exception as e:
         print(f"❌ Error saving receipt: {e}")
+
     finally:
         try:
             cur.close()
