@@ -1288,8 +1288,11 @@ elif st.session_state.page == "main":
                         for _, row in category_items.iterrows():
                             name = row["ITEM"]
                             price = float(row["PRICE"])
+                            
+                            # Robust IMAGE_URL handling
+                            import math
                             img = row.get("IMAGE_URL")
-                            if not img or not img.strip():
+                            if img is None or (isinstance(img, float) and math.isnan(img)) or not str(img).strip():
                                 img = "https://via.placeholder.com/150"
 
                             with cols[col_index]:
