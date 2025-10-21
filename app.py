@@ -33,13 +33,12 @@ try:
 except Exception:
     client = None
 
-# ---------------------------
-# PAGE CONFIG & BACKGROUND
-# ---------------------------
 st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
 
-def set_background(image_file: str | None = None):
+def set_background(image_file: str | None = None, user_type: str | None = None):
     css_parts = []
+
+    # 🖼️ LOGIN PAGE → show background image
     if image_file and os.path.exists(image_file):
         with open(image_file, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
@@ -56,6 +55,70 @@ def set_background(image_file: str | None = None):
             """
         )
 
+        # Add dark overlay + login text styles
+        css_parts.append(
+            """
+            .login-card {
+                background: rgba(10,10,10,0.6);
+                padding: 1.6rem;
+                border-radius: 12px;
+                max-width: 840px;
+                margin: 18px auto;
+                color: #fff;
+                box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+            }
+            div.stButton > button {
+                width: 100%;
+                height: 44px;
+                font-size: 15px;
+                border-radius: 8px;
+            }
+            .stTextInput>div>div>input, .stTextInput>div>div>div>input {
+                background: rgba(0,0,0,0.55);
+                color: #fff;
+            }
+            .stContainer, .stMarkdown, .stExpander {
+                color: #fff;
+            }
+            """
+        )
+
+    # 👥 AFTER LOGIN → STAFF / NON-STAFF / GUEST
+    else:
+        # Define greys for each user type
+        if user_type == "staff":
+            bg_color = "#2e2e2e"  # dark grey
+            text_color = "#ffffff"
+        elif user_type == "non-staff":
+            bg_color = "#d9d9d9"  # medium grey
+            text_color = "#111111"
+        else:
+            bg_color = "#f5f5f5"  # light grey
+            text_color = "#222222"
+
+        css_parts.append(
+            f"""
+            [data-testid="stAppViewContainer"] {{
+                background-color: {bg_color} !important;
+                color: {text_color} !important;
+            }}
+            h1, h2, h3, h4, h5, h6, p, div, span, label {{
+                color: {text_color} !important;
+            }}
+            div.stButton > button {{
+                background-color: #444444 !important;
+                color: white !important;
+                border-radius: 8px;
+                transition: 0.2s ease-in-out;
+            }}
+            div.stButton > button:hover {{
+                background-color: #666666 !important;
+                transform: scale(1.03);
+            }}
+            """
+        )
+
+    # Common layout adjustments (keep from your original)
     css_parts.append(
         """
         [data-testid="stAppViewContainer"] > section:first-child {
@@ -64,34 +127,10 @@ def set_background(image_file: str | None = None):
         }
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
-        .login-card {
-            background: rgba(10,10,10,0.6);
-            padding: 1.6rem;
-            border-radius: 12px;
-            max-width: 840px;
-            margin: 18px auto;
-            color: #fff;
-            box-shadow: 0 8px 28px rgba(0,0,0,0.5);
-        }
-        div.stButton > button {
-            width: 100%;
-            height: 44px;
-            font-size: 15px;
-            border-radius: 8px;
-        }
-        .stTextInput>div>div>input, .stTextInput>div>div>div>input {
-            background: rgba(0,0,0,0.55);
-            color: #fff;
-        }
-        .stContainer, .stMarkdown, .stExpander {
-            color: #fff;
-        }
         """
     )
 
     st.markdown("<style>" + "\n".join(css_parts) + "</style>", unsafe_allow_html=True)
-
-set_background("back.jpg")
 
 # ---------------------------
 # SNOWFLAKE CONNECTION
