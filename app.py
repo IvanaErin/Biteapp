@@ -15,7 +15,7 @@ import json
 from textblob import TextBlob
 import math
 import requests
-
+from io import BytesIO
 
 # Try to import st_autorefresh helper if available
 try:
@@ -275,26 +275,35 @@ def load_feedbacks_df():
         cur.close()
         conn.close()
 # ---------------------------
-# Validate images so every item has a displayable URL
+# Validate and resize images
 # ---------------------------
-def validate_image_url(url):
+def validate_and_resize_image(url, size=(200, 200)):
     """
-    Returns a valid image URL for Streamlit.
-    If the given URL is None, empty, or whitespace, returns a placeholder.
-    Otherwise, returns the URL as is.
+    Returns a resized PIL image for Streamlit.
+    If URL is missing or invalid, uses a placeholder.
     """
     placeholder = "https://via.placeholder.com/150"
     if url is None or not str(url).strip():
-        return placeholder
-    return url
+        url = placeholder
+    try:
+        response = requests.get(url)
+        img = Image.open(BytesIO(response.content))
+        img.thumbnail(size)  # Resize while keeping aspect ratio
+        return img
+    except Exception:
+        # Fallback if the URL is broken
+        response = requests.get(placeholder)
+        img = Image.open(BytesIO(response.content))
+        img.thumbnail(size)
+        return img
 
 # ---------------------------
-# MENU + SENTIMENT DISPLAY
+# Load menu + sentiment display
 # ---------------------------
 def load_menu():
     conn = get_connection()
     if not conn:
-        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE", "IMAGE_URL"])
+        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE", "IMAGE_URL", "VALID_IMAGE"])
 
     try:
         cur = conn.cursor()
@@ -322,8 +331,8 @@ def load_menu():
             df["Neutral"] = 0
             df["Negative"] = 0
 
-        # ✅ Validate images AFTER loading the menu
-        df["VALID_IMAGE"] = df["IMAGE_URL"].apply(validate_image_url)
+        # ✅ Validate and resize images AFTER loading the menu
+        df["VALID_IMAGE"] = df["IMAGE_URL"].apply(validate_and_resize_image)
 
         return df
 
