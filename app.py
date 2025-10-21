@@ -274,10 +274,6 @@ def load_feedbacks_df():
     finally:
         cur.close()
         conn.close()
-
-# ---------------------------
-# MENU + SENTIMENT DISPLAY
-# ---------------------------
 # Validate images so every item has a displayable URL
 def validate_image_url(url):
     placeholder = "https://via.placeholder.com/150"
@@ -290,9 +286,9 @@ def validate_image_url(url):
     except:
         pass
     return placeholder
-
-menu_df["VALID_IMAGE"] = menu_df["IMAGE_URL"].apply(validate_image_url)
-
+# ---------------------------
+# MENU + SENTIMENT DISPLAY
+# -------------------------
 def load_menu():
     conn = get_connection()
     if not conn:
@@ -336,6 +332,8 @@ def load_menu():
             conn.close()
         except Exception:
             pass
+
+menu_df["VALID_IMAGE"] = menu_df["IMAGE_URL"].apply(validate_image_url)
 
 def detect_menu_columns(menu_df):
     """
