@@ -13,6 +13,7 @@ import re
 from PIL import Image
 import json
 from textblob import TextBlob
+import math
 
 
 # Try to import st_autorefresh helper if available
