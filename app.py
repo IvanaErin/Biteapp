@@ -1302,17 +1302,20 @@ elif st.session_state.page == "main":
                         cols = st.columns(3)
                         col_index = 0
 
-                        for _, row in category_items.iterrows():
+                        for idx, row in category_items.iterrows():
                             name = row["ITEM"]
                             price = float(row["PRICE"])
                             img = row["VALID_IMAGE"]  # <-- use the validated image URL
+
+                            # Make a unique key using index + name
+                            button_key = f"add_{idx}_{name}"
 
                             with cols[col_index]:
                                 st.image(img, use_container_width=True)
                                 st.markdown(f"**{name}**")
                                 st.write(f"₱{price:.2f}")
 
-                                if st.button("➕ Add to Cart", key=f"add_{name}"):
+                                if st.button("➕ Add to Cart", key=button_key):
                                     if "cart" not in st.session_state:
                                         st.session_state.cart = {}
                                     if name not in st.session_state.cart:
