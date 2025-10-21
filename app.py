@@ -276,31 +276,20 @@ def load_feedbacks_df():
         conn.close()
 
 # ---------------------------
-# Validate and safely resize images
+# Validate image URLs
 # ---------------------------
-def safe_validate_and_resize_image(url, size=(200, 200)):
+def validate_image_url(url):
     """
-    Returns a resized PIL image for Streamlit.
-    If the URL is missing, empty, or fails to load, returns a placeholder image.
+    Returns a valid image URL for Streamlit.
+    If the URL is None, empty, or whitespace, returns a placeholder.
     """
-    placeholder_url = "https://via.placeholder.com/150"
+    placeholder = "https://via.placeholder.com/150"
     if url is None or not str(url).strip():
-        url = placeholder_url
-
-    try:
-        response = requests.get(url, timeout=5)
-        img = Image.open(BytesIO(response.content))
-        img.thumbnail(size)  # Resize while keeping aspect ratio
-        return img
-    except Exception:
-        # Return a simple placeholder image if fetching fails
-        response = requests.get(placeholder_url)
-        img = Image.open(BytesIO(response.content))
-        img.thumbnail(size)
-        return img
+        return placeholder
+    return url
 
 # ---------------------------
-# Load menu + validated/resized images
+# Load menu safely
 # ---------------------------
 def load_menu():
     conn = get_connection()
@@ -311,12 +300,10 @@ def load_menu():
         cur = conn.cursor()
         cur.execute("SELECT CATEGORY, ITEM, PRICE, IMAGE_URL FROM MENU ORDER BY CATEGORY, ITEM")
         df = cur.fetch_pandas_all()
-
-        # Ensure PRICE is numeric
         df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
 
-        # Validate images URLs and resize safely
-        df["VALID_IMAGE"] = df["IMAGE_URL"].apply(safe_validate_and_resize_image)
+        # Validate images
+        df["VALID_IMAGE"] = df["IMAGE_URL"].apply(validate_image_url)
 
         return df
 
@@ -327,7 +314,7 @@ def load_menu():
         try:
             cur.close()
             conn.close()
-        except Exception:
+        except:
             pass
             
 def detect_menu_columns(menu_df):
