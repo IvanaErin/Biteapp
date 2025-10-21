@@ -274,31 +274,33 @@ def load_feedbacks_df():
     finally:
         cur.close()
         conn.close()
+
 # ---------------------------
-# Validate and resize images
+# Validate and safely resize images
 # ---------------------------
-def validate_and_resize_image(url, size=(200, 200)):
+def safe_validate_and_resize_image(url, size=(200, 200)):
     """
     Returns a resized PIL image for Streamlit.
-    If URL is missing or invalid, uses a placeholder.
+    If the URL is missing, empty, or fails to load, returns a placeholder image.
     """
-    placeholder = "https://via.placeholder.com/150"
+    placeholder_url = "https://via.placeholder.com/150"
     if url is None or not str(url).strip():
-        url = placeholder
+        url = placeholder_url
+
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
         img = Image.open(BytesIO(response.content))
         img.thumbnail(size)  # Resize while keeping aspect ratio
         return img
     except Exception:
-        # Fallback if the URL is broken
-        response = requests.get(placeholder)
+        # Return a simple placeholder image if fetching fails
+        response = requests.get(placeholder_url)
         img = Image.open(BytesIO(response.content))
         img.thumbnail(size)
         return img
 
 # ---------------------------
-# Load menu + sentiment display
+# Load menu + validated/resized images
 # ---------------------------
 def load_menu():
     conn = get_connection()
@@ -309,35 +311,17 @@ def load_menu():
         cur = conn.cursor()
         cur.execute("SELECT CATEGORY, ITEM, PRICE, IMAGE_URL FROM MENU ORDER BY CATEGORY, ITEM")
         df = cur.fetch_pandas_all()
+
+        # Ensure PRICE is numeric
         df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
 
-        # Ensure IMAGE_URL has a valid value
-        df["IMAGE_URL"] = df["IMAGE_URL"].apply(
-            lambda x: x if pd.notna(x) and str(x).strip() else "https://via.placeholder.com/150"
-        )
-
-        # --- integrate sentiment ---
-        feedbacks = load_feedbacks_df()
-        if not feedbacks.empty:
-            sentiment_summary = (
-                feedbacks.groupby("item")["sentiment"]
-                .value_counts()
-                .unstack(fill_value=0)
-                .reset_index()
-            )
-            df = df.merge(sentiment_summary, how="left", left_on="ITEM", right_on="item").fillna(0)
-        else:
-            df["Positive"] = 0
-            df["Neutral"] = 0
-            df["Negative"] = 0
-
-        # ✅ Validate and resize images AFTER loading the menu
-        df["VALID_IMAGE"] = df["IMAGE_URL"].apply(validate_and_resize_image)
+        # Validate images URLs and resize safely
+        df["VALID_IMAGE"] = df["IMAGE_URL"].apply(safe_validate_and_resize_image)
 
         return df
 
     except Exception as e:
-        print(f"❌ Error loading menu with sentiment: {e}")
+        print(f"❌ Error loading menu: {e}")
         return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE", "IMAGE_URL", "VALID_IMAGE"])
     finally:
         try:
