@@ -278,16 +278,15 @@ def load_feedbacks_df():
 # Validate images so every item has a displayable URL
 # ---------------------------
 def validate_image_url(url):
+    """
+    Returns a valid image URL for Streamlit.
+    If the given URL is None, empty, or whitespace, returns a placeholder.
+    Otherwise, returns the URL as is.
+    """
     placeholder = "https://via.placeholder.com/150"
-    if url is None or (isinstance(url, float) and math.isnan(url)) or not str(url).strip():
+    if url is None or not str(url).strip():
         return placeholder
-    try:
-        r = requests.head(url, timeout=2)
-        if r.status_code == 200 and "image" in r.headers.get("Content-Type", ""):
-            return url
-    except:
-        pass
-    return placeholder
+    return url
 
 # ---------------------------
 # MENU + SENTIMENT DISPLAY
