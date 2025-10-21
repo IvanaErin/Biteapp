@@ -660,22 +660,47 @@ def load_receipts_df():
 # ---------------------------
 # AI
 # ---------------------------
-def run_ai(question: str, extra_context: str = "") -> str:
-    if not client:
-        return "⚠️ AI unavailable (no Groq client configured)."
-    if not question:
-        return "Please ask a question."
-    try:
-        resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",  # ✅ currently supported by Groq
-            messages=[
-                {"role": "system", "content": "You are BiteHub's smart assistant. Answer questions about the canteen, menu, meals, prices, and food items only."},
-                {"role": "user", "content": question + "\n" + extra_context}
-            ]
-        )
-        return resp.choices[0].message.content
-    except Exception as e:
-        return f"⚠️ AI unavailable: {e}"
+def run_ai_staff(question):
+    system_prompt = """
+    You are BiteHub's Staff Assistant.
+    Your role is to help canteen staff manage operations, such as:
+    - Updating menu items, prices, and categories.
+    - Managing orders, stocks, and staff-related tasks.
+    - Explaining errors in simple, clear terms.
+    - Suggesting practical improvements.
+    Keep your answers concise, professional, and relevant to BiteHub's operations.
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question},
+        ],
+        temperature=0.4,
+    )
+    return response.choices[0].message["content"]
+
+
+def run_ai_nonstaff(question):
+    system_prompt = """
+    You are BiteHub's Friendly Food Assistant.
+    You help customers learn about menu items, food categories, prices, and deals.
+    You should:
+    - Be friendly, clear, and short.
+    - Give recommendations from the menu.
+    - Avoid technical or staff-only topics.
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question},
+        ],
+        temperature=0.6,
+    )
+    return response.choices[0].message["content"]
 
 # ---------------------------
 # SESSION DEFAULTS
@@ -1126,10 +1151,10 @@ elif st.session_state.page == "main":
                     st.info("No menu items available.")
 
         elif choice == "AI Assistant":
-            st.subheader("🤖 AI Assistant")
+            st.subheader("🤖 AI Assistant (Staff)")
             q = st.text_area("Ask AI something:", key="staff_ai_q")
             if st.button("Ask AI", key="ask_ai_staff"):
-                st.write(run_ai(q))
+                st.write(run_ai(q, role="Staff"))
 
         elif choice == "Feedback Review":
             st.subheader("📢 Feedback Review")
@@ -1255,20 +1280,23 @@ elif st.session_state.page == "main":
         left_col, right_col = st.columns([1.3, 1])
 
         with left_col:
-            st.markdown("### 🤖 BiteHub Assistant")
+        elif choice == "AI Assistant":
+            st.markdown("### 🤖 BiteHub Staff Assistant")
             with st.expander("💬 Ask BiteHub AI", expanded=False):
-                q = st.text_input("Ask something:", key="user_ai_q", placeholder="e.g. What’s the best seller?")
-                if st.button("Ask AI", key="ask_ai_user"):
+                q = st.text_input("Ask something:", key="staff_ai_q", placeholder="e.g. Suggest menu improvements or pricing ideas.")
+                if st.button("Ask AI", key="ask_ai_staff"):
                     menu_df = load_menu()
                     menu_list = "\n".join([f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})" for _, row in menu_df.iterrows()])
                     prompt = f"""
-                    You are BiteHub's AI assistant. Only use items from the menu below.
-                    Prices are in Pesos (₱). Do NOT invent items or prices.
+                    You are BiteHub's staff AI assistant. 
+                    You help canteen staff manage menu, pricing, ingredients, and operations.
+                    Be concise, helpful, and only refer to menu items below.
+                    Do NOT invent prices or items.
 
                     MENU:
                     {menu_list}
 
-                    USER QUESTION: {q}
+                    STAFF QUESTION: {q}
                     """
                     st.write(run_ai(prompt))
 
