@@ -14,6 +14,7 @@ from PIL import Image
 import json
 from textblob import TextBlob
 import math
+import requests
 
 
 # Try to import st_autorefresh helper if available
@@ -277,6 +278,21 @@ def load_feedbacks_df():
 # ---------------------------
 # MENU + SENTIMENT DISPLAY
 # ---------------------------
+# Validate images so every item has a displayable URL
+def validate_image_url(url):
+    placeholder = "https://via.placeholder.com/150"
+    if url is None or (isinstance(url, float) and math.isnan(url)) or not str(url).strip():
+        return placeholder
+    try:
+        r = requests.head(url, timeout=2)
+        if r.status_code == 200 and "image" in r.headers.get("Content-Type", ""):
+            return url
+    except:
+        pass
+    return placeholder
+
+menu_df["VALID_IMAGE"] = menu_df["IMAGE_URL"].apply(validate_image_url)
+
 def load_menu():
     conn = get_connection()
     if not conn:
@@ -1274,22 +1290,6 @@ elif st.session_state.page == "main":
             # ---------------------------
             st.markdown("### 📖 Menu & Ordering")
 
-            import requests
-            import math
-
-            def validate_image_url(url):
-                """Return the URL if valid and points to an image, else return placeholder."""
-                placeholder = "https://via.placeholder.com/150"
-                if url is None or (isinstance(url, float) and math.isnan(url)) or not str(url).strip():
-                    return placeholder
-                try:
-                    r = requests.head(url, timeout=2)
-                    if r.status_code == 200 and "image" in r.headers.get("Content-Type", ""):
-                        return url
-                except:
-                    pass
-                return placeholder
-
             if menu_df is None or menu_df.empty:
                 st.warning("⚠️ Menu is empty.")
             else:
@@ -1305,7 +1305,7 @@ elif st.session_state.page == "main":
                         for _, row in category_items.iterrows():
                             name = row["ITEM"]
                             price = float(row["PRICE"])
-                            img = validate_image_url(row.get("IMAGE_URL"))
+                            img = row["VALID_IMAGE"]  # <-- use the validated image URL
 
                             with cols[col_index]:
                                 st.image(img, use_container_width=True)
