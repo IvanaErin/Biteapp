@@ -1269,33 +1269,26 @@ elif st.session_state.page == "main":
             else:
                 cat_col, item_col, price_col = detect_menu_columns(menu_df)
 
-                # Sidebar collapsible menu like Pret
-                with st.sidebar:
-                    st.markdown("### 🍴 View Menu")
-                    categories = menu_df[cat_col].dropna().unique().tolist()
-                    selected_cat = st.radio("Choose a category", categories, horizontal=False)
+                # Collapsible category sections (Pret-style)
+                for cat in menu_df[cat_col].dropna().unique():
+                    with st.expander(f"🍽️ {cat}", expanded=False):
+                        items = menu_df[menu_df[cat_col] == cat]
+                        cols = st.columns(3)
+                        for i, (_, row) in enumerate(items.iterrows()):
+                            with cols[i % 3]:
+                                name = row[item_col]
+                                price = float(row[price_col])
+                                img = row.get("IMAGE_URL", None) or "https://via.placeholder.com/150"
 
-                # Display selected category items as cards
-                st.markdown(f"### 🍽️ {selected_cat}")
-                items = menu_df[menu_df[cat_col] == selected_cat]
-
-                cols = st.columns(3)
-                for i, (_, row) in enumerate(items.iterrows()):
-                    with cols[i % 3]:
-                        name = row[item_col]
-                        price = float(row[price_col])
-                        img = row.get("IMAGE_URL", None) or "https://via.placeholder.com/150"
-
-                        # Card-like layout
-                        st.image(img, use_container_width=True)
-                        st.markdown(f"**{name}**")
-                        st.write(f"₱{price:.2f}")
-                        if st.button("➕ Add to Cart", key=f"add_{name}"):
-                            if name not in st.session_state.cart:
-                                st.session_state.cart[name] = {"qty": 1, "price": price}
-                            else:
-                                st.session_state.cart[name]["qty"] += 1
-                            st.success(f"{name} added to cart!")
+                                st.image(img, use_container_width=True)
+                                st.markdown(f"**{name}**")
+                                st.write(f"₱{price:.2f}")
+                                if st.button("➕ Add to Cart", key=f"add_{name}"):
+                                    if name not in st.session_state.cart:
+                                        st.session_state.cart[name] = {"qty": 1, "price": price}
+                                    else:
+                                        st.session_state.cart[name]["qty"] += 1
+                                    st.success(f"{name} added to cart!")
 
             # 🛒 CART SECTION
             st.divider()
