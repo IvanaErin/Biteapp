@@ -283,10 +283,15 @@ def load_menu():
 
     try:
         cur = conn.cursor()
-        # 🧩 FIXED: Include IMAGE_URL in the query
+        # Include IMAGE_URL in the query
         cur.execute("SELECT CATEGORY, ITEM, PRICE, IMAGE_URL FROM MENU ORDER BY CATEGORY, ITEM")
         df = cur.fetch_pandas_all()
         df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
+
+        # Ensure IMAGE_URL has a valid value
+        df["IMAGE_URL"] = df["IMAGE_URL"].apply(
+            lambda x: x if pd.notna(x) and str(x).strip() else "https://via.placeholder.com/150"
+        )
 
         # --- integrate sentiment ---
         feedbacks = load_feedbacks_df()
