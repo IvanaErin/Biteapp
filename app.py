@@ -1263,37 +1263,52 @@ elif st.session_state.page == "main":
                     """
                     st.write(run_ai(prompt))
 
+            # ---------------------------
+            # MENU & ORDERING
+            # ---------------------------
             st.markdown("### 📖 Menu & Ordering")
+
             if menu_df is None or menu_df.empty:
                 st.warning("⚠️ Menu is empty.")
             else:
-                cat_col, item_col, price_col = detect_menu_columns(menu_df)
-
-                # Collapsible category sections (Pret-style)
-                for cat in menu_df[cat_col].dropna().unique():
+                # Loop through categories
+                for cat in menu_df["CATEGORY"].dropna().unique():
                     with st.expander(f"🍽️ {cat}", expanded=False):
-                        items = menu_df[menu_df[cat_col] == cat]
-                        cols = st.columns(3)
-                        for i, (_, row) in enumerate(items.iterrows()):
-                            with cols[i % 3]:
-                                name = row[item_col]
-                                price = float(row[price_col])
-                                img = row.get("IMAGE_URL", None) or "https://via.placeholder.com/150"
+                        category_items = menu_df[menu_df["CATEGORY"] == cat]
 
+                        # Display in 3-column grid
+                        cols = st.columns(3)
+                        col_index = 0
+
+                        for _, row in category_items.iterrows():
+                            name = row["ITEM"]
+                            price = float(row["PRICE"])
+                            img = row.get("IMAGE_URL", None) or "https://via.placeholder.com/150"
+
+                            with cols[col_index]:
                                 st.image(img, use_container_width=True)
                                 st.markdown(f"**{name}**")
                                 st.write(f"₱{price:.2f}")
+
                                 if st.button("➕ Add to Cart", key=f"add_{name}"):
+                                    if "cart" not in st.session_state:
+                                        st.session_state.cart = {}
                                     if name not in st.session_state.cart:
                                         st.session_state.cart[name] = {"qty": 1, "price": price}
                                     else:
                                         st.session_state.cart[name]["qty"] += 1
                                     st.success(f"{name} added to cart!")
 
-            # 🛒 CART SECTION
-            st.divider()
+                            col_index += 1
+                            if col_index >= 3:
+                                cols = st.columns(3)
+                                col_index = 0
+
+            # ---------------------------
+            # CART SECTION
+            # ---------------------------
             st.markdown("### 🛒 Your Cart")
-            cart = st.session_state.cart
+            cart = st.session_state.get("cart", {})
             if not cart:
                 st.info("Your cart is empty.")
             else:
@@ -1302,6 +1317,7 @@ elif st.session_state.page == "main":
                     qty, price = details["qty"], details["price"]
                     subtotal = qty * price
                     total += subtotal
+
                     c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
                     c1.markdown(f"**{item}**")
                     c2.write(f"₱{price:.2f}")
@@ -1317,7 +1333,7 @@ elif st.session_state.page == "main":
                     if c4.button("🗑 Remove", key=f"rm_{item}"):
                         del cart[item]
                         st.rerun()
-                    st.caption(f"Qty: {qty} | Subtotal: ₱{subtotal:.2f}")
+                    st.write(f"Qty: {qty} | Subtotal: ₱{subtotal:.2f}")
 
                 st.markdown(f"### 💵 Total: ₱{total:.2f}")
                 if st.button("💳 Proceed to Payment"):
@@ -1342,7 +1358,7 @@ elif st.session_state.page == "main":
 
                     add_notification(
                         user_id,
-                        "🧾 Your order has been placed successfully! We'll notify you once it's ready for pickup."
+                        f"🧾 Your order has been placed successfully! We'll notify you once it's ready for pickup."
                     )
 
                     st.success("✅ Order placed successfully!")
