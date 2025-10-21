@@ -1279,12 +1279,15 @@ elif st.session_state.page == "main":
         menu_df = load_menu()
         left_col, right_col = st.columns([1.3, 1])
 
-        with left_col:
-            
-        elif choice == "AI Assistant":
+        if choice == "AI Assistant":
             st.markdown("### 🤖 BiteHub Staff Assistant")
             with st.expander("💬 Ask BiteHub AI", expanded=False):
-                q = st.text_input("Ask something:", key="staff_ai_q", placeholder="e.g. Suggest menu improvements or pricing ideas.")
+                q = st.text_input(
+                    "Ask something:",
+                    key="staff_ai_q",
+                    placeholder="e.g. Suggest menu improvements or pricing ideas."
+                )
+
                 if st.button("Ask AI", key="ask_ai_staff"):
                     menu_df = load_menu()
                     menu_list = "\n".join([
@@ -1304,10 +1307,10 @@ elif st.session_state.page == "main":
                     """
                     st.write(run_ai(prompt))
 
-            # ---------------------------
-            # MENU & ORDERING
-            # ---------------------------
-            st.markdown("### 📖 Menu & Ordering")
+        # ---------------------------
+        # MENU & ORDERING
+        # ---------------------------
+        st.markdown("### 📖 Menu & Ordering")
 
             if menu_df is None or menu_df.empty:
                 st.warning("⚠️ Menu is empty.")
