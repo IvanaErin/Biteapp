@@ -330,7 +330,6 @@ def detect_menu_columns(menu_df):
 
     return cat_col, item_col, price_col
 
-
 def upsert_menu(df: pd.DataFrame):
     if df.empty:
         st.warning("Menu is empty. Nothing to save.")
@@ -358,7 +357,6 @@ def upsert_menu(df: pd.DataFrame):
             """
             cur.execute(sql)
         conn.commit()
-        st.success("✅ Menu updated successfully!")
     except Exception as e:
         st.error(f"❌ Error updating menu: {e}")
     finally:
