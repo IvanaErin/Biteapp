@@ -1268,15 +1268,29 @@ elif st.session_state.page == "main":
                 st.warning("⚠️ Menu is empty.")
             else:
                 cat_col, item_col, price_col = detect_menu_columns(menu_df)
-                for cat in menu_df[cat_col].dropna().unique():
-                    st.markdown(f"#### 🍽️ {cat}")
-                    for _, row in menu_df[menu_df[cat_col] == cat].iterrows():
+
+                # Sidebar collapsible menu like Pret
+                with st.sidebar:
+                    st.markdown("### 🍴 View Menu")
+                    categories = menu_df[cat_col].dropna().unique().tolist()
+                    selected_cat = st.radio("Choose a category", categories, horizontal=False)
+
+                # Display selected category items as cards
+                st.markdown(f"### 🍽️ {selected_cat}")
+                items = menu_df[menu_df[cat_col] == selected_cat]
+
+                cols = st.columns(3)
+                for i, (_, row) in enumerate(items.iterrows()):
+                    with cols[i % 3]:
                         name = row[item_col]
                         price = float(row[price_col])
-                        c1, c2, c3 = st.columns([3, 1, 1])
-                        c1.write(name)
-                        c2.write(f"₱{price:.2f}")
-                        if c3.button("➕ Add", key=f"add_{name}"):
+                        img = row.get("IMAGE_URL", None) or "https://via.placeholder.com/150"
+
+                        # Card-like layout
+                        st.image(img, use_container_width=True)
+                        st.markdown(f"**{name}**")
+                        st.write(f"₱{price:.2f}")
+                        if st.button("➕ Add to Cart", key=f"add_{name}"):
                             if name not in st.session_state.cart:
                                 st.session_state.cart[name] = {"qty": 1, "price": price}
                             else:
@@ -1284,6 +1298,7 @@ elif st.session_state.page == "main":
                             st.success(f"{name} added to cart!")
 
             # 🛒 CART SECTION
+            st.divider()
             st.markdown("### 🛒 Your Cart")
             cart = st.session_state.cart
             if not cart:
@@ -1309,11 +1324,10 @@ elif st.session_state.page == "main":
                     if c4.button("🗑 Remove", key=f"rm_{item}"):
                         del cart[item]
                         st.rerun()
-                    st.write(f"Qty: {qty} | Subtotal: ₱{subtotal:.2f}")
+                    st.caption(f"Qty: {qty} | Subtotal: ₱{subtotal:.2f}")
 
                 st.markdown(f"### 💵 Total: ₱{total:.2f}")
                 if st.button("💳 Proceed to Payment"):
-                    # ✅ Save the order first
                     from datetime import datetime
                     import uuid
 
@@ -1333,10 +1347,9 @@ elif st.session_state.page == "main":
                         status
                     )
 
-                    # ✅ Send confirmation notification
                     add_notification(
                         user_id,
-                        f"🧾 Your order has been placed successfully! We'll notify you once it's ready for pickup."
+                        "🧾 Your order has been placed successfully! We'll notify you once it's ready for pickup."
                     )
 
                     st.success("✅ Order placed successfully!")
