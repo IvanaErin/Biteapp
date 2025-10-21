@@ -107,19 +107,6 @@ def get_connection():
     except Exception:
         return None
 
-def get_snowflake_conn():
-    try:
-        return snowflake.connector.connect(
-            user=st.secrets["SNOWFLAKE_USER"],
-            password=st.secrets["SNOWFLAKE_PASSWORD"],
-            account=st.secrets["SNOWFLAKE_ACCOUNT"],
-            warehouse=st.secrets["SNOWFLAKE_WAREHOUSE"],
-            database=st.secrets["SNOWFLAKE_DATABASE"],
-            schema=st.secrets["SNOWFLAKE_SCHEMA"]
-        )
-    except Exception:
-        return None
-
 # ---------------------------
 # PASSWORD HELPERS
 # ---------------------------
@@ -379,12 +366,8 @@ def upsert_menu(df: pd.DataFrame):
         except Exception:
             pass
 
-
 # ---------------------------
-# MENU + SENTIMENT DISPLAY
-# ---------------------------
-# ---------------------------
-# MENU + SENTIMENT DISPLAY (Dynamic per item)
+# MENU + SENTIMENT DISPLAY 
 # ---------------------------
 def display_menu_with_sentiment():
     st.subheader("🍽️ Menu with Sentiment Insights")
@@ -438,8 +421,6 @@ def display_menu_with_sentiment():
 # ---------------------------
 # NOTIFICATION FUNCTIONS
 # ---------------------------
-
-import uuid
 
 def add_notification(user_id, message):
     """Save a notification for the user."""
@@ -554,6 +535,25 @@ def clear_notifications_for_user(user_id: str):
             conn.close()
         except Exception:
             pass
+
+def get_all_non_staff_users():
+    """
+    Fetch all usernames of Non-Staff and Guest users from the USERS table.
+    Used for sending notifications about new menu items.
+    """
+    conn = get_connection()
+    try:
+        query = """
+            SELECT USERNAME
+            FROM USERS
+            WHERE ROLE != 'Staff'
+        """
+        cur = conn.cursor()
+        cur.execute(query)
+        result = [row[0] for row in cur.fetchall()]
+        return result
+    finally:
+        conn.close()
 
 def update_order_status(order_id, new_status):
     """Update the order status in the receipts table."""
