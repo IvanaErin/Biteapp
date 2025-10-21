@@ -1283,7 +1283,9 @@ elif st.session_state.page == "main":
                         for _, row in category_items.iterrows():
                             name = row["ITEM"]
                             price = float(row["PRICE"])
-                            img = row.get("IMAGE_URL", None) or "https://via.placeholder.com/150"
+                            img = row.get("IMAGE_URL")
+                            if not img or not img.strip():
+                                img = "https://via.placeholder.com/150"
 
                             with cols[col_index]:
                                 st.image(img, use_container_width=True)
