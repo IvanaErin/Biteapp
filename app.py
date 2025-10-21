@@ -274,7 +274,9 @@ def load_feedbacks_df():
     finally:
         cur.close()
         conn.close()
+# ---------------------------
 # Validate images so every item has a displayable URL
+# ---------------------------
 def validate_image_url(url):
     placeholder = "https://via.placeholder.com/150"
     if url is None or (isinstance(url, float) and math.isnan(url)) or not str(url).strip():
@@ -286,9 +288,10 @@ def validate_image_url(url):
     except:
         pass
     return placeholder
+
 # ---------------------------
 # MENU + SENTIMENT DISPLAY
-# -------------------------
+# ---------------------------
 def load_menu():
     conn = get_connection()
     if not conn:
@@ -296,7 +299,6 @@ def load_menu():
 
     try:
         cur = conn.cursor()
-        # Include IMAGE_URL in the query
         cur.execute("SELECT CATEGORY, ITEM, PRICE, IMAGE_URL FROM MENU ORDER BY CATEGORY, ITEM")
         df = cur.fetch_pandas_all()
         df["PRICE"] = pd.to_numeric(df.get("PRICE", 0), errors="coerce").fillna(0)
@@ -321,20 +323,21 @@ def load_menu():
             df["Neutral"] = 0
             df["Negative"] = 0
 
+        # ✅ Validate images AFTER loading the menu
+        df["VALID_IMAGE"] = df["IMAGE_URL"].apply(validate_image_url)
+
         return df
 
     except Exception as e:
         print(f"❌ Error loading menu with sentiment: {e}")
-        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE", "IMAGE_URL"])
+        return pd.DataFrame(columns=["CATEGORY", "ITEM", "PRICE", "IMAGE_URL", "VALID_IMAGE"])
     finally:
         try:
             cur.close()
             conn.close()
         except Exception:
             pass
-
-menu_df["VALID_IMAGE"] = menu_df["IMAGE_URL"].apply(validate_image_url)
-
+            
 def detect_menu_columns(menu_df):
     """
     Automatically detects which columns in the menu DataFrame 
