@@ -1274,6 +1274,22 @@ elif st.session_state.page == "main":
             # ---------------------------
             st.markdown("### 📖 Menu & Ordering")
 
+            import requests
+            import math
+
+            def validate_image_url(url):
+                """Return the URL if valid and points to an image, else return placeholder."""
+                placeholder = "https://via.placeholder.com/150"
+                if url is None or (isinstance(url, float) and math.isnan(url)) or not str(url).strip():
+                    return placeholder
+                try:
+                    r = requests.head(url, timeout=2)
+                    if r.status_code == 200 and "image" in r.headers.get("Content-Type", ""):
+                        return url
+                except:
+                    pass
+                return placeholder
+
             if menu_df is None or menu_df.empty:
                 st.warning("⚠️ Menu is empty.")
             else:
@@ -1289,12 +1305,7 @@ elif st.session_state.page == "main":
                         for _, row in category_items.iterrows():
                             name = row["ITEM"]
                             price = float(row["PRICE"])
-                            
-                            # Robust IMAGE_URL handling
-                            import math
-                            img = row.get("IMAGE_URL")
-                            if img is None or (isinstance(img, float) and math.isnan(img)) or not str(img).strip():
-                                img = "https://via.placeholder.com/150"
+                            img = validate_image_url(row.get("IMAGE_URL"))
 
                             with cols[col_index]:
                                 st.image(img, use_container_width=True)
