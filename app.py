@@ -33,12 +33,17 @@ try:
 except Exception:
     client = None
 
+# ---------------------------
+# PAGE CONFIG & BACKGROUND
+# ---------------------------
 st.set_page_config(page_title="BiteHub Canteen GenAI", layout="wide")
 
-def set_background(image_file: str | None = None, user_type: str | None = None):
+def set_background(image_file: str | None = None, color: str = "#f0f0f0"):
+    """
+    Set a background image (if provided), otherwise a solid background color.
+    """
     css_parts = []
 
-    # 🖼️ LOGIN PAGE → show background image
     if image_file and os.path.exists(image_file):
         with open(image_file, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
@@ -54,71 +59,15 @@ def set_background(image_file: str | None = None, user_type: str | None = None):
             }}
             """
         )
-
-        # Add dark overlay + login text styles
-        css_parts.append(
-            """
-            .login-card {
-                background: rgba(10,10,10,0.6);
-                padding: 1.6rem;
-                border-radius: 12px;
-                max-width: 840px;
-                margin: 18px auto;
-                color: #fff;
-                box-shadow: 0 8px 28px rgba(0,0,0,0.5);
-            }
-            div.stButton > button {
-                width: 100%;
-                height: 44px;
-                font-size: 15px;
-                border-radius: 8px;
-            }
-            .stTextInput>div>div>input, .stTextInput>div>div>div>input {
-                background: rgba(0,0,0,0.55);
-                color: #fff;
-            }
-            .stContainer, .stMarkdown, .stExpander {
-                color: #fff;
-            }
-            """
-        )
-
-    # 👥 AFTER LOGIN → STAFF / NON-STAFF / GUEST
     else:
-        # Define greys for each user type
-        if user_type == "staff":
-            bg_color = "#2e2e2e"  # dark grey
-            text_color = "#ffffff"
-        elif user_type == "non-staff":
-            bg_color = "#d9d9d9"  # medium grey
-            text_color = "#111111"
-        else:
-            bg_color = "#f5f5f5"  # light grey
-            text_color = "#222222"
-
         css_parts.append(
             f"""
             [data-testid="stAppViewContainer"] {{
-                background-color: {bg_color} !important;
-                color: {text_color} !important;
-            }}
-            h1, h2, h3, h4, h5, h6, p, div, span, label {{
-                color: {text_color} !important;
-            }}
-            div.stButton > button {{
-                background-color: #444444 !important;
-                color: white !important;
-                border-radius: 8px;
-                transition: 0.2s ease-in-out;
-            }}
-            div.stButton > button:hover {{
-                background-color: #666666 !important;
-                transform: scale(1.03);
+                background-color: {color};
             }}
             """
         )
 
-    # Common layout adjustments (keep from your original)
     css_parts.append(
         """
         [data-testid="stAppViewContainer"] > section:first-child {
@@ -127,6 +76,25 @@ def set_background(image_file: str | None = None, user_type: str | None = None):
         }
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
+        .login-card {
+            background: rgba(10,10,10,0.6);
+            padding: 1.6rem;
+            border-radius: 12px;
+            max-width: 840px;
+            margin: 18px auto;
+            color: #fff;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+        }
+        div.stButton > button {
+            width: 100%;
+            height: 44px;
+            font-size: 15px;
+            border-radius: 8px;
+        }
+        .stTextInput>div>div>input, .stTextInput>div>div>div>input {
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+        }
         """
     )
 
@@ -745,10 +713,13 @@ def password_valid_rules(pw: str):
 # LOGIN PAGE
 # ---------------------------
 if st.session_state.page == "login":
+    # 🌆 Set login background
+    set_background("back.jpg")
+
     st.markdown(
         """
         <h1 style='text-align: center; color: #FF6F61; font-size: 60px; margin-top: 20px;'>☕ BiteHub</h1>
-        <p style='text-align: center; color: #888888; font-size: 18px;'>Welcome! Please log in below.</p>
+        <p style='text-align: center; color: #dddddd; font-size: 18px;'>Welcome! Please log in below.</p>
         """,
         unsafe_allow_html=True
     )
@@ -759,16 +730,14 @@ if st.session_state.page == "login":
     col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
     with col2:
         if st.button("🔑 Log In", use_container_width=True):
-            
-            # 1️⃣ Check if hardcoded staff
+            # 1️⃣ Hardcoded staff
             if username == "staff1" and password == "staff123":
                 st.session_state.user = {"username": "staff1", "role": "Staff", "loyalty_points": 0}
                 st.session_state.page = "main"
                 st.success(f"✅ Welcome Staff {username}!")
                 st.rerun()
-            
-            # 2️⃣ Check database users
             else:
+                # 2️⃣ Database users
                 acc = get_account(username)
                 if acc and verify_password(acc["password"], password):
                     role_value = acc.get("role", "Non-Staff")
@@ -805,13 +774,15 @@ if st.session_state.page == "login":
 # SIGNUP PAGE
 # ---------------------------
 elif st.session_state.page == "signup":
+    # 🌆 Set signup background
+    set_background("back.jpg")
+
     st.markdown("<h1 style='text-align: center; color: #FF6F61;'>📝 BiteHub — Sign Up</h1>", unsafe_allow_html=True)
 
     new_username = st.text_input("Create Username", key="new_user")
     new_password = st.text_input("Create Password", type="password", key="new_pass")
     confirm_password = st.text_input("Confirm Password", type="password", key="conf_pass")
 
-    # --- live validation ---
     rules = password_valid_rules(new_password)
     st.markdown("*Password rules:* (all must be ✅ to register)")
     st.write(f"- Minimum 12 chars: {'✅' if rules['length'] else '❌'}")
@@ -830,7 +801,6 @@ elif st.session_state.page == "signup":
         elif get_account(new_username):
             st.error("⚠️ Username already exists.")
         else:
-            # --- HASH PASSWORD BEFORE SAVING ---
             hashed_pass = hash_password(new_password)
             save_account(new_username, hashed_pass, role="Non-Staff")
             st.success("🎉 Account created successfully! Please log in.")
