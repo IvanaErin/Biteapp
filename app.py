@@ -732,8 +732,10 @@ def run_ai_staff(question: str):
 
 
 def run_ai_nonstaff(question: str):
-    """AI for guests and non-staff: answers about menu and recommendations."""
+    """AI for guests and non-staff: answers about menu and recommendations based on real data."""
     from snowflake.connector.errors import ProgrammingError
+
+    # --- Load Menu Data ---
     try:
         menu_df = load_menu()
         menu_list = "\n".join([
@@ -743,17 +745,59 @@ def run_ai_nonstaff(question: str):
     except ProgrammingError:
         menu_list = "Menu unavailable."
 
+    # --- Load Receipts / Sales Data ---
+    try:
+        receipts = load_receipts_df()
+        if not receipts.empty:
+            # Normalize and parse
+            receipts["status"] = receipts["status"].astype(str).str.lower().str.strip()
+
+            all_items = []
+            for _, row in receipts.iterrows():
+                try:
+                    items = json.loads(row["items"]) if isinstance(row["items"], str) else row["items"]
+                    if isinstance(items, list):
+                        for it in items:
+                            name = it.get("name") if isinstance(it, dict) else str(it)
+                            qty = int(it.get("qty", 1)) if isinstance(it, dict) else 1
+                            all_items.append({"Item": name, "Quantity": qty})
+                except Exception:
+                    pass
+
+            if all_items:
+                df_items = (
+                    pd.DataFrame(all_items)
+                    .groupby("Item", as_index=False)
+                    .sum()
+                    .sort_values(by="Quantity", ascending=False)
+                )
+                best_sellers = "\n".join([
+                    f"{row['Item']}: {row['Quantity']} sold"
+                    for _, row in df_items.head(5).iterrows()
+                ])
+            else:
+                best_sellers = "No sales data yet."
+        else:
+            best_sellers = "No sales data available."
+    except Exception as e:
+        best_sellers = f"⚠️ Couldn't load sales data ({e})"
+
+    # --- System Prompt (AI Context) ---
     system_prompt = f"""
     You are BiteHub's Friendly Food Assistant.
     You help customers with menu items, prices, and food recommendations.
     Always be polite, friendly, and concise.
-    Only use the menu items listed below.
-    Do NOT invent items or prices.
+    Use the real menu and sales data below.
+    Never make up items or prices.
 
     MENU:
     {menu_list}
+
+    TOP-SELLING ITEMS (based on real sales):
+    {best_sellers}
     """
 
+    # --- Generate AI Response ---
     try:
         chat = client.chat.completions.create(
             model="llama-3.1-8b-instant",
@@ -766,7 +810,7 @@ def run_ai_nonstaff(question: str):
         return chat.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI unavailable: {e}"
-
+        
 # ---------------------------
 # SESSION DEFAULTS
 # ---------------------------
