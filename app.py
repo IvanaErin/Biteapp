@@ -989,11 +989,10 @@ elif st.session_state.page == "main":
                 metrics = get_order_metrics()
 
                 # --- METRICS SECTION ---
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3 = st.columns(3)
                 col1.metric("🧾 Total Items Ordered", total_item_count)
                 col2.metric("💰 Total Sales", f"₱{total_sales:,.2f}")
                 col3.metric("✅ Completed Orders", metrics["completed"])
-                col4.metric("🕒 Ready Orders", metrics["ready"])
 
                 st.divider()
 
