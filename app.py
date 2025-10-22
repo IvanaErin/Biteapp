@@ -660,85 +660,82 @@ def load_receipts_df():
 # ---------------------------
 # AI
 # ---------------------------
-def run_ai_nonstaff(question: str) -> str:
-    # --- Load menu ---
-    menu_df = load_menu()
-    if menu_df is not None and not menu_df.empty:
+# ---------------------------
+# AI ASSISTANTS (using Groq)
+# ---------------------------
+def run_ai_staff(question: str):
+    """AI for staff: focuses on operations and management."""
+    from snowflake.connector.errors import ProgrammingError
+    try:
+        menu_df = load_menu()
         menu_list = "\n".join([
             f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
             for _, row in menu_df.iterrows()
         ])
-    else:
-        menu_list = "No menu items available."
+    except ProgrammingError:
+        menu_list = "Menu unavailable."
 
-    # --- Load best sellers ---
+    system_prompt = f"""
+    You are BiteHub's Staff Assistant.
+    Your role is to help canteen staff manage operations, such as:
+    - Updating menu items, prices, and categories.
+    - Managing orders, stocks, and staff-related tasks.
+    - Suggesting improvements to the canteen.
+    Keep answers short, helpful, and professional.
+
+    MENU:
+    {menu_list}
+    """
+
     try:
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT ITEM, COUNT(*) AS TOTAL_ORDERS
-            FROM RECEIPTS
-            GROUP BY ITEM
-            ORDER BY TOTAL_ORDERS DESC
-            LIMIT 5
-        """)
-        rows = cur.fetchall()
-        best_sellers = "\n".join([f"{r[0]} — {r[1]} orders" for r in rows])
-        conn.close()
-    except Exception:
-        best_sellers = "No best-seller data."
+        chat = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question},
+            ],
+            temperature=0.5,
+        )
+        return chat.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ AI unavailable: {e}"
 
-    # --- System prompt ---
+
+def run_ai_nonstaff(question: str):
+    """AI for guests and non-staff: answers about menu and recommendations."""
+    from snowflake.connector.errors import ProgrammingError
+    try:
+        menu_df = load_menu()
+        menu_list = "\n".join([
+            f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
+            for _, row in menu_df.iterrows()
+        ])
+    except ProgrammingError:
+        menu_list = "Menu unavailable."
+
     system_prompt = f"""
     You are BiteHub's Friendly Food Assistant.
-    Help customers with menu info, prices, and popular meals.
-    Use only real data from below.
+    You help customers with menu items, prices, and food recommendations.
+    Always be polite, friendly, and concise.
+    Only use the menu items listed below.
+    Do NOT invent items or prices.
 
-    🧾 MENU:
+    MENU:
     {menu_list}
-
-    ⭐ BEST SELLERS:
-    {best_sellers}
-
-    Rules:
-    - Be warm, clear, and brief.
-    - Recommend popular or fitting meals.
-    - Never invent items or prices.
-    - Avoid staff-only or technical info.
     """
 
-    # --- Ask LLaMA 3.1 8B ---
-    chat = client.chat.completions.create(
-        model="llama-3.1-8b",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question},
-        ],
-        temperature=0.7,
-    )
-
-    return chat.choices[0].message.content
-
-def run_ai_staff(question: str) -> str:
-    system_prompt = """
-    You are BiteHub's Staff Assistant.
-    Help canteen staff with operations:
-    - Menu, pricing, and categories.
-    - Order summaries and sales trends.
-    - Explaining errors or suggesting improvements.
-    Keep replies short, clear, and professional.
-    """
-
-    chat = client.chat.completions.create(
-        model="llama-3.1-8b",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question},
-        ],
-        temperature=0.4,
-    )
-
-    return chat.choices[0].message.content
+    try:
+        chat = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question},
+            ],
+            temperature=0.7,
+        )
+        return chat.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ AI unavailable: {e}"
 
 # ---------------------------
 # SESSION DEFAULTS
@@ -1190,13 +1187,19 @@ elif st.session_state.page == "main":
 
         elif choice == "AI Assistant":
             st.subheader("🤖 AI Assistant (Staff)")
-            q = st.text_area("Ask AI something:", key="staff_ai_q")
+
+            q = st.text_area(
+                "Ask AI something:",
+                key="staff_ai_q",
+                placeholder="e.g. Suggest menu improvements or pricing ideas."
+            )
+
             if st.button("Ask AI", key="ask_ai_staff"):
                 if q.strip():
                     st.write(run_ai_staff(q))
                 else:
-                    st.warning("Please enter a question for the AI.")
-
+                    st.warning("⚠️ Please enter a question for the AI.")
+                    
         elif choice == "Feedback Review":
             st.subheader("📢 Feedback Review")
             fb = load_feedbacks_df()
