@@ -484,7 +484,6 @@ def save_notification(user_id: str, message: str):
         except Exception:
             pass
 
-
 def get_notifications_for_user(user_id: str):
     """Retrieve notifications for a specific user."""
     conn = get_connection()
@@ -657,9 +656,6 @@ def load_receipts_df():
         except Exception:
             pass
             
-# ---------------------------
-# AI
-# ---------------------------
 # ---------------------------
 # AI ASSISTANTS (using Groq)
 # ---------------------------
@@ -962,15 +958,16 @@ elif st.session_state.page == "main":
 
                 total_item_count = sum(i["Quantity Sold"] for i in all_items)
                 total_sales = receipts["total"].astype(float).sum()
-                ready_orders = (receipts["status"] == "ready").sum()
-                completed_orders = (receipts["status"] == "completed").sum()
+
+                # --- METRICS FROM DATABASE ---
+                metrics = get_order_metrics()
 
                 # --- METRICS SECTION ---
                 col1, col2, col3, col4 = st.columns(4)
                 col1.metric("🧾 Total Items Ordered", total_item_count)
                 col2.metric("💰 Total Sales", f"₱{total_sales:,.2f}")
-                col3.metric("✅ Completed Orders", completed_orders)
-                col4.metric("🕒 Ready Orders", ready_orders)
+                col3.metric("✅ Completed Orders", metrics["completed"])
+                col4.metric("🕒 Ready Orders", metrics["ready"])
 
                 st.divider()
 
