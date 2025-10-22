@@ -1280,25 +1280,32 @@ elif st.session_state.page == "main":
         left_col, right_col = st.columns([1.3, 1])
 
         with left_col:
-        elif choice == "AI Assistant":
-            st.markdown("### 🤖 BiteHub Staff Assistant")
-            with st.expander("💬 Ask BiteHub AI", expanded=False):
-                q = st.text_input("Ask something:", key="staff_ai_q", placeholder="e.g. Suggest menu improvements or pricing ideas.")
-                if st.button("Ask AI", key="ask_ai_staff"):
-                    menu_df = load_menu()
-                    menu_list = "\n".join([f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})" for _, row in menu_df.iterrows()])
-                    prompt = f"""
-                    You are BiteHub's staff AI assistant. 
-                    You help canteen staff manage menu, pricing, ingredients, and operations.
-                    Be concise, helpful, and only refer to menu items below.
-                    Do NOT invent prices or items.
+            if choice == "AI Assistant":
+                st.markdown("### 🤖 BiteHub Staff Assistant")
+                with st.expander("💬 Ask BiteHub AI", expanded=False):
+                    q = st.text_input(
+                        "Ask something:",
+                        key="staff_ai_q",
+                        placeholder="e.g. Suggest menu improvements or pricing ideas."
+                    )
+                    if st.button("Ask AI", key="ask_ai_staff"):
+                        menu_df = load_menu()
+                        menu_list = "\n".join([
+                            f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
+                            for _, row in menu_df.iterrows()
+                        ])
+                        prompt = f"""
+                        You are BiteHub's staff AI assistant. 
+                        You help canteen staff manage menu, pricing, ingredients, and operations.
+                        Be concise, helpful, and only refer to menu items below.
+                        Do NOT invent prices or items.
 
-                    MENU:
-                    {menu_list}
+                        MENU:
+                        {menu_list}
 
-                    STAFF QUESTION: {q}
-                    """
-                    st.write(run_ai(prompt))
+                        STAFF QUESTION: {q}
+                        """
+                        st.write(run_ai(prompt))
 
             # ---------------------------
             # MENU & ORDERING
