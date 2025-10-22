@@ -1276,6 +1276,12 @@ elif st.session_state.page == "main":
         if "notifications" not in st.session_state:
             st.session_state.notifications = []
 
+        # 🧭 Sidebar menu for navigation
+        choice = st.sidebar.selectbox(
+            "Choose an option",
+            ["Menu", "AI Assistant", "Cart", "Notifications"]
+        )
+
         menu_df = load_menu()
         left_col, right_col = st.columns([1.3, 1])
 
@@ -1310,47 +1316,47 @@ elif st.session_state.page == "main":
             # ---------------------------
             # MENU & ORDERING
             # ---------------------------
-            st.markdown("### 📖 Menu & Ordering")
+            elif choice == "Menu":
+                st.markdown("### 📖 Menu & Ordering")
 
-            if menu_df is None or menu_df.empty:
-                st.warning("⚠️ Menu is empty.")
-            else:
-                # Loop through categories
-                for cat in menu_df["CATEGORY"].dropna().unique():
-                    with st.expander(f"🍽️ {cat}", expanded=False):
-                        category_items = menu_df[menu_df["CATEGORY"] == cat]
+                if menu_df is None or menu_df.empty:
+                    st.warning("⚠️ Menu is empty.")
+                else:
+                    # Loop through categories
+                    for cat in menu_df["CATEGORY"].dropna().unique():
+                        with st.expander(f"🍽️ {cat}", expanded=False):
+                            category_items = menu_df[menu_df["CATEGORY"] == cat]
 
-                        # Display in 3-column grid
-                        cols = st.columns(3)
-                        col_index = 0
+                            # Display in 3-column grid
+                            cols = st.columns(3)
+                            col_index = 0
 
-                        for idx, row in category_items.iterrows():
-                            name = row["ITEM"]
-                            price = float(row["PRICE"])
-                            img = row["VALID_IMAGE"]  # <-- use the validated image URL
+                            for idx, row in category_items.iterrows():
+                                name = row["ITEM"]
+                                price = float(row["PRICE"])
+                                img = row["VALID_IMAGE"]
 
-                            # Make a unique key using index + name
-                            button_key = f"add_{idx}_{name}"
+                                button_key = f"add_{idx}_{name}"
 
-                            with cols[col_index]:
-                                st.image(img, use_container_width=True)
-                                st.markdown(f"**{name}**")
-                                st.write(f"₱{price:.2f}")
+                                with cols[col_index]:
+                                    st.image(img, use_container_width=True)
+                                    st.markdown(f"**{name}**")
+                                    st.write(f"₱{price:.2f}")
 
-                                if st.button("➕ Add to Cart", key=button_key):
-                                    if "cart" not in st.session_state:
-                                        st.session_state.cart = {}
-                                    if name not in st.session_state.cart:
-                                        st.session_state.cart[name] = {"qty": 1, "price": price}
-                                    else:
-                                        st.session_state.cart[name]["qty"] += 1
-                                    st.success(f"{name} added to cart!")
+                                    if st.button("➕ Add to Cart", key=button_key):
+                                        if "cart" not in st.session_state:
+                                            st.session_state.cart = {}
+                                        if name not in st.session_state.cart:
+                                            st.session_state.cart[name] = {"qty": 1, "price": price}
+                                        else:
+                                            st.session_state.cart[name]["qty"] += 1
+                                        st.success(f"{name} added to cart!")
 
-                            col_index += 1
-                            if col_index >= 3:
-                                cols = st.columns(3)
-                                col_index = 0
-
+                                col_index += 1
+                                if col_index >= 3:
+                                    cols = st.columns(3)
+                                    col_index = 0
+                                    
             # ---------------------------
             # CART SECTION
             # ---------------------------
