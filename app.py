@@ -1276,86 +1276,77 @@ elif st.session_state.page == "main":
         if "notifications" not in st.session_state:
             st.session_state.notifications = []
 
-        # 🧭 Sidebar menu for navigation
-        choice = st.sidebar.selectbox(
-            "Choose an option",
-            ["Menu", "AI Assistant", "Cart", "Notifications"]
-        )
-
+        # Load menu data
         menu_df = load_menu()
         left_col, right_col = st.columns([1.3, 1])
 
         with left_col:
-            if choice == "AI Assistant":
-                st.markdown("### 🤖 BiteHub Staff Assistant")
-                with st.expander("💬 Ask BiteHub AI", expanded=False):
-                    q = st.text_input(
-                        "Ask something:",
-                        key="staff_ai_q",
-                        placeholder="e.g. Suggest menu improvements or pricing ideas."
-                    )
-                    if st.button("Ask AI", key="ask_ai_staff"):
-                        menu_df = load_menu()
-                        menu_list = "\n".join([
-                            f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
-                            for _, row in menu_df.iterrows()
-                        ])
-                        prompt = f"""
-                        You are BiteHub's staff AI assistant. 
-                        You help canteen staff manage menu, pricing, ingredients, and operations.
-                        Be concise, helpful, and only refer to menu items below.
-                        Do NOT invent prices or items.
+            # 🤖 AI Assistant Section
+            st.markdown("### 🤖 BiteHub Staff Assistant")
+            with st.expander("💬 Ask BiteHub AI", expanded=False):
+                q = st.text_input(
+                    "Ask something:",
+                    key="staff_ai_q",
+                    placeholder="e.g. Suggest menu improvements or pricing ideas."
+                )
+                if st.button("Ask AI", key="ask_ai_staff"):
+                    menu_df = load_menu()
+                    menu_list = "\n".join([
+                        f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
+                        for _, row in menu_df.iterrows()
+                    ])
+                    prompt = f"""
+                    You are BiteHub's staff AI assistant. 
+                    You help canteen staff manage menu, pricing, ingredients, and operations.
+                    Be concise, helpful, and only refer to menu items below.
+                    Do NOT invent prices or items.
 
-                        MENU:
-                        {menu_list}
+                    MENU:
+                    {menu_list}
 
-                        STAFF QUESTION: {q}
-                        """
-                        st.write(run_ai(prompt))
+                    STAFF QUESTION: {q}
+                    """
+                    st.write(run_ai(prompt))
 
             # ---------------------------
             # MENU & ORDERING
             # ---------------------------
-            elif choice == "Menu":
-                st.markdown("### 📖 Menu & Ordering")
+            st.markdown("### 📖 Menu & Ordering")
 
-                if menu_df is None or menu_df.empty:
-                    st.warning("⚠️ Menu is empty.")
-                else:
-                    # Loop through categories
-                    for cat in menu_df["CATEGORY"].dropna().unique():
-                        with st.expander(f"🍽️ {cat}", expanded=False):
-                            category_items = menu_df[menu_df["CATEGORY"] == cat]
+            if menu_df is None or menu_df.empty:
+                st.warning("⚠️ Menu is empty.")
+            else:
+                for cat in menu_df["CATEGORY"].dropna().unique():
+                    with st.expander(f"🍽️ {cat}", expanded=False):
+                        category_items = menu_df[menu_df["CATEGORY"] == cat]
+                        cols = st.columns(3)
+                        col_index = 0
 
-                            # Display in 3-column grid
-                            cols = st.columns(3)
-                            col_index = 0
+                        for idx, row in category_items.iterrows():
+                            name = row["ITEM"]
+                            price = float(row["PRICE"])
+                            img = row["VALID_IMAGE"]
 
-                            for idx, row in category_items.iterrows():
-                                name = row["ITEM"]
-                                price = float(row["PRICE"])
-                                img = row["VALID_IMAGE"]
+                            button_key = f"add_{idx}_{name}"
 
-                                button_key = f"add_{idx}_{name}"
+                            with cols[col_index]:
+                                st.image(img, use_container_width=True)
+                                st.markdown(f"**{name}**")
+                                st.write(f"₱{price:.2f}")
 
-                                with cols[col_index]:
-                                    st.image(img, use_container_width=True)
-                                    st.markdown(f"**{name}**")
-                                    st.write(f"₱{price:.2f}")
+                                if st.button("➕ Add to Cart", key=button_key):
+                                    if "cart" not in st.session_state:
+                                        st.session_state.cart = {}
+                                    if name not in st.session_state.cart:
+                                        st.session_state.cart[name] = {"qty": 1, "price": price}
+                                    else:
+                                        st.session_state.cart[name]["qty"] += 1
+                                    st.success(f"{name} added to cart!")
 
-                                    if st.button("➕ Add to Cart", key=button_key):
-                                        if "cart" not in st.session_state:
-                                            st.session_state.cart = {}
-                                        if name not in st.session_state.cart:
-                                            st.session_state.cart[name] = {"qty": 1, "price": price}
-                                        else:
-                                            st.session_state.cart[name]["qty"] += 1
-                                        st.success(f"{name} added to cart!")
-
-                                col_index += 1
-                                if col_index >= 3:
-                                    cols = st.columns(3)
-                                    col_index = 0
+                            col_index += 1
+                            if col_index >= 3:
+                                cols = st.columns(3)
+                                col_index = 0
                                     
             # ---------------------------
             # CART SECTION
