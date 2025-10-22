@@ -588,31 +588,39 @@ def update_order_status(order_id, new_status):
             pass
 
 def get_order_metrics():
-    """Return total, ready, and completed orders counts."""
+    """Return total and completed (includes ready) orders counts."""
     conn = get_connection()
     if not conn:
         print("⚠️ No DB connection for get_order_metrics.")
-        return {"total": 0, "ready": 0, "completed": 0}
+        return {"total": 0, "completed": 0}
 
     try:
         cur = conn.cursor()
+
+        # Total orders
         cur.execute("SELECT COUNT(*) FROM receipts")
         total = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM receipts WHERE status = 'Ready'")
-        ready = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM receipts WHERE status = 'Completed'")
+
+        # Completed orders (include both ready + completed)
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM receipts
+            WHERE LOWER(status) IN ('ready', 'completed')
+        """)
         completed = cur.fetchone()[0]
-        return {"total": total, "ready": ready, "completed": completed}
+
+        return {"total": total, "completed": completed}
+
     except Exception as e:
         print(f"❌ Error fetching order metrics: {e}")
-        return {"total": 0, "ready": 0, "completed": 0}
+        return {"total": 0, "completed": 0}
     finally:
         try:
             cur.close()
             conn.close()
         except Exception:
             pass
-
+            
 def save_receipt(order_id, cart, total, payment_method, user_id, pickup_time, status="Pending"):
     """Save the order (receipt) into Snowflake."""
     conn = get_connection()
