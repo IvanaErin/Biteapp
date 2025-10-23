@@ -6,5 +6,9 @@ groq
 pillow
 snowflake-connector-python
 textblob
+chromadb
+sentence-transformers
+
+
 
 
