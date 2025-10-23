@@ -1612,24 +1612,23 @@ elif st.session_state.page == "main":
                         st.success("✅ Feedback submitted!")
 
                 st.divider()
-                st.subheader("📝 Your Previous Feedbacks")
-
-                df = load_feedbacks_df()
-                if df.empty:
-                    st.info("You haven't submitted any feedback yet.")
-                else:
-                    # Filter only current user's feedbacks
-                    user_feedbacks = df[df["user_id"] == username].sort_values(by="timestamp", ascending=False)
-
-                    if user_feedbacks.empty:
+                with st.expander("📝 Your Previous Feedbacks"):
+                    df = load_feedbacks_df()
+                    if df.empty:
                         st.info("You haven't submitted any feedback yet.")
                     else:
-                        for _, row in user_feedbacks.iterrows():
-                            stars = "⭐" * int(row["rating"])
-                            st.markdown(f"**{stars}** — *{row['item']}*")
-                            st.write(row["feedback"])
-                            st.caption(f"🕒 {row['timestamp']} • Sentiment: {row['sentiment'].capitalize()}")
-                            st.divider()
+                        # Filter only current user's feedbacks
+                        user_feedbacks = df[df["user_id"] == username].sort_values(by="timestamp", ascending=False)
+
+                        if user_feedbacks.empty:
+                            st.info("You haven't submitted any feedback yet.")
+                        else:
+                            for _, row in user_feedbacks.iterrows():
+                                stars = "⭐" * int(row["rating"])
+                                st.markdown(f"**{stars}** — *{row['item']}*")
+                                st.write(row["feedback"])
+                                st.caption(f"🕒 {row['timestamp']} • Sentiment: {row['sentiment'].capitalize()}")
+                                st.markdown("<hr style='margin:4px 0;'>", unsafe_allow_html=True)
 
             # ---------------------------
             # 📢 Notifications Section
