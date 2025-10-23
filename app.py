@@ -1540,31 +1540,7 @@ elif st.session_state.page == "main":
 
                 st.markdown(f"### 💵 Total: ₱{total:.2f}")
                 if st.button("💳 Proceed to Payment"):
-                    from datetime import datetime
-                    import uuid
-
-                    user_id = st.session_state.get("user", {}).get("username", "Guest")
-                    order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
-                    payment_method = "Cash"
-                    pickup_time = datetime.now()
-                    status = "Pending"
-
-                    save_receipt(
-                        order_id,
-                        cart,
-                        total,
-                        payment_method,
-                        user_id,
-                        pickup_time,
-                        status
-                    )
-
-                    add_notification(
-                        user_id,
-                        f"🧾 Your order has been placed successfully! We'll notify you once it's ready for pickup."
-                    )
-
-                    st.success("✅ Order placed successfully!")
+                    # 💡 Only go to payment page — do not save yet
                     st.session_state.page = "payment"
                     st.session_state.cart_total = total
                     st.rerun()
