@@ -264,7 +264,6 @@ def save_feedback(item: str, feedback: str, rating: int, user_id: str):
         cur.close()
         conn.close()
 
-
 def load_feedbacks_df():
     conn = get_connection()
     if not conn:
@@ -281,6 +280,45 @@ def load_feedbacks_df():
     finally:
         cur.close()
         conn.close()
+
+def feedback_section(user_id):
+    """Allow user to submit feedback and view their own past feedbacks."""
+    st.subheader("💬 Share Your Feedback")
+
+    # --- Feedback form ---
+    item = st.text_input("Which menu item are you reviewing?")
+    rating = st.slider("Rate your experience:", 1, 5, 5)
+    feedback_text = st.text_area("Your feedback:", placeholder="Type your comments here...")
+
+    if st.button("Submit Feedback"):
+        if feedback_text.strip() and item.strip():
+            save_feedback(item, feedback_text, rating, user_id)
+            st.success("✅ Thank you! Your feedback has been submitted.")
+        else:
+            st.warning("Please enter both an item name and your feedback before submitting.")
+
+    st.divider()
+
+    # --- Show user's previous feedbacks ---
+    st.subheader("📝 Your Previous Feedbacks")
+
+    df = load_feedbacks_df()
+    if df.empty:
+        st.info("You haven't submitted any feedback yet.")
+        return
+
+    # Filter only this user's feedbacks
+    user_feedbacks = df[df["user_id"] == user_id].sort_values(by="timestamp", ascending=False)
+
+    if user_feedbacks.empty:
+        st.info("You haven't submitted any feedback yet.")
+    else:
+        for _, row in user_feedbacks.iterrows():
+            stars = "⭐️" * int(row["rating"])
+            st.markdown(f"**{stars}** — *{row['item']}*")
+            st.write(row["feedback"])
+            st.caption(f"🕒 {row['timestamp']} • Sentiment: {row['sentiment'].capitalize()}")
+            st.divider()
 
 # ---------------------------
 # Validate image URLs
@@ -1572,6 +1610,26 @@ elif st.session_state.page == "main":
                     if st.form_submit_button("Submit"):
                         save_feedback(item, fb, rt, username)
                         st.success("✅ Feedback submitted!")
+
+                st.divider()
+                st.subheader("📝 Your Previous Feedbacks")
+
+                df = load_feedbacks_df()
+                if df.empty:
+                    st.info("You haven't submitted any feedback yet.")
+                else:
+                    # Filter only current user's feedbacks
+                    user_feedbacks = df[df["user_id"] == username].sort_values(by="timestamp", ascending=False)
+
+                    if user_feedbacks.empty:
+                        st.info("You haven't submitted any feedback yet.")
+                    else:
+                        for _, row in user_feedbacks.iterrows():
+                            stars = "⭐" * int(row["rating"])
+                            st.markdown(f"**{stars}** — *{row['item']}*")
+                            st.write(row["feedback"])
+                            st.caption(f"🕒 {row['timestamp']} • Sentiment: {row['sentiment'].capitalize()}")
+                            st.divider()
 
             # ---------------------------
             # 📢 Notifications Section
