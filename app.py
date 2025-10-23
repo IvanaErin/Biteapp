@@ -325,8 +325,10 @@ def feedback_section(user_id):
 # ---------------------------
 # RAG INTEGRATION (Chroma + Embeddings)
 # ---------------------------
+# --- Initialize local embedding model ---
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-embedding_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# --- Initialize Chroma client ---
 chroma_client = chromadb.Client()
 feedback_collection = chroma_client.get_or_create_collection("bitehub_feedbacks")
 
@@ -339,14 +341,20 @@ def build_feedback_index():
     for i, row in df.iterrows():
         doc_id = f"{row['user_id']}_{i}"
         content = f"Item: {row['item']} | Feedback: {row['feedback']} | Rating: {row['rating']} | Sentiment: {row['sentiment']}"
+        
+        # Compute embedding for this feedback
+        embedding = embedding_model.encode(content).tolist()
+
         feedback_collection.add(
             ids=[doc_id],
             documents=[content],
+            embeddings=[embedding],
         )
 
 def retrieve_relevant_feedbacks(query, n=3):
     """Retrieve top-n relevant feedbacks for the query."""
-    results = feedback_collection.query(query_texts=[query], n_results=n)
+    query_embedding = embedding_model.encode(query).tolist()
+    results = feedback_collection.query(query_embeddings=[query_embedding], n_results=n)
     docs = results.get("documents", [[]])[0]
     return "\n".join(docs) if docs else "No similar feedbacks found."
 
