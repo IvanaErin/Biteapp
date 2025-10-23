@@ -16,6 +16,9 @@ from textblob import TextBlob
 import math
 import requests
 from io import BytesIO
+import chromadb
+from sentence_transformers import SentenceTransformer
+
 
 # Try to import st_autorefresh helper if available
 try:
@@ -322,8 +325,6 @@ def feedback_section(user_id):
 # ---------------------------
 # RAG INTEGRATION (Chroma + Embeddings)
 # ---------------------------
-import chromadb
-from openai import OpenAI
 
 embedding_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 chroma_client = chromadb.Client()
