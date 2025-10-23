@@ -16,9 +16,6 @@ from textblob import TextBlob
 import math
 import requests
 from io import BytesIO
-import chromadb
-from sentence_transformers import SentenceTransformer
-
 
 # Try to import st_autorefresh helper if available
 try:
@@ -236,6 +233,7 @@ def analyze_sentiment(feedback: str):
         sentiment = "Neutral"
     return sentiment, polarity
 
+
 # ---------------------------
 # FEEDBACK FUNCTIONS
 # ---------------------------
@@ -321,185 +319,6 @@ def feedback_section(user_id):
             st.write(row["feedback"])
             st.caption(f"🕒 {row['timestamp']} • Sentiment: {row['sentiment'].capitalize()}")
             st.divider()
-
-# ---------------------------
-# RAG INTEGRATION (Chroma + Embeddings)
-# ---------------------------
-# --- Initialize local embedding model ---
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-# --- Initialize Chroma client ---
-chroma_client = chromadb.Client()
-feedback_collection = chroma_client.get_or_create_collection("bitehub_feedbacks")
-
-def build_feedback_index():
-    """Store feedbacks in ChromaDB for semantic search."""
-    df = load_feedbacks_df()
-    if df.empty:
-        return
-
-    for i, row in df.iterrows():
-        doc_id = f"{row['user_id']}_{i}"
-        content = f"Item: {row['item']} | Feedback: {row['feedback']} | Rating: {row['rating']} | Sentiment: {row['sentiment']}"
-        
-        # Compute embedding for this feedback
-        embedding = embedding_model.encode(content).tolist()
-
-        feedback_collection.add(
-            ids=[doc_id],
-            documents=[content],
-            embeddings=[embedding],
-        )
-
-def retrieve_relevant_feedbacks(query, n=3):
-    """Retrieve top-n relevant feedbacks for the query."""
-    query_embedding = embedding_model.encode(query).tolist()
-    results = feedback_collection.query(query_embeddings=[query_embedding], n_results=n)
-    docs = results.get("documents", [[]])[0]
-    return "\n".join(docs) if docs else "No similar feedbacks found."
-
-# ---------------------------
-# AI ASSISTANTS (using Groq)
-# ---------------------------
-def run_ai_staff(question: str):
-    """AI for staff: now uses RAG to provide insights from feedback and receipts."""
-    from snowflake.connector.errors import ProgrammingError
-
-    # --- Load Menu ---
-    try:
-        menu_df = load_menu()
-        menu_list = "\n".join([
-            f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
-            for _, row in menu_df.iterrows()
-        ])
-    except ProgrammingError:
-        menu_list = "Menu unavailable."
-
-    # --- Load Receipts / Sales ---
-    try:
-        receipts = load_receipts_df()
-        if not receipts.empty:
-            all_items = []
-            for _, row in receipts.iterrows():
-                try:
-                    items = json.loads(row["items"]) if isinstance(row["items"], str) else row["items"]
-                    if isinstance(items, list):
-                        for it in items:
-                            name = it.get("name") if isinstance(it, dict) else str(it)
-                            qty = int(it.get("qty", 1)) if isinstance(it, dict) else 1
-                            all_items.append({"Item": name, "Quantity": qty})
-                except Exception:
-                    pass
-
-            if all_items:
-                df_items = (
-                    pd.DataFrame(all_items)
-                    .groupby("Item", as_index=False)
-                    .sum()
-                    .sort_values(by="Quantity", ascending=False)
-                )
-                best_sellers = "\n".join([
-                    f"{row['Item']}: {row['Quantity']} sold"
-                    for _, row in df_items.head(5).iterrows()
-                ])
-                low_sellers = "\n".join([
-                    f"{row['Item']}: {row['Quantity']} sold"
-                    for _, row in df_items.tail(5).iterrows()
-                ])
-            else:
-                best_sellers = "No sales data yet."
-                low_sellers = "No sales data yet."
-        else:
-            best_sellers = low_sellers = "No sales data available."
-    except Exception as e:
-        best_sellers = low_sellers = f"⚠️ Couldn't load sales data ({e})"
-
-    # --- RAG: Retrieve Relevant Feedbacks ---
-    relevant_feedbacks = retrieve_relevant_feedbacks(question, limit=5)
-    feedback_context = "\n".join(relevant_feedbacks)
-
-    # --- System Prompt ---
-    system_prompt = f"""
-    You are BiteHub's Staff Assistant.
-    Your job is to help staff manage canteen operations using real data.
-    You can summarize customer feedbacks, track best and worst sellers, and suggest improvements.
-
-    Be concise, professional, and data-driven.
-
-    MENU DATA:
-    {menu_list}
-
-    BEST SELLING ITEMS:
-    {best_sellers}
-
-    LOWEST SELLING ITEMS:
-    {low_sellers}
-
-    RELEVANT CUSTOMER FEEDBACKS:
-    {feedback_context}
-    """
-
-    # --- Generate AI Response ---
-    try:
-        chat = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question},
-            ],
-            temperature=0.4,
-        )
-        return chat.choices[0].message.content
-    except Exception as e:
-        return f"⚠️ AI unavailable: {e}"
-        
-def run_ai_nonstaff(question: str):
-    """AI for guests and non-staff with RAG support."""
-    from snowflake.connector.errors import ProgrammingError
-
-    # --- Load Menu and Receipts ---
-    try:
-        menu_df = load_menu()
-        menu_list = "\n".join([
-            f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
-            for _, row in menu_df.iterrows()
-        ])
-    except ProgrammingError:
-        menu_list = "Menu unavailable."
-
-    # --- Build feedback index if empty ---
-    build_feedback_index()
-
-    # --- Retrieve relevant feedbacks (RAG) ---
-    relevant_feedbacks = retrieve_relevant_feedbacks(question)
-
-    # --- AI Prompt ---
-    system_prompt = f"""
-    You are BiteHub's Friendly Food Assistant.
-    You help customers with menu items, recommendations, and feedback insights.
-    Be polite, factual, and concise.
-    Use the menu, sales data, and user feedbacks below.
-
-    MENU:
-    {menu_list}
-
-    RELEVANT USER FEEDBACKS:
-    {relevant_feedbacks}
-    """
-
-    # --- Generate response ---
-    try:
-        chat = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question},
-            ],
-            temperature=0.7,
-        )
-        return chat.choices[0].message.content
-    except Exception as e:
-        return f"⚠️ AI unavailable: {e}"
 
 # ---------------------------
 # Validate image URLs
@@ -908,6 +727,127 @@ def load_receipts_df():
             conn.close()
         except Exception:
             pass
+            
+# ---------------------------
+# AI ASSISTANTS (using Groq)
+# ---------------------------
+def run_ai_staff(question: str):
+    """AI for staff: focuses on operations and management."""
+    from snowflake.connector.errors import ProgrammingError
+    try:
+        menu_df = load_menu()
+        menu_list = "\n".join([
+            f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
+            for _, row in menu_df.iterrows()
+        ])
+    except ProgrammingError:
+        menu_list = "Menu unavailable."
+
+    system_prompt = f"""
+    You are BiteHub's Staff Assistant.
+    Your role is to help canteen staff manage operations, such as:
+    - Updating menu items, prices, and categories.
+    - Managing orders, stocks, and staff-related tasks.
+    - Suggesting improvements to the canteen.
+    Keep answers short, helpful, and professional.
+
+    MENU:
+    {menu_list}
+    """
+
+    try:
+        chat = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question},
+            ],
+            temperature=0.5,
+        )
+        return chat.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ AI unavailable: {e}"
+
+
+def run_ai_nonstaff(question: str):
+    """AI for guests and non-staff: answers about menu and recommendations based on real data."""
+    from snowflake.connector.errors import ProgrammingError
+
+    # --- Load Menu Data ---
+    try:
+        menu_df = load_menu()
+        menu_list = "\n".join([
+            f"{row['CATEGORY']} - {row['ITEM']} (₱{row['PRICE']})"
+            for _, row in menu_df.iterrows()
+        ])
+    except ProgrammingError:
+        menu_list = "Menu unavailable."
+
+    # --- Load Receipts / Sales Data ---
+    try:
+        receipts = load_receipts_df()
+        if not receipts.empty:
+            # Normalize and parse
+            receipts["status"] = receipts["status"].astype(str).str.lower().str.strip()
+
+            all_items = []
+            for _, row in receipts.iterrows():
+                try:
+                    items = json.loads(row["items"]) if isinstance(row["items"], str) else row["items"]
+                    if isinstance(items, list):
+                        for it in items:
+                            name = it.get("name") if isinstance(it, dict) else str(it)
+                            qty = int(it.get("qty", 1)) if isinstance(it, dict) else 1
+                            all_items.append({"Item": name, "Quantity": qty})
+                except Exception:
+                    pass
+
+            if all_items:
+                df_items = (
+                    pd.DataFrame(all_items)
+                    .groupby("Item", as_index=False)
+                    .sum()
+                    .sort_values(by="Quantity", ascending=False)
+                )
+                best_sellers = "\n".join([
+                    f"{row['Item']}: {row['Quantity']} sold"
+                    for _, row in df_items.head(5).iterrows()
+                ])
+            else:
+                best_sellers = "No sales data yet."
+        else:
+            best_sellers = "No sales data available."
+    except Exception as e:
+        best_sellers = f"⚠️ Couldn't load sales data ({e})"
+
+    # --- System Prompt (AI Context) ---
+    system_prompt = f"""
+    You are BiteHub's Friendly Food Assistant.
+    You help customers with menu items, prices, and food recommendations.
+    Always be polite, friendly, and concise.
+    Use the real menu and sales data below.
+    Never make up items or prices.
+
+    MENU:
+    {menu_list}
+
+    TOP-SELLING ITEMS (based on real sales):
+    {best_sellers}
+    """
+
+    # --- Generate AI Response ---
+    try:
+        chat = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question},
+            ],
+            temperature=0.7,
+        )
+        return chat.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ AI unavailable: {e}"
         
 # ---------------------------
 # SESSION DEFAULTS
