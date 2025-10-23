@@ -1593,24 +1593,6 @@ elif st.session_state.page == "main":
                     else:
                         st.error("😞 Needs improvement based on reviews.")
 
-            st.divider()
-            st.subheader("⭐ Feedbacks")
-
-            # Detect if user is guest (no username or explicitly Guest)
-            username = user.get("username", "")
-            is_guest = not username or username.lower() == "guest"
-
-            if is_guest:
-                st.warning("Guests cannot submit feedbacks. Please log in to share your thoughts.")
-            else:
-                with st.form("feedback_form"):
-                    item = st.selectbox("Item", menu_df["ITEM"].unique())
-                    fb = st.text_area("Your feedback")
-                    rt = st.slider("Rating", 1, 5, 3)
-                    if st.form_submit_button("Submit"):
-                        save_feedback(item, fb, rt, username)
-                        st.success("✅ Feedback submitted!")
-
                 st.divider()
                 st.subheader("📝 Your Previous Feedbacks")
 
@@ -1618,7 +1600,6 @@ elif st.session_state.page == "main":
                 if df.empty:
                     st.info("You haven't submitted any feedback yet.")
                 else:
-                    # Filter only current user's feedbacks
                     user_feedbacks = df[df["user_id"] == username].sort_values(by="timestamp", ascending=False)
 
                     if user_feedbacks.empty:
@@ -1626,11 +1607,15 @@ elif st.session_state.page == "main":
                     else:
                         for _, row in user_feedbacks.iterrows():
                             stars = "⭐" * int(row["rating"])
-                            st.markdown(f"**{stars}** — *{row['item']}*")
-                            st.write(row["feedback"])
-                            st.caption(f"🕒 {row['timestamp']} • Sentiment: {row['sentiment'].capitalize()}")
-                            st.divider()
-
+                            st.markdown(
+                                f"<p style='margin-bottom:2px;'><b>{stars}</b> — <i>{row['item']}</i></p>"
+                                f"<p style='margin-top:0;margin-bottom:4px;font-size:14px;'>{row['feedback']}</p>"
+                                f"<p style='color:gray;font-size:12px;margin-top:-5px;'>"
+                                f"🕒 {row['timestamp'].strftime('%Y-%m-%d %H:%M')} • Sentiment: {row['sentiment'].capitalize()}</p>",
+                                unsafe_allow_html=True
+                            )
+                            st.markdown("<hr style='margin:4px 0;'>", unsafe_allow_html=True)
+                            
             # ---------------------------
             # 📢 Notifications Section
             # ---------------------------
